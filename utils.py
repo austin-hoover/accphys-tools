@@ -1,5 +1,7 @@
 import numpy as np
 import numpy.linalg as la
+import pandas as pd
+from scipy.integrate import trapz
 
 
 def rotation_matrix(phi):
