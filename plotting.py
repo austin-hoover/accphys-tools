@@ -2,8 +2,6 @@
 This module provides functions to visualize beam distributions.
 """
 
-##################################79 characters################################
-
 from matplotlib import pyplot as plt
 from matplotlib import animation
 import numpy as np
@@ -266,6 +264,7 @@ def corner(
             
     # Set axis label sizes and orientations
     _set_ticks_props(axes, xlabelsize=8, xrot=0, ylabelsize=8, yrot=0)
+    fig.align_axis()
         
     # Save figure
     if figname is not None:
@@ -280,6 +279,7 @@ def corner_envelope(
     mm_mrad=False,
     limits=None,
     fill=False,
+    edgecolor='black',
     fillcolor='lightsteelblue',
     padding=0.5,
     gap=0.1,
@@ -310,9 +310,11 @@ def corner_envelope(
         plot will be at umax * (1 + padding).
     gap : float
         Width of the gap between the subplots.
-    c : str
-        Marker color.
-    figsize : tuple, 
+    edgecolor : str
+        The color of the ellipse boundary.
+    fillcolor : str
+        The color of the ellipse interior.
+    figsize : tuple
         The x and y size of the figure.
     norm_labels : boolean
         If True, add '_n' to the axis labels. E.g. 'x' -> 'x_n'.
@@ -378,6 +380,7 @@ def corner_envelope(
         axes[i,j].legend(handles, leg_labels, fontsize='large', loc='center')
     
     _set_ticks_props(axes, xlabelsize=8, xrot=0, ylabelsize=8, yrot=0)
+    fig.align_axis()
     fig.set_tight_layout(tight_layout)
         
     # Save
