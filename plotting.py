@@ -264,7 +264,7 @@ def corner(
             
     # Set axis label sizes and orientations
     _set_ticks_props(axes, xlabelsize=8, xrot=0, ylabelsize=8, yrot=0)
-    fig.align_axis()
+    fig.align_labels()
         
     # Save figure
     if figname is not None:
@@ -380,7 +380,7 @@ def corner_envelope(
         axes[i,j].legend(handles, leg_labels, fontsize='large', loc='center')
     
     _set_ticks_props(axes, xlabelsize=8, xrot=0, ylabelsize=8, yrot=0)
-    fig.align_axis()
+    fig.align_labels()
     fig.set_tight_layout(tight_layout)
         
     # Save
