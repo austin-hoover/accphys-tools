@@ -243,9 +243,9 @@ def corner(
             if i == j:
                 ax.set_yticks([])
             if i != 3:
-                ax.set_xticklabels([''])
+                ax.set_xticklabels([])
             if j != 0:
-                ax.set_yticklabels([''])
+                ax.set_yticklabels([])
             # set labels
             if j == 0 and i != 0:
                 ax.set_ylabel(labels[i], fontsize='x-large')
@@ -285,8 +285,9 @@ def corner_envelope(
     gap=0.1,
     c='black',
     figsize=(6,6),
+    labelsize=None,
     norm_labels=False,
-    leg_loc=(0,1),
+    leg_loc=(0, 1),
     leg_labels=('Initial', 'Final'),
     tight_layout=False,
     figname=None,
@@ -325,7 +326,7 @@ def corner_envelope(
     leg_labels : tuple
         Labels if plotting two envelopes on top of one another. For example,
         the default is ('Initial', 'Final') if plotting the initial and final 
-        envelopes. 
+        envelopes.
     figname : str
         Name of saved figure -> plt.savefig(figname, dpi=dpi).
     dpi : int
