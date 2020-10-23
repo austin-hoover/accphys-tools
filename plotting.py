@@ -107,7 +107,7 @@ def corner(
     c=None,
     histtype='step',
     bins='auto',
-    reduce_hist_height=0.75,
+    reduce_hist_height=0.6,
     plt_kws={},
     hist_kws={},
     figname=None,
