@@ -289,17 +289,18 @@ def corner(
     if figname is not None:
         anim.save(figname, writer=writer, dpi=dpi, progress_callback=None)
     return anim
-
-
+    
+    
 def corner_onepart(
-    coords,
+    X,
     limits=None,
-    psi=0.0,
     padding=0.75,
     c='black',
-    s=5,
+    s=None,
     update_string='Turn = {}',
     show_history=False,
+    scatter=True,
+    vector=False,
     positions=None,
     figsize=(7, 7),
     gap=0.1,
@@ -308,25 +309,34 @@ def corner_onepart(
     figname=None,
     dpi=None,
 ):
-    """Animation of single particle coordinates."""
+    """Animate the motion of a single particle in 4D phase space.
     
+    Parameters
+    ----------
+    X : NumPy array, shape (nframes, 4)
+        The transverse particle coordinates at each frame.
+    scatter : bool
+        Whether to plot the paricle position.
+    vector : bool
+        Whether to plot an arrow from the origin to the particle position.
+    """
     # Split the data
-    hdata, vdata = coords[:, :-1], coords[:, 1:]
-    
+    hdata, vdata = X[:, :-1], X[:, 1:]
+
     # Configure axis limits, ticks, and labels
     labels = [r"$x$", r"$x'$", r"$y$", r"$y'$"]
     if norm_labels:
-        labels = [l + '_n' for l in labels]
+        labels = [r"$x_n$", r"$x_n'$", r"$y_n$", r"$y_n'$"]
         
     if limits is None:
-        x, xp, y, yp = coords.T
+        x, xp, y, yp = X.T
         umax = max(max(x), max(y))
         upmax = max(max(xp), max(yp))
     else:
         umax, upmax = limits
     umax_padded, upmax_padded = (1+padding)*umax, (1+padding)*upmax
     limits = 2 * [(-umax_padded, umax_padded), (-upmax_padded, upmax_padded)]
-    
+
     utick, uptick = umax_padded * 0.8, upmax_padded * 0.8
     ticks = np.around(
         2 * [[-utick, 0, utick], [-uptick, 0, uptick]], decimals=1
@@ -340,51 +350,55 @@ def corner_onepart(
     fig.subplots_adjust(wspace=gap, hspace=gap)
     plt.close()
     
-    lines = [[],[],[]]
-    for i in range(3):
-        for j in range(3):
-            ax = axes[i, j]
-            line, = ax.plot([], [], 'o', lw=0, ms=s, color=c)
-            lines[i].append(line)
-            
-    for i in range(3):
-        for j in range(3):
-            ax = axes[i,j]
-            ax.spines['top'].set_visible(False)
-            ax.spines['right'].set_visible(False)
-            ax.set_xticks(xticks[j])
-            ax.set_yticks(yticks[i])
-            ax.set_xlim(xlimits[j])
-            ax.set_ylim(ylimits[i])
-            if i < j:
-                ax.axis('off')
-            if j == 0:
-                ax.set_ylabel(ylabels[i], fontsize='x-large')
-            if i == 2:
-                ax.set_xlabel(xlabels[j], fontsize='x-large')
-
+    def reset_axes():
+        for i in range(3):
+            for j in range(3):
+                ax = axes[i,j]
+                ax.clear()
+                ax.spines['top'].set_visible(False)
+                ax.spines['right'].set_visible(False)
+                ax.set_xticks(xticks[j])
+                ax.set_yticks(yticks[i])
+                ax.set_xlim(xlimits[j])
+                ax.set_ylim(ylimits[i])
+                if i < j:
+                    ax.axis('off')
+                if j == 0:
+                    ax.set_ylabel(ylabels[i], fontsize='x-large')
+                if i == 2:
+                    ax.set_xlabel(xlabels[j], fontsize='x-large')
+                                        
     def update(t):
+        reset_axes()
         if positions is not None:
             t = positions[t]
         axes[1,1].set_title(update_string.format(t))
         for i in range(3):
             for j in range(3):
                 if i >= j:
-                    if show_history:
-                        lines[i][j].set_data(hdata[:t+1, j], vdata[:t+1, i])
-                    else:
-                        lines[i][j].set_data(hdata[t, j], vdata[t, i])
-                        
-                        
+                    ax = axes[i, j]
+                    x, y = hdata[:t+1, j], vdata[:t+1, i]
+                    if scatter:
+                        ax.scatter(x[-1], y[-1], c=c)
+                        if show_history and t > 0:
+                            ax.scatter(x[:-1], y[:-1], s=1, c=c)
+                    if vector:
+                        length = np.sqrt(x[-1]**2 + y[-1]**2)
+                        ax.quiver([0], [0], x[-1], y[-1], scale=1, scale_units='x')
+                        if show_history and t > 0:
+                            origin = ([0] * t, [0] * t)
+                            ax.quiver([0] * t, [0] * t, x[:-1], y[:-1], scale=1)
+
     # Call animator
-    anim = animation.FuncAnimation(fig, update, frames=coords.shape[0],
-                                   interval=1000/fps)
+    anim = animation.FuncAnimation(fig, update, frames=X.shape[0], interval=1000/fps)
+    
     # Save animation
     writer = animation.writers['ffmpeg'](fps=fps)
     if figname is not None:
         anim.save(figname, writer=writer, dpi=dpi, progress_callback=None)
-
+    
     return anim
+    
 
 
 def corner_envelope(
