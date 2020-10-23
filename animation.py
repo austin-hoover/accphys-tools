@@ -148,10 +148,10 @@ def corner(
     fps=1,
     bitrate=None
 ):
-    """Animate corner plots of TBT coordinate data.
+    """Animate corner plots of TBT coordinate data."""
     
-    cdfs: list of coordinate DataFrames
-    """
+    # Get list of DataFrames
+    dfs = [pd.DataFrame(X, columns=['x','xp','y','yp']) for X in coords_list]
     
     # Setup figure
     plt.clf()
@@ -167,7 +167,7 @@ def corner(
     
     # Auto limits
     if limits is None:
-        initial_beam = cdfs[0]
+        initial_beam = dfs[0]
         umax = 2 * initial_beam.std()[['x','y']].max()
         upmax = 2 * initial_beam.std()[['xp','yp']].max()
     else:
@@ -219,7 +219,6 @@ def corner(
                     ax.spines["top"].set_visible(False)
                     ax.spines["right"].set_visible(False)
                         
-
     # Axis label sizes and orientations
     _set_ticks_props(axes, xlabelsize=8, xrot=0, ylabelsize=8, yrot=0)
 
@@ -245,7 +244,7 @@ def corner(
 
     # Animation function to be called sequentially.
     def animate(i):
-        df = pd.DataFrame(coords_list[i])
+        df = dfs[i]
         df_samp = df.sample(samples) if samples < df.shape[0] else df
         for r in range(4):
             for c in range(4):
