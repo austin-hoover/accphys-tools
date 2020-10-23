@@ -95,44 +95,9 @@ def setup_corner_axes_3x3(limits, gap=0.1, figsize=(8,8), norm_labels=False):
     return fig, axes
 
 
-def setup_corner_axes_no_diag(limits, gap=0.1, figsize=(8,8)):
-    """Set up axes for corner plot (no diagonal).
-    
-    limits: tuple - (umax, upmax)
-    """
-    # Create figure
-    fig, axes = plt.subplots(4, 4, sharex='col', sharey='row', figsize=figsize)
-    fig.subplots_adjust(wspace=gap, hspace=gap)
-    plt.close()
-    # visibility of axes
-    for i in range(4):
-        for j in range(4):
-            ax = axes[i,j]
-            ax.spines['top'].set_visible(False)
-            ax.spines['right'].set_visible(False)
-            if i <= j:
-                ax.axis('off')
-    # Limits, ticks, and labels
-    labels = [r"$x$", r"$x'$", r"$y$", r"$y'$"]
-    if norm_labels:
-        labels = [r"$x_n$", r"$x_n'$", r"$y_n$", r"$y_n'$"]
-    umax, upmax = limits
-    limits = [(-umax, umax), (-upmax, upmax)] * 2
-    utick, uptick = umax * 0.8, upmax * 0.8
-    ticks = np.around([[-utick, 0, utick], [-uptick, 0, uptick]] * 2, decimals=1)
-    for k in range(4):
-        axes[3,k].set_xlim(limits[k])
-        axes[3,k].set_xticks(ticks[k])
-        axes[3,k].set_xlabel(labels[k], fontsize='x-large')
-        axes[k,0].set_ylim(limits[k])
-        axes[k,0].set_yticks(ticks[k])
-        axes[k,0].set_ylabel(labels[k], fontsize='x-large')
-    return fig, axes
-
-
 def corner(
     coords_list,
-    nturns,
+    nframes,
     samples=5000,
     limits=None,
     padding=0.5,
@@ -244,7 +209,7 @@ def corner(
         return [line for row in lines for line in row],
 
     # Animation function to be called sequentially.
-    def animate(i):
+    def update(i):
         df = dfs[i]
         df_samp = df.sample(samples) if samples < df.shape[0] else df
         for r in range(4):
@@ -282,14 +247,92 @@ def corner(
         return [line for row in lines for line in row]
 
     # Call the animator.
-    anim = animation.FuncAnimation(fig, animate, init_func=init,
-                                   frames=nturns, interval=1000/fps)
+    anim = animation.FuncAnimation(fig, update, init_func=init,
+                                   frames=nframes, interval=1000/fps)
     # Save animation as mp4
     writer = animation.writers['ffmpeg'](fps=fps)
     if figname is not None:
         anim.save(figname, writer=writer, dpi=dpi, progress_callback=None)
     return anim
     
+    
+def corner_nohist(
+    coords_list,
+    nframes,
+    samples=5000,
+    limits=None,
+    padding=0.5,
+    c=None,
+    s=1.0,
+    alpha=1.0,
+    update_string='Turn = {}',
+    positions=None,
+    figsize=(7,7),
+    gap=0.1,
+    norm_labels=False,
+    figname=None,
+    dpi=None,
+    fps=1,
+    bitrate=None
+):
+    """Animate corner plots of TBT coordinate data without histograms."""
+    
+    # Get list of DataFrames
+    dfs = [pd.DataFrame(X, columns=['x','xp','y','yp']) for X in coords_list]
+    
+    # Auto limits
+    if limits is None:
+        initial_beam = dfs[0]
+        umax = 2 * initial_beam.std()[['x','y']].max()
+        upmax = 2 * initial_beam.std()[['xp','yp']].max()
+    else:
+        umax, upmax = limits
+    limits = ((1+padding)*umax, (1+padding)*upmax)
+    
+    # Create figure
+    fig, axes = setup_corner_axes_3x3(limits, gap, figsize, norm_labels)
+    
+    # Create array of Line2D objects
+    lines = [[],[],[]]
+    for i in range(3):
+        for j in range(3):
+            ax = axes[i, j]
+            line, = ax.plot([], [], '.', ms=s, color=c, lw=0)
+            lines[i].append(line)
+            
+    # Initialization function: plot the background of each frame.
+    def init():
+        for i in range(3):
+            for j in range(3):
+                if i > j:
+                    lines[i][j].set_data([], [])
+        return [line for row in lines for line in row],
+         
+    def update(i):
+        df = dfs[i]
+        df_samp = df.sample(samples) if samples < df.shape[0] else df
+        X = df_samp.values
+        hdata, vdata = X[:, :-1], X[:, 1:]
+        for r in range(3):
+            for c in range(3):
+                if r >= c:
+                    lines[r][c].set_data(hdata[:, c], vdata[:, r])
+        # Show turn number
+        if positions is not None:
+            i = positions[i]
+        axes[1,1].set_title(update_string.format(i))
+        return [line for row in lines for line in row]
+        
+    anim = animation.FuncAnimation(fig, update, init_func=init,
+                                   frames=nframes, interval=1000/fps)
+    # Save animation as mp4
+    writer = animation.writers['ffmpeg'](fps=fps)
+    if figname is not None:
+        anim.save(figname, writer=writer, dpi=dpi, progress_callback=None)
+    return anim
+    
+    
+        
     
 def corner_onepart(
     X,
@@ -435,7 +478,7 @@ def corner_envelope(
 
     Inputs
     ------
-    params : NumPy array, shape (nturns, 8)
+    params : NumPy array, shape (nframes, 8)
         Columns are [a,b,a',b',e,f,e',f']. Rows are frame number.
     limits : tuple
         Manually set the maximum rms position and slope of the distribution
@@ -482,10 +525,10 @@ def corner_envelope(
         ST Accel. Beams 6, 094202 (2003).
     """
     # Get ellipse boundary data for x, x', y, y'
-    nturns = params.shape[0]
+    nframes = params.shape[0]
     n_angles = 50
-    tracked = np.zeros((nturns, n_angles, 4))
-    for i in range(nturns):
+    tracked = np.zeros((nframes, n_angles, 4))
+    for i in range(nframes):
         x, xp, y, yp = ea.get_coords(params[i], n_angles)
         tracked[i] = np.vstack([x, xp, y, yp]).T
 
@@ -565,7 +608,7 @@ def corner_envelope(
                         ax.plot(xdata_init[:,j], ydata_init[:,i], 'k--', lw=0.5, alpha=0.25)
                         
     # Call animator
-    anim = animation.FuncAnimation(fig, update, frames=nturns, 
+    anim = animation.FuncAnimation(fig, update, frames=nframes,
                                    interval=1000/fps)
     # Save animation
     writer = animation.writers['ffmpeg'](fps=fps)
@@ -596,11 +639,11 @@ def xy_envelope(
     """Plot the ellipse in real space."""
         
     # Get ellipse boundary data for x and y
-    nturns = params.shape[0]
+    nframes = params.shape[0]
     psi = np.linspace(0.0, 2*np.pi, 50)
     cos, sin = np.cos(psi), np.sin(psi)
     x, y = [], []
-    for i in range(nturns):
+    for i in range(nframes):
         a, b, ap, bp, e, f, ep, fp = params[i]
         x.append(a*cos + b*sin)
         y.append(e*cos + f*sin)
@@ -645,7 +688,7 @@ def xy_envelope(
         reset_axes()
 
     # Call animator
-    anim = animation.FuncAnimation(fig, update, frames=nturns, interval=1000/fps)
+    anim = animation.FuncAnimation(fig, update, frames=nframes, interval=1000/fps)
     
     # Save animation
     writer = animation.writers['ffmpeg'](fps=fps)
