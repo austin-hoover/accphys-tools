@@ -140,6 +140,7 @@ def corner(
     alpha=1.0,
     figsize=(7,7),
     gap=0.1,
+    bins='auto',
     hist_spines=False,
     reduce_hist_height=0.75,
     norm_labels=False,
@@ -261,7 +262,7 @@ def corner(
                         ax.set_yticks([])
                     ax.set_xlabel(labels[r])
                     ax.set_ylabel('')
-                    ax.hist(df.iloc[:,r], bins='auto', histtype='step')
+                    ax.hist(df.iloc[:,r], bins=bins, histtype='step')
                 else:
                     ax.axis('off')
                     
