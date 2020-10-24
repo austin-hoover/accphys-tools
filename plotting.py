@@ -189,7 +189,7 @@ def corner(
     plt_kws['edgecolors'] ='none'
     hist_kws['histtype'] = histtype
     hist_kws['bins'] = bins
-    hist_kws['color'] = c
+    hist_kws['color'] = c if type(c) is str else None
     
     # Setup figure
     fig, axes = plt.subplots(4, 4, figsize=figsize)
