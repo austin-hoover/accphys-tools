@@ -426,11 +426,10 @@ def corner_onepart(
                         if show_history and t > 0:
                             ax.scatter(x[:-1], y[:-1], s=1, c=c)
                     if vector:
-                        length = np.sqrt(x[-1]**2 + y[-1]**2)
-                        ax.quiver([0], [0], x[-1], y[-1], scale=1, scale_units='x')
+                        ax.arrow(0, 0, x[-1], y[-1], color='r', zorder=0)
                         if show_history and t > 0:
-                            origin = ([0] * t, [0] * t)
-                            ax.quiver([0] * t, [0] * t, x[:-1], y[:-1], scale=1)
+                            for x_, y_ in zip(x[:-1], y[:-1]):
+                                ax.arrow(0, 0, x_, y_, color='r', zorder=0)
 
     # Call animator
     anim = animation.FuncAnimation(fig, update, frames=X.shape[0], interval=1000/fps)
