@@ -116,7 +116,7 @@ def parts_from_envelope(params_df, psi=0.0):
     return part
 
 
-def read(filename, drop_s=False, mm_mrad=True):
+def read(filename, drop_s=False, mm_mrad=False):
     """Read envelope parameters and calculate statistics.
     
     Parameters
