@@ -8,7 +8,7 @@ import numpy.linalg as la
 import pandas as pd
 from tqdm import trange, tqdm
 
-from .utils import mat2vec, vec2mat, cov2corr, norm_mat_4D
+from .utils import mat2vec, vec2mat, cov2corr, norm_mat
     
 moment_cols = ['x2','xxp','xy','xyp','xp2','yxp','xpyp','y2','yyp','yp2']
 twiss_cols = ['ax','ay','bx','by','ex','ey','e1','e2']
@@ -140,14 +140,14 @@ def read_stats(filename, drop_s):
     return Stats(twiss, moments, corr, beam)
 
     
-def read_coords(file_path, turns, mm_mrad=False):
+def read_coords(dir, turns, mm_mrad=False):
     """Read turn-by-turn transverse coordinate data files.
     
     Parameters
     ----------
-    file_path : str
-        The path to data files. Ex: coords after turn 3 are found in
-        'path/coords_3.dat'.
+    dir : str
+        The path to the directory containing the data files. Ex:
+        coords after turn 3 are found in 'dir/coords_3.dat'.
     turns : iterable
         The turns to read.
     
@@ -156,13 +156,13 @@ def read_coords(file_path, turns, mm_mrad=False):
     cdfs : list[DataFrame]
         List of coordinate DataFrames at each frame.
     """
-    if file_path.endswith('/'):
-        file_path = file_path[:-1]
-        
+    if not dir.endswith('/'):
+        dir += '/'
+                
     cdfs = []
     for turn in tqdm(turns):
-        file = ''.join([file_path, '/coords_{}.dat'.format(turn)])
-        cdf = pd.read_table(file, sep=' ', names=dims, usecols=list(range(4)))
+        file = ''.join([dir, 'coords_{}.dat'.format(turn)])
+        cdf = pd.read_table(file, sep=' ', names=dims[:4], usecols=list(range(4)))
         if mm_mrad:
             cdf *= 1e3
         cdfs.append(cdf)
@@ -190,7 +190,7 @@ def normalize(cdfs, twiss):
         return np.apply_along_axis(lambda x: np.matmul(N, x), 1, X)
         
     ax, ay, bx, by, ex, ey = twiss
-    V = norm_mat_4D(ax, bx, ay, by)
+    V = norm_mat(ax, bx, ay, by)
     Vinv = la.inv(V)
         
     cdfs_n = []

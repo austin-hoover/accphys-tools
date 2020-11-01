@@ -97,7 +97,6 @@ def setup_corner_axes_3x3(limits, gap=0.1, figsize=(8,8), norm_labels=False):
 
 def corner(
     coords_list,
-    nframes,
     samples=5000,
     limits=None,
     padding=0.5,
@@ -247,8 +246,10 @@ def corner(
         return [line for row in lines for line in row]
 
     # Call the animator.
-    anim = animation.FuncAnimation(fig, update, init_func=init,
-                                   frames=nframes, interval=1000/fps)
+    anim = animation.FuncAnimation(
+        fig, update, init_func=init,
+        frames=len(coords_list), interval=1000/fps
+    )
     # Save animation as mp4
     writer = animation.writers['ffmpeg'](fps=fps)
     if figname is not None:
@@ -258,7 +259,6 @@ def corner(
     
 def corner_nohist(
     coords_list,
-    nframes,
     samples=5000,
     limits=None,
     padding=0.5,
@@ -323,8 +323,11 @@ def corner_nohist(
         axes[1,1].set_title(update_string.format(i))
         return [line for row in lines for line in row]
         
-    anim = animation.FuncAnimation(fig, update, init_func=init,
-                                   frames=nframes, interval=1000/fps)
+    # Call the animator.
+    anim = animation.FuncAnimation(
+        fig, update, init_func=init,
+        frames=len(coords_list), interval=1000/fps
+    )
     # Save animation as mp4
     writer = animation.writers['ffmpeg'](fps=fps)
     if figname is not None:

@@ -1,22 +1,33 @@
 import numpy as np
 import numpy.linalg as la
 import pandas as pd
+from sympy import pprint, Matrix
 from scipy.integrate import trapz
+
+
+def show(V, name=None, dec=3):
+    """Pretty print matrix with rounded numbers."""
+    if name:
+        print(name, '=')
+    pprint(Matrix(np.round(V, dec)))
 
 
 def rotation_matrix(phi):
     return np.array([[np.cos(phi), np.sin(phi)], [-np.sin(phi), np.cos(phi)]])
     
-def phase_space_rotation_matrix(phi_x, phi_y):
+    
+def phase_adv_matrix(phi1, phi2):
     R = np.zeros((4, 4))
-    R[:2, :2] = rotation_matrix(phi_x)
-    R[2:, 2:] = rotation_matrix(phi_y)
+    R[:2, :2] = rotation_matrix(phi1)
+    R[2:, 2:] = rotation_matrix(phi2)
     return R
+    
     
 def mat2vec(S):
     """Return vector of independent elements in 4x4 symmetric matrix S."""
     return np.array([S[0,0], S[0,1], S[0,2], S[0,3], S[1,1],
                      S[1,2], S[1,3], S[2,2], S[2,3], S[3,3]])
+                     
                      
 def vec2mat(v):
     """Return 4x4 symmetric matrix from 10 element vector."""
@@ -26,6 +37,7 @@ def vec2mat(v):
                      [s13, s23, s33, s34],
                      [s14, s24, s34, s44]])
                      
+                     
 def symmetrize(M):
     """Return a symmetrized version of M.
     
@@ -34,6 +46,7 @@ def symmetrize(M):
     """
     return M + M.T - np.diag(M.diagonal())
     
+    
 def cov2corr(cov_mat):
     """Convert covariance matrix to correlation matrix."""
     D = np.sqrt(np.diag(cov_mat.diagonal()))
@@ -41,14 +54,17 @@ def cov2corr(cov_mat):
     corr_mat = la.multi_dot([Dinv, cov_mat, Dinv])
     return corr_mat
     
+    
 def norm_mat_2D(alpha, beta):
     return np.array([[beta, 0.0], [-alpha, 1.0]]) / np.sqrt(beta)
 
-def norm_mat_4D(alpha_x, beta_x, alpha_y, beta_y):
+def norm_mat(alpha_x, beta_x, alpha_y, beta_y):
+    """4D normalization matrix (uncoupled)"""
     V = np.zeros((4, 4))
     V[:2, :2] = norm_mat_2D(alpha_x, beta_x)
     V[2:, 2:] = norm_mat_2D(alpha_y, beta_y)
     return V
+    
     
 def get_phase_adv(beta_x, beta_y, s, units='deg'):
     """Compute phase advance as function of s."""

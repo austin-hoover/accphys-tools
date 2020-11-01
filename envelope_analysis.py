@@ -16,7 +16,7 @@ from numpy import linalg as la
 import pandas as pd
 from scipy.integrate import trapz
 
-from .utils import mat2vec, norm_mat_4D, cov2corr
+from .utils import mat2vec, norm_mat, cov2corr
 
 
 env_cols = ['a','b','ap','bp','e','f','ep','fp']
@@ -99,7 +99,7 @@ def radii(params):
 def normalize(params, twiss_params):
     """Normalize the envelope parameters."""
     ax, ay, bx, by = twiss_params
-    V = norm_mat_4D(ax, bx, ay, by)
+    V = norm_mat(ax, bx, ay, by)
     P = env_vec2mat(params)
     params_n = mat_to_vec(np.matmul(la.inv(V), P))
     return params_n
