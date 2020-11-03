@@ -265,6 +265,7 @@ def corner(
     # Set axis label sizes and orientations
     _set_ticks_props(axes, xlabelsize=8, xrot=0, ylabelsize=8, yrot=0)
     fig.align_labels()
+    fig.set_tight_layout(True)
         
     # Save figure
     if figname is not None:
@@ -289,7 +290,7 @@ def corner_envelope(
     norm_labels=False,
     leg_loc=(0, 1),
     leg_labels=('Initial', 'Final'),
-    tight_layout=False,
+    tight_layout=True,
     figname=None,
     dpi=None,
 ):       
