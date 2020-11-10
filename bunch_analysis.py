@@ -43,7 +43,6 @@ def get_mode_emittances(S):
         eigvals = eigvals[:-1]
         
     # Return the largest emittance first
-    eigvals = np.sort(eigvals)
     e1, e2 = np.sort(eigvals)
     return e1, e2
 
