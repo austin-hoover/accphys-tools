@@ -14,12 +14,11 @@ from . import envelope_analysis as ea
 # Global variables
 labels = [r"$x$", r"$x'$", r"$y$", r"$y'$"]
 
-
-# Helper functions
-def setup_corner_axes_3x3(limits, gap=0.1, figsize=(8,8), norm_labels=False):
+    
+def setup_corner_axes_3x3(limits, gap=0.1, figsize=(8, 8), norm_labels=False):
     """Set up 'corner' of 4x4 grid of subplots:
     
-    Does not include diagonals. It returns the axes 
+    Does not include diagonals. It returns the axes
     marked with 'X' in the following diagram:
     
     O O O O
@@ -27,8 +26,8 @@ def setup_corner_axes_3x3(limits, gap=0.1, figsize=(8,8), norm_labels=False):
     X X O O
     X X X O
     
-    It is used to plot the 6 unique pairwise relationships between 4 variables. 
-    For example, if our variables are a, b, c, and d, the subplots would 
+    It is used to plot the 6 unique pairwise relationships between 4 variables.
+    For example, if our variables are a, b, c, and d, the subplots would
     contain the following plots:
 
     b-a
@@ -39,7 +38,7 @@ def setup_corner_axes_3x3(limits, gap=0.1, figsize=(8,8), norm_labels=False):
     ------
     limits : tuple
         (umax, upmax), where u can be x or y. umax is the maximum extent of
-        the real-space plot windows, while upmax is the maximum extent of 
+        the real-space plot windows, while upmax is the maximum extent of
         the phase-space plot windows.
     gap : float
         Size of the gap between subplots.
@@ -53,7 +52,6 @@ def setup_corner_axes_3x3(limits, gap=0.1, figsize=(8,8), norm_labels=False):
     axes : Matplotlib axes object
         3x3 array of Axes objects.
     """
-    
     # Create figure
     fig, axes = plt.subplots(3, 3, sharex='col', sharey='row', figsize=figsize)
     fig.subplots_adjust(wspace=gap, hspace=gap)
@@ -87,9 +85,9 @@ def setup_corner_axes_3x3(limits, gap=0.1, figsize=(8,8), norm_labels=False):
             if i < j:
                 ax.axis('off')
             if j == 0:
-                ax.set_ylabel(ylabels[i], fontsize='x-large')
+                ax.set_ylabel(ylabels[i], fontsize='xx-large')
             if i == 2:
-                ax.set_xlabel(xlabels[j], fontsize='x-large')
+                ax.set_xlabel(xlabels[j], fontsize='xx-large')
     
     return fig, axes
     
@@ -164,7 +162,6 @@ def corner(
         Name of saved figure. 
     dpi : int
         Dots per inch of saved figure.
-        
         
     Returns
     -------
@@ -276,30 +273,27 @@ def corner(
 
 def corner_envelope(
     params,
-    init_params=None,
     mm_mrad=False,
     limits=None,
-    fill=False,
-    edgecolor='black',
-    fillcolor='lightsteelblue',
     padding=0.5,
     gap=0.1,
-    c='black',
     figsize=(6,6),
-    labelsize=None,
+    edgecolor='black',
+    fillcolor=None,
+    labelsize=12,
     norm_labels=False,
-    leg_loc=(0, 1),
-    leg_labels=('Initial', 'Final'),
-    tight_layout=True,
+    legend_labels=None,
+    tight_layout=False,
     figname=None,
     dpi=None,
-):       
+):
     """Plot the 6 transverse phase space ellipses of the beam.
     
     Inputs
     ------
-    params : array-like
-        Envelope parameters [a, b, a', b', e, f, e', f'].
+    params_list : array-like
+        Envelope parameters [a, b, a', b', e, f, e', f']. If a list of
+        these vectors is provided, each one will be plotted.
     init_params : array-like
         Initial envelope parameters (will be plotted in the background).
     mm_mrad : boolean
@@ -312,22 +306,20 @@ def corner_envelope(
         plot will be at umax * (1 + padding).
     gap : float
         Width of the gap between the subplots.
+    figsize : tuple
+        The (x, y) size of the figure.
     edgecolor : str
         The color of the ellipse boundary.
     fillcolor : str
-        The color of the ellipse interior.
-    figsize : tuple
-        The x and y size of the figure.
+        The color of the ellipse interior. If None, do not fill.
+    labelsize : float or str
+        The size of the tick labels.
     norm_labels : boolean
         If True, add '_n' to the axis labels. E.g. 'x' -> 'x_n'.
-    leg_loc : tuple
-        Location of subplot of the legend. The legend identifies linestyles 
-        used for the initial and final beam ellipses. (0,1) corresponds to 
-        first row, second column.
-    leg_labels : tuple
-        Labels if plotting two envelopes on top of one another. For example,
-        the default is ('Initial', 'Final') if plotting the initial and final 
-        envelopes.
+    legend_labels : list
+        Creates legend from these labels if provided.
+    tight_layout : bool
+        Whether to call fig.set_tight_layout(True)
     figname : str
         Name of saved figure -> plt.savefig(figname, dpi=dpi).
     dpi : int
@@ -339,16 +331,17 @@ def corner_envelope(
         3x3 array of Axes objects.
     """    
     # Get ellipse boundary data for x, x', y, y'
-    def get_ellipse_data(params):
-        data = ea.get_coords(params)
+    def get_ellipse_data(pvec):
+        data = ea.get_coords(pvec)
         if mm_mrad:
             data *= 1000
         return data
-    data = get_ellipse_data(params)
-    if init_params is not None:
-        init_data = get_ellipse_data(init_params)
-            
-    xdata, ydata = data[:-1], data[1:]
+    
+    if type(params) != list:
+        params = [params]
+    
+    data_list = [get_ellipse_data(pvec) for pvec in params]
+    data = data_list[-1]
 
     # Configure axis limits
     if limits is None:
@@ -361,27 +354,29 @@ def corner_envelope(
                 
     # Set up figure
     fig, axes = setup_corner_axes_3x3(limits, gap, figsize, norm_labels)
+    if len(params) > 1:
+        colorcycle = [plt.cm.viridis(i) for i in np.linspace(0, 1, len(params))]
+        for ax in axes.flatten():
+            ax.set_prop_cycle('color', colorcycle)
 
     # Plot data
-    for i in range(3):
-        for j in range(3):
-            ax = axes[i,j]
-            if i >= j: 
-                ax.plot(xdata[j], ydata[i], '-', color=c, lw=1)
-                if fill:
-                    ax.fill(xdata[j], ydata[i], facecolor=fillcolor, lw=0)
-                if init_params is not None:
-                    xdata, ydata = init_data[:-1], init_data[1:]
-                    ax.plot(xdata[j], ydata[i], '--', color=c, lw=1)
+    for data in data_list:
+        xdata, ydata = data[:-1], data[1:]
+        for i in range(3):
+            for j in range(3):
+                ax = axes[i,j]
+                if i >= j:
+                    if fillcolor is not None:
+                        ax.fill(xdata[j], ydata[i], facecolor=fillcolor, edgecolor='k', lw=1)
+                    else:
+                        color = edgecolor if len(params) == 1 else None
+                        ax.plot(xdata[j], ydata[i], color=color, lw=2)
     # Add legend
-    if init_params is not None:
-        handles = []
-        handles.append(plt.plot([], [], c=c, ls='--', marker='')[0])
-        handles.append(plt.plot([], [], c=c, ls='-', marker='')[0])
-        i, j = leg_loc
-        axes[i,j].legend(handles, leg_labels, fontsize='large', loc='center')
+    if legend_labels is not None:
+        axes[1, 1].legend(leg_labels, fontsize='large', loc='center')
     
-    _set_ticks_props(axes, xlabelsize=8, xrot=0, ylabelsize=8, yrot=0)
+    _set_ticks_props(axes, xlabelsize=labelsize, xrot=0,
+                     ylabelsize=labelsize, yrot=0)
     fig.align_labels()
     fig.set_tight_layout(tight_layout)
         
@@ -389,8 +384,8 @@ def corner_envelope(
     if figname is not None:
         plt.savefig(figname, dpi=dpi)
 
-    return axes
-
+    return fig, axes
+    
 
 def plot_fft(x, y, legend_kws={}, grid=True, figname=None):
     """Compute and plot the FFT of two signals x and y on the same figure.
