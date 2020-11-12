@@ -280,9 +280,10 @@ def corner_envelope(
     figsize=(6,6),
     edgecolor='black',
     fillcolor=None,
-    labelsize=12,
+    cmap=None,
+    labelsize=8,
     norm_labels=False,
-    legend_labels=None,
+    legend_kws=None,
     tight_layout=False,
     figname=None,
     dpi=None,
@@ -312,12 +313,17 @@ def corner_envelope(
         The color of the ellipse boundary.
     fillcolor : str
         The color of the ellipse interior. If None, do not fill.
+    cmap : Matplotlib colormap
+        If plotting a sequence of envelopes, this sets the color cycle. If
+        None, it will plot distinct or random colors. If we provide something
+        like plt.cm.viridis, the different envelopes will be perceptually
+        uniform from blue to yellow.
     labelsize : float or str
         The size of the tick labels.
     norm_labels : boolean
         If True, add '_n' to the axis labels. E.g. 'x' -> 'x_n'.
-    legend_labels : list
-        Creates legend from these labels if provided.
+    legend_kws : dict
+        Key word args for the legend.
     tight_layout : bool
         Whether to call fig.set_tight_layout(True)
     figname : str
@@ -354,8 +360,8 @@ def corner_envelope(
                 
     # Set up figure
     fig, axes = setup_corner_axes_3x3(limits, gap, figsize, norm_labels)
-    if len(params) > 1:
-        colorcycle = [plt.cm.viridis(i) for i in np.linspace(0, 1, len(params))]
+    if len(params) > 1 and cmap is not None:
+        colorcycle = [cmap(i) for i in np.linspace(0, 1, len(params))]
         for ax in axes.flatten():
             ax.set_prop_cycle('color', colorcycle)
 
@@ -372,8 +378,8 @@ def corner_envelope(
                         color = edgecolor if len(params) == 1 else None
                         ax.plot(xdata[j], ydata[i], color=color, lw=2)
     # Add legend
-    if legend_labels is not None:
-        axes[1, 1].legend(leg_labels, fontsize='large', loc='center')
+    if legend_kws is not None:
+        axes[1, 1].legend(**legend_kws)
     
     _set_ticks_props(axes, xlabelsize=labelsize, xrot=0,
                      ylabelsize=labelsize, yrot=0)
