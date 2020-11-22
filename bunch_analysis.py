@@ -3,92 +3,68 @@ This module provides functions to analyze the 6D phase space coordinate data
 describing a distribution of particles.
 """
 
+# 3rd party
 import numpy as np
 import numpy.linalg as la
 import pandas as pd
 from tqdm import trange, tqdm
 
+# My modules
 from .utils import mat2vec, vec2mat, cov2corr, norm_mat
     
+# Module level variables
 moment_cols = ['x2','xxp','xy','xyp','xp2','yxp','xpyp','y2','yyp','yp2']
 twiss_cols = ['ax','ay','bx','by','ex','ey','e1','e2']
 dims = ['x','xp','y','yp','z','dE']
 
+#------------------------------------------------------------------------------
 
-def rms_ellipse_params(moments):
-    s11, s12, s13, s14, s22, s23, s24, s33, s34, s44 = moments
+def rms_ellipse_params(Sigma):
+    s11, s33, s13 = Sigma[0, 0], Sigma[2, 2], Sigma[0, 2]
     phi = 0.5 * np.arctan2(2 * s13, s11 - s33)
     cx = np.sqrt(2) * np.sqrt(s11 + s33 + np.sqrt((s11 - s33)**2 + 4*s13**2))
     cy = np.sqrt(2) * np.sqrt(s11 + s33 - np.sqrt((s11 - s33)**2 + 4*s13**2))
     return phi, cx, cy
-
-
-def get_mode_emittances(S):
-    """Compute the mode emittances from the covariance matrix.
     
-    S : NumPy array, shape (4, 4)
-        The transverse covariance matrix.
-    """
     
+def mode_emittances(Sigma):
     # Get imaginary components of eigenvalues of S.U
     U = np.array([[0,1,0,0], [-1,0,0,0], [0,0,0,1], [0,0,-1,0]])
-    eigvals = la.eigvals(np.matmul(S, U)).imag
-
+    eigvals = la.eigvals(np.matmul(Sigma, U)).imag
     # Keep positive values
     eigvals = eigvals[np.argwhere(eigvals >= 0).flatten()]
-
     # If one of the mode emittances is zero, both will be kept.
     # Remove the extra zero.
     if len(eigvals) > 2:
         eigvals = eigvals[:-1]
-        
     # Return the largest emittance first
     e1, e2 = np.sort(eigvals)
     return e1, e2
-
-
-def get_twiss(S):
-    """Compute the transverse Twiss parameters.
-
-    Parameters
-    ----------
-    S : NumPy array, shape (4, 4)
-        The transverse covariance matrix.
-        
-    Returns
-    -------
-    ax{y} : float
-        The x{y} alpha parameter.
-    bx{y} : float
-        The x{y} beta parameter.
-    ex{y} : float
-        The x{y} rms emittance.
-    e1{2} : float
-        The mode emittance.
-    """
-    ex = np.sqrt(la.det(S[:2, :2]))
-    ey = np.sqrt(la.det(S[2:, 2:]))
-    bx = S[0, 0] / ex
-    by = S[2, 2] / ey
-    ax = -S[0, 1] / ex
-    ay = -S[2, 3] / ey
-    e1, e2 = get_mode_emittances(S)
-    return ax, ay, bx, by, ex, ey, e1, e2
-
     
-def read_stats(filename, drop_s):
-    """Read turn-by-turn statistics files.
+    
+def get_twiss(Sigma):
+    ex = np.sqrt(la.det(Sigma[:2, :2]))
+    ey = np.sqrt(la.det(Sigma[2:, 2:]))
+    bx = Sigma[0, 0] / ex
+    by = Sigma[2, 2] / ey
+    ax = -Sigma[0, 1] / ex
+    ay = -Sigma[2, 3] / ey
+    e1, e2 = mode_emittances(Sigma)
+    return np.array([ax, ay, bx, by, ex, ey, e1, e2])
+    
+    
+def read_moments(filename):
+    """Read the bunch moments.
+    
+    Other beam parameters, such as the Twiss parameters and emittance, may be
+    computed from the moments.
     
     Inputs
     ------
     filename : str
-        The name of the file to be read containing the transverse beam moments.
-        The columns are ['s','x2','xxp','xy','xyp','xp2','yxp','xpyp','y2',
-        'yyp','yp2'], where s is the longitudinal position (always 0 for
-        turn by turn data), x2 = <x^2>, xxp = <xx'>, etc.
-        
-    drop_s : bool
-        If True, the 's' column is dropped.
+        The name of the file containing the transverse beam moments. The
+        columns are ['x2','xxp','xy','xyp','xp2','yxp','xpyp','y2',
+        'yyp','yp2'], where x2 = <x^2>, xxp = <xx'>, etc.
         
     Returns
     ------
@@ -99,11 +75,7 @@ def read_stats(filename, drop_s):
         * corr : the 10 elements of the correlation matrix
         * beam : the tilt angle, radii and area of the real space ellipse
     """
-    moments = pd.read_table(filename, sep=' ', names=['s'] + moment_cols)
-    s_col = moments['s'].values
-    if not drop_s:
-        env_params = env_params.sort_values('s', ignore_index=True)
-    moments = moments.loc[:, moments.columns != 's']
+    moments = pd.read_table(filename, sep=' ', names=moment_cols)
         
     nframes = moments.shape[0]
     corr = np.zeros((nframes, 10))
@@ -115,7 +87,7 @@ def read_stats(filename, drop_s):
         corr_mat = cov2corr(cov_mat)
         corr[i] = mat2vec(corr_mat)
         twiss[i] = get_twiss(cov_mat)
-        phi, cx, cy = rms_ellipse_params(moment_vec)
+        phi, cx, cy = rms_ellipse_params(cov_mat)
         area = np.pi * cx * cy
         beam[i] = [np.degrees(phi), cx, cy, area]
         
@@ -130,72 +102,12 @@ def read_stats(filename, drop_s):
     beam['area_rel'] = beam['area'] / beam.loc[0, 'area']
     
     class Stats:
+        """Container for beam statistics. Each attribute is a DataFrame."""
         def __init__(self, twiss, moments, corr, beam):
             self.twiss = twiss
             self.moments = moments
             self.corr = corr
             self.beam = beam
+            self.dfs = [self.twiss, self.moments, self.corr, self.beam]
     
     return Stats(twiss, moments, corr, beam)
-
-    
-def read_coords(dir, turns, mm_mrad=False):
-    """Read turn-by-turn transverse coordinate data files.
-    
-    Parameters
-    ----------
-    dir : str
-        The path to the directory containing the data files. Ex:
-        coords after turn 3 are found in 'dir/coords_3.dat'.
-    turns : iterable
-        The turns to read.
-    
-    Returns
-    -------
-    cdfs : list[DataFrame]
-        List of coordinate DataFrames at each frame.
-    """
-    if not dir.endswith('/'):
-        dir += '/'
-                
-    cdfs = []
-    for turn in tqdm(turns):
-        file = ''.join([dir, 'coords_{}.dat'.format(turn)])
-        cdf = pd.read_table(file, sep=' ', names=dims[:4], usecols=list(range(4)))
-        if mm_mrad:
-            cdf *= 1e3
-        cdfs.append(cdf)
-    return cdfs
-
-
-def normalize(cdfs, twiss):
-    """Normalize the x-x' and y-y' projections.
-            
-    Parameters
-    ----------
-    cdfs : list[DataFrame]
-        List of coordinate DataFrames at each frame.
-    twiss : list
-        The Twiss parameters to use: [ax, ay, bx, by, ex, ey].
-        
-    Returns
-    -------
-    cdfs : list[DataFrame]
-        List of normalized coordinate DataFrames at each frame.
-    """
-    def norm(X, Vinv, ex, ey):
-        Ainv = np.sqrt(np.diag([1/ex, 1/ex, 1/ey, 1/ey]))
-        N = np.matmul(Ainv, Vinv)
-        return np.apply_along_axis(lambda x: np.matmul(N, x), 1, X)
-        
-    ax, ay, bx, by, ex, ey = twiss
-    V = norm_mat(ax, bx, ay, by)
-    Vinv = la.inv(V)
-        
-    cdfs_n = []
-    for cdf in tqdm(cdfs):
-        X = cdf.values
-        X_n = norm(X, Vinv, ex, ey)
-        cdf_n = pd.DataFrame(X_n, columns=['x','xp','y','yp'])
-        cdfs_n.append(cdf_n)
-    return cdfs_n
