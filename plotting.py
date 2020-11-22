@@ -179,7 +179,8 @@ def corner(
     add_to_dict(hist_kws, 'bins', 'auto')
     add_to_dict(hist_kws, 'color', c if type(c) is str else None)
     
-    # Get envelope data 
+    # Get envelope data
+    X_env = None
     if env_params is not None:
         env_params = np.array(env_params)
         X_env = ea.get_coords(env_params)
