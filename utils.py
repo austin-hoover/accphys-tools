@@ -1,3 +1,7 @@
+# Python
+import os
+
+# 3rd party
 import numpy as np
 import numpy.linalg as la
 import pandas as pd
@@ -5,17 +9,62 @@ from sympy import pprint, Matrix
 from scipy.integrate import trapz
 
 
+# General functions
+#------------------------------------------------------------------------------
+
+# File movement
+def list_files(dir):
+    """List all files in directory not starting with '.'"""
+    files = os.listdir(dir)
+    return [file for file in files if not file.startswith('.')]
+
+def is_empty(dir):
+    """Return True if directory is empty."""
+    return len(list_files(dir)) > 0
+    
+def delete_files_not_folders(dir):
+    """Delete all files in directory and subdirectories."""
+    for root, dirs, files in os.walk(dir):
+        for file in files:
+            if not file.startswith('.'):
+                os.remove(os.path.join(root, file))
+                
+def file_in_dir(file, dir):
+    """Return True if file is in directory."""
+    return file in list_files(dir)
+    
+# Miscellaneous
+def merge_lists(a, b):
+    """Returns [a[0], b[0], ..., a[-1], b[-1]]"""
+    return [x for pair in zip(a, b) for x in pair]
+    
+def add_to_dict(d, key, val):
+    """Add key-value pair if the key is not in the dictionary."""
+    if key not in d:
+        d[key] = val
+        
+def rand_rows(X, n):
+    """Return random subset of 2D array."""
+    nrows = X.shape[0]
+    if n >= nrows:
+        return X
+    idx = np.random.choice(X.shape[0], n, replace=False)
+    return X[idx, :]
+             
+# Printing
 def show(V, name=None, dec=3):
-    """Pretty print matrix with rounded numbers."""
+    """Pretty print matrix with rounded entries."""
     if name:
         print(name, '=')
     pprint(Matrix(np.round(V, dec)))
 
 
+# Accelerator physics
+#------------------------------------------------------------------------------
 def rotation_matrix(phi):
     return np.array([[np.cos(phi), np.sin(phi)], [-np.sin(phi), np.cos(phi)]])
     
-    
+
 def phase_adv_matrix(phi1, phi2):
     R = np.zeros((4, 4))
     R[:2, :2] = rotation_matrix(phi1)
@@ -57,6 +106,7 @@ def cov2corr(cov_mat):
     
 def norm_mat_2D(alpha, beta):
     return np.array([[beta, 0.0], [-alpha, 1.0]]) / np.sqrt(beta)
+
 
 def norm_mat(alpha_x, beta_x, alpha_y, beta_y):
     """4D normalization matrix (uncoupled)"""
