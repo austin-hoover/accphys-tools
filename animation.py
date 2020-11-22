@@ -1,122 +1,152 @@
 """
-This module contains functions to animate the evolution of a beam in phase 
-space.
+This module contains functions to animate the evolution of a beam of
+particles in phase space.
+
+TO DO
+------
+* Plot multiple envelopes at once.
+* Write function specifically for single particle motion which shows the
+  coordinate vector as an arrow.
 """
 
+# 3rd party
 import numpy as np
 import pandas as pd
 from matplotlib import pyplot as plt
 from matplotlib import animation
 import seaborn as sns
 from pandas.plotting._matplotlib.tools import _set_ticks_props
-from . import envelope_analysis as ea
 from matplotlib.patches import Ellipse, transforms
+
+# My modules
+from . import envelope_analysis as ea
+from .plotting import setup_corner_axes_3x3, get_u_up_max
+from .utils import add_to_dict
+
+# Settings
 plt.rcParams['animation.ffmpeg_path'] = '/usr/local/bin/ffmpeg'
 
-
+# Module level variables
 labels = [r"$x$", r"$x'$", r"$y$", r"$y'$"]
+        
 
+def get_u_up_max_global(coords):
+    """Get the maximum x{y} and x'{y'} extents for any frame in `coords`.
 
-def setup_corner_axes_3x3(limits, gap=0.1, figsize=(8,8), norm_labels=False):
-    """Set up 'corner' of 4x4 grid of subplots:
-    
-    Does not include diagonals. It returns the axes 
-    marked with 'X' in the following diagram:
-    
-    O O O O
-    X O O O
-    X X O O
-    X X X O
-    
-    Motivation is to plot the 6 unique pairwise relationships
-    between 4 variables. For example, if our variables are a,
-    b, c, and d, the subplots would contain the following 
-    plots:
-    
-    ba
-    ca cb
-    da db dc
-    
-    Inputs
-    ------
-    limits : tuple, length 2
-        (umax, upmax), where u can be x or y. umax is the maximum extent of the
-        real-space plot windows, while upmax is the maximum extent of the 
-        phase-space plot windows.
-    gap : float
-        The width of the gap between subplots.
-    figsize : tuple, length 2
-        The figure size: (size_x, size_y)
-    norm_labels : bool
-        Whether to add an 'n' subscript to axis labels.
-
-    Returns
-    -------
-    axes : Matplotlib Axes object
-        Array of the figure axes.
+    `coords` : NumPy array, shape (nframes, nparts, 4)
+        The beam coordinate arrays at each frame.
     """
-    # Create figure
-    fig, axes = plt.subplots(3, 3, sharex='col', sharey='row', figsize=figsize)
-    fig.subplots_adjust(wspace=gap, hspace=gap)
-    plt.close()
+    u_up_local_maxes = np.array([get_u_up_max(X) for X in coords])
+    umax_global, upmax_global = np.max(u_up_local_maxes, axis=0)
+    return (umax_global, upmax_global)
     
-    # Limits, ticks, and labels
-    labels = [r"$x$", r"$x'$", r"$y$", r"$y'$"]
-    if norm_labels:
-        labels = [r"$x_n$", r"$x_n'$", r"$y_n$", r"$y_n'$"]
-    umax, upmax = limits
-    limits = [(-umax, umax), (-upmax, upmax)] * 2
-    utick, uptick = umax * 0.8, upmax * 0.8
-    ticks = [[-utick, 0, utick], [-uptick, 0, uptick]] * 2
-    ticks = np.around(ticks, decimals=1)
-    xlimits = limits[:-1]
-    xticks = ticks[:-1]
-    xlabels = labels[:-1]
-    ylimits = limits[1:]
-    yticks = ticks[1:]
-    ylabels = labels[1:]
-    
-    for i in range(3):
-        for j in range(3):
-            ax = axes[i,j]
-            ax.spines['top'].set_visible(False)
-            ax.spines['right'].set_visible(False)
-            ax.set_xticks(xticks[j])
-            ax.set_yticks(yticks[i])
-            ax.set_xlim(xlimits[j])
-            ax.set_ylim(ylimits[i])
-            if i < j:
-                ax.axis('off')
-            if j == 0:
-                ax.set_ylabel(ylabels[i], fontsize='x-large')
-            if i == 2:
-                ax.set_xlabel(xlabels[j], fontsize='x-large')
-    
-    return fig, axes
-
 
 def corner(
-    coords_list,
-    samples=5000,
+    coords,
+    samples=2000,
+    skip=0,
     limits=None,
-    padding=0.5,
-    s=1.0,
-    alpha=1.0,
-    figsize=(7,7),
+    padding=0.25,
+    figsize=(7, 7),
     gap=0.1,
-    bins='auto',
+    s=2.0,
+    c='tab:blue',
+    hist=True,
     hist_spines=False,
-    reduce_hist_height=0.75,
+    hist_height=0.7,
+    plt_kws={},
+    hist_kws={},
+    update_str='Turn = {}',
+    update_vals=None,
     norm_labels=False,
     figname=None,
     dpi=None,
     fps=1,
-    bitrate=None
+    env=None,
+    c_env='k',
 ):
-    """Animate corner plots of TBT coordinate data."""
+    """Frame-by-frame phase space projections of the beam.
     
-    # Get list of DataFrames
-    dfs = [pd.DataFrame(X, columns=['x','xp','y','yp']) for X in coords_list]
+    Parameters
+    ----------
+    coords : list or NumPy array, shape (nturns, nparts, 4)
+        Each element of `coords` contains the coordinate array at a particular
+        frame.
+    samples : int
+        The number of particles to use in the scatter plots.
+    skip : int
+        The coordinates will be plotted every `skip` + 1 frames.
+    limits : tuple
+        (`umax`, `upmax`), where u can be x or y. `umax` is the maximum extent
+        of the real-space plot windows, while `upmax` is the maximum extent of
+        the phase-space plot windows. If None, they are set automatically.
+    padding : float
+        Fraction of umax and upmax to pad the axis ranges with. The edge of the
+        plot will be at umax * (1 + padding).
+    figsize : tuple,
+        The x and y size of the figure.
+    gap : float
+        Width of the gap between the subplots.
+    s : float
+        The marker size.
+    c : str
+        The marker color.
+    hist : bool
+        Whether to plot histograms on the diagonals.
+    hist_height : float
+        Reduce the height of the histogram from its default value. Must be in
+        range [0, 1]. The new height will be hist_height * old_height.
+    plt_kws : dict
+        Keyword arguments for matplotlib.pyplot.scatter. It will override the
+        `s` and `c` parameters.
+    hist_kws : dict
+        Keyword arguments for matplotlib.pyplot.hist. It will override the
+        `histtype` and `bins` arg
+    update_str : str
+        Each new frame will display text indicating the turn or position. For
+        example: 'Turn = 5' or 's = 17.4 m'. The string that will be printed
+        is update_str.format(f), where f = update_vals[t] and t is the frame
+        number.
+    update_vals : array like
+        Array which maps frame number to a value such as the s position.
+    norm_labels : bool
+        Whether to add an 'n' subscript to axis labels. Ex: 'x' --> 'x_n'.
+    figname : str
+        If not None, calls animation.save(figname).
+    fps : int
+        Frames per second of the animation.
+    dpi : int
+        DPI for saved animation.
+    env : NumPy array, shape (nframes, 8)
+        The beam envelope parameters, which are used to plot the beam envelope
+        if provided.
+    c_env : str
+        The color of the beam envelope, if provided.
+    """
+    # Add user supplied keyword arguments
+    add_to_dict(plt_kws, 'ms', s)
+    add_to_dict(plt_kws, 'color', c)
+    add_to_dict(plt_kws, 'marker', '.')
+    add_to_dict(plt_kws, 'markeredgewidth', 0)
+    add_to_dict(plt_kws, 'lw', 0)
+    add_to_dict(plt_kws, 'fillstyle', 'full')
+    add_to_dict(hist_kws, 'histtype', 'step')
+    add_to_dict(hist_kws, 'bins', 'auto')
+    add_to_dict(hist_kws, 'color', c)
+    
+    # Setup
+    if type(coords) is list:
+        coords = np.array(coords)
+    nframes = coords.shape[0]
+    if len(coords.shape) == 2: # single particle bunch
+        coords = coords[:, np.newaxis, :]
+    if update_vals is None:
+        update_vals = list(range(nframes))
+    # Skip frames
+    plot_every = skip + 1
+    coords = coords[::plot_every]
+    update_vals = update_vals[::plot_every]
+    nframes = coords.shape[0]
     
     # Setup figure
     plt.clf()
@@ -130,333 +160,232 @@ def corner(
     extra_ax.set_xticks([])
     extra_ax.set_yticks([])
     
-    # Auto limits
+    # Take random sample of the coordinates
+    coords_samp, (nframes, nparts, ndims) = coords, coords.shape
+    if nparts > samples:
+        idx = np.random.choice(nparts, samples, replace=False)
+        coords_samp = coords[:, idx, :]
+    
+    # Configure axis limits
     if limits is None:
-        initial_beam = dfs[0]
-        umax = 2 * initial_beam.std()[['x','y']].max()
-        upmax = 2 * initial_beam.std()[['xp','yp']].max()
+        umax, upmax = get_u_up_max_global(coords)
     else:
         umax, upmax = limits
-    umax_padded, upmax_padded = (1+padding)*umax, (1+padding)*upmax
-    limits = [(-umax_padded, umax_padded),
-              (-upmax_padded, upmax_padded)] * 2
-   
+    umax_pad, upmax_pad = (1+padding)*umax, (1+padding)*upmax
+    limits = 2 * [(-umax_pad, umax_pad), (-upmax_pad, upmax_pad)]
+    
+    # Get envelope coordinates
+    env_coords = None
+    if env is not None:
+        env_coords = ea.get_ellipse_coords(env)
+        env_coords = env_coords[::plot_every]
+    
+    if not hist:
+        return corner_nohist(
+            coords_samp, (umax_pad, upmax_pad), padding, figsize, gap,
+            plt_kws, update_str, update_vals, norm_labels, figname, dpi,
+            fps, env_coords, c_env)
+
+    # Set axis limits and spines
+    for i in range(4):
+        for j in range(4):
+            ax = axes[i, j]
+            [ax.spines[s].set_visible(False) for s in ['top', 'right']]
+            if i > j:
+                ax.set_xlim(limits[j])
+                ax.set_ylim(limits[i])
+            elif i == j:
+                ax.set_xlim(limits[j])
+                ax.yaxis.set_visible(False) # no yticks for histograms
+                if not hist_spines or i == 0:
+                    ax.spines["left"].set_visible(False)
+                    ax.set_ylabel('')
+                    ax.set_yticks([])
+            else:
+                ax.axis('off')
+                    
     # Ticks and labels
     labels = ['x', 'xp', 'y', 'yp']
     scale = 1.0
     utick, uptick = umax * scale, upmax * scale
-    ticks = np.around([[-utick, 0, utick], [-uptick, 0, uptick]] * 2, 
-                      decimals=1)
-    for k in range(4):
-        axes[k,0].set_yticks(ticks[k])
-        axes[3,k].set_xticks(ticks[k])
-        axes[k,0].set_ylabel(labels[k], fontsize='large')
-        axes[3,k].set_xlabel(labels[k], fontsize='large')
-
-    # Set limits
+    ticks = 2 * [[-utick, 0, utick], [-uptick, 0, uptick]]
+    ticks = np.round(ticks, decimals=1)
     for i in range(4):
-        for j in range(4):
-            ax = axes[i,j]
-            if i != j:
-                ax.set_xlim(limits[j])
-                ax.set_ylim(limits[i])
+        for j in range(i):
+            ax = axes[i, j]
+            if j == 0:
+                ax.set_yticks(ticks[i])
+                ax.set_ylabel(labels[i], fontsize='large')
             else:
-                ax.set_xlim(limits[j])
-            # turn off ticks for non-edge subplots
-            if (j != 0): ax.yaxis.set_visible(False)
-            if (i != 3): ax.xaxis.set_visible(False)
-            
-    # Turn on/off borders for histogram subplot windows
-    if not hist_spines:
-        for i in range(4):
-            for j in range(4):
-                ax = axes[i,j]
-                if i < j:
-                    ax.axis('off')
-                elif i == j:
-                    ax.spines["top"].set_visible(False)
-                    ax.spines["right"].set_visible(False)
-                    if i == 0:
-                        ax.spines["left"].set_visible(False)
-                        ax.set_ylabel('')
-                        ax.set_yticks([])
-                else:
-                    ax.spines["top"].set_visible(False)
-                    ax.spines["right"].set_visible(False)
+                ax.set_yticklabels([])
+                ax.set_ylabel('')
+            if i == 3:
+                ax.set_xticks(ticks[j])
+                ax.set_xlabel(labels[j], fontsize='large')
+            else:
+                ax.set_xticklabels([])
+                ax.set_xlabel('')
                         
-    # Axis label sizes and orientations
+    # Axis ticklabels - sizes and orientations
     _set_ticks_props(axes, xlabelsize=8, xrot=0, ylabelsize=8, yrot=0)
 
     # Create array of line2D objects
-    lines = [[],[],[],[]]
+    lines = [[], [], [], []]
     for i in range(4):
         for j in range(4):
+            ax = axes[i, j]
             if i > j:
-                line, = axes[i,j].plot([], [], 'o',
-                                    alpha=alpha,
-                                    markersize=s,
-                                    markeredgewidth=0,
-                                    fillstyle='full')
+                line, = ax.plot([], [], **plt_kws)
                 lines[i].append(line)
+                
+    # Beam envelope
+    if env is not None:
+        lines_env = [[], [], [], []]
+        for i in range(4):
+            for j in range(4):
+                ax = axes[i, j]
+                if i > j:
+                    line, = ax.plot([], [], '-', color=c_env)
+                    lines_env[i].append(line)
 
-    # Initialization function: plot the background of each frame.
     def init():
+        """Plot the background of each frame."""
         for i in range(4):
             for j in range(4):
                 if i > j:
                     lines[i][j].set_data([], [])
-        return [line for row in lines for line in row],
+        return [line for row in lines for line in row]
 
-    # Animation function to be called sequentially.
-    def update(i):
-        df = dfs[i]
-        df_samp = df.sample(samples) if samples < df.shape[0] else df
-        for r in range(4):
-            for c in range(4):
-                ax = axes[r, c]
-                if r > c:
-                    lines[r][c].set_data(df_samp.iloc[:,c].values,
-                                         df_samp.iloc[:,r].values)
-                elif r == c:
-                    ax.cla() # This clears everything. 
-                             # Can I just clear the data?
-                    ax.set_xlim(limits[r])
-                    ax.set_xticks(ticks[r])
-                    if r == 0:
+    def update(t):
+        """Animation function to be called sequentially."""
+        X, X_samp = coords[t], coords_samp[t]
+        for i in range(4):
+            for j in range(4):
+                ax = axes[i, j]
+                if i > j:
+                    lines[i][j].set_data(X_samp[:, j], X_samp[:, i])
+                    if env is not None:
+                        X_env = env_coords[t]
+                        lines_env[i][j].set_data(X_env[:, j], X_env[:, i])
+                elif i == j:
+                    # Clear the axis. This clears everything... can I just
+                    # clear the data?
+                    ax.cla()
+                    ax.set_xlim(limits[i])
+                    ax.set_xticks(ticks[i])
+                    if i == 0:
                         ax.set_yticks([])
-                    ax.set_xlabel(labels[r])
+                    if j == 3:
+                        ax.set_xlabel(labels[i])
                     ax.set_ylabel('')
-                    ax.hist(df.iloc[:,r], bins=bins, histtype='step')
-                else:
-                    ax.axis('off')
+                    ax.hist(X[:, i], **hist_kws)
                     
         # Reset tick sizes (they have been cleared)
         _set_ticks_props(axes, xlabelsize=8, xrot=0, ylabelsize=8, yrot=0)
         
         # Edit histogram height
-        for j in range(4):
-            ax = axes[j, j]
-            new_ylim = (1.0 / reduce_hist_height) * ax.get_ylim()[1]
+        for k in range(4):
+            ax = axes[k, k]
+            new_ylim = ax.get_ylim()[1] / hist_height
             ax.set_ylim(0, new_ylim)
         
-        # Show turn number
-        [t.set_visible(False) for t in extra_ax.texts]
-        extra_ax.text(0.5, 0.5, 'turn {}'.format(i))
-
+        # Display update
+        if update_vals is not None:
+             t = update_vals[t]
+        [text.set_visible(False) for text in extra_ax.texts]
+        extra_ax.text(0.5, 0.5, update_str.format(t))
         return [line for row in lines for line in row]
 
-    # Call the animator.
-    anim = animation.FuncAnimation(
-        fig, update, init_func=init,
-        frames=len(coords_list), interval=1000/fps
-    )
-    # Save animation as mp4
+    # Call animator and (maybe) save the animation
+    anim = animation.FuncAnimation(fig, update, init_func=init,
+                                   frames=nframes, interval=1000/fps)
     writer = animation.writers['ffmpeg'](fps=fps)
     if figname is not None:
-        anim.save(figname, writer=writer, dpi=dpi, progress_callback=None)
+        anim.save(figname, writer=writer, dpi=dpi)
     return anim
     
     
 def corner_nohist(
-    coords_list,
-    samples=5000,
-    limits=None,
-    padding=0.5,
-    c=None,
-    s=1.0,
-    alpha=1.0,
-    update_string='Turn = {}',
-    positions=None,
-    figsize=(7,7),
+    coords,
+    limits=(1, 1),
+    padding=0.25,
+    figsize=(7, 7),
     gap=0.1,
+    plt_kws={},
+    update_str='Turn = {}',
+    update_vals=None,
     norm_labels=False,
     figname=None,
     dpi=None,
     fps=1,
-    bitrate=None
+    env_coords=None,
+    c_env='k',
 ):
-    """Animate corner plots of TBT coordinate data without histograms."""
+    """Corner plot without histograms on the diagonals.
     
-    # Get list of DataFrames
-    dfs = [pd.DataFrame(X, columns=['x','xp','y','yp']) for X in coords_list]
-    
-    # Auto limits
-    if limits is None:
-        initial_beam = dfs[0]
-        umax = 2 * initial_beam.std()[['x','y']].max()
-        upmax = 2 * initial_beam.std()[['xp','yp']].max()
-    else:
-        umax, upmax = limits
-    limits = ((1+padding)*umax, (1+padding)*upmax)
-    
+    Do not call directly... use `corner` with `hist=False`.
+    """
     # Create figure
     fig, axes = setup_corner_axes_3x3(limits, gap, figsize, norm_labels)
-    
-    # Create array of Line2D objects
-    lines = [[],[],[]]
-    for i in range(3):
-        for j in range(3):
-            ax = axes[i, j]
-            line, = ax.plot([], [], '.', ms=s, color=c, lw=0)
-            lines[i].append(line)
-            
-    # Initialization function: plot the background of each frame.
-    def init():
-        for i in range(3):
-            for j in range(3):
-                if i > j:
-                    lines[i][j].set_data([], [])
-        return [line for row in lines for line in row],
-         
-    def update(i):
-        df = dfs[i]
-        df_samp = df.sample(samples) if samples < df.shape[0] else df
-        X = df_samp.values
-        hdata, vdata = X[:, :-1], X[:, 1:]
-        for r in range(3):
-            for c in range(3):
-                if r >= c:
-                    lines[r][c].set_data(hdata[:, c], vdata[:, r])
-        # Show turn number
-        if positions is not None:
-            i = positions[i]
-        axes[1,1].set_title(update_string.format(i))
-        return [line for row in lines for line in row]
-        
-    # Call the animator.
-    anim = animation.FuncAnimation(
-        fig, update, init_func=init,
-        frames=len(coords_list), interval=1000/fps
-    )
-    # Save animation as mp4
-    writer = animation.writers['ffmpeg'](fps=fps)
-    if figname is not None:
-        anim.save(figname, writer=writer, dpi=dpi, progress_callback=None)
-    return anim
-    
-    
-        
-    
-def corner_onepart(
-    X,
-    limits=None,
-    padding=0.75,
-    c='black',
-    s=None,
-    update_string='Turn = {}',
-    show_history=False,
-    scatter=True,
-    vector=False,
-    positions=None,
-    figsize=(7, 7),
-    gap=0.1,
-    norm_labels=False,
-    fps=5,
-    figname=None,
-    dpi=None,
-):
-    """Animate the motion of a single particle in 4D phase space.
-    
-    Parameters
-    ----------
-    X : NumPy array, shape (nframes, 4)
-        The transverse particle coordinates at each frame.
-    scatter : bool
-        Whether to plot the paricle position.
-    vector : bool
-        Whether to plot an arrow from the origin to the particle position.
-    """
-    # Split the data
-    hdata, vdata = X[:, :-1], X[:, 1:]
-
-    # Configure axis limits, ticks, and labels
-    labels = [r"$x$", r"$x'$", r"$y$", r"$y'$"]
-    if norm_labels:
-        labels = [r"$x_n$", r"$x_n'$", r"$y_n$", r"$y_n'$"]
-        
-    if limits is None:
-        x, xp, y, yp = X.T
-        umax = max(max(x), max(y))
-        upmax = max(max(xp), max(yp))
-    else:
-        umax, upmax = limits
-    umax_padded, upmax_padded = (1+padding)*umax, (1+padding)*upmax
-    limits = 2 * [(-umax_padded, umax_padded), (-upmax_padded, upmax_padded)]
-
-    utick, uptick = umax_padded * 0.8, upmax_padded * 0.8
-    ticks = np.around(
-        2 * [[-utick, 0, utick], [-uptick, 0, uptick]], decimals=1
-    )
-    xlimits, ylimits = limits[:-1], limits[1:]
-    xticks, yticks = ticks[:-1], ticks[1:]
-    xlabels, ylabels = labels[:-1], labels[1:]
-
-    # Create figure
-    fig, axes = plt.subplots(3, 3, sharex='col', sharey='row', figsize=figsize)
-    fig.subplots_adjust(wspace=gap, hspace=gap)
     plt.close()
     
-    def reset_axes():
+    # Create list of Line2D objects
+    lines = [[], [], []]
+    for i in range(3):
+        for j in range(3):
+            line, = axes[i, j].plot([], [], **plt_kws)
+            lines[i].append(line)
+            
+    # Beam envelope
+    if env_coords is not None:
+        lines_env = [[], [], []]
         for i in range(3):
             for j in range(3):
-                ax = axes[i,j]
-                ax.clear()
-                ax.spines['top'].set_visible(False)
-                ax.spines['right'].set_visible(False)
-                ax.set_xticks(xticks[j])
-                ax.set_yticks(yticks[i])
-                ax.set_xlim(xlimits[j])
-                ax.set_ylim(ylimits[i])
-                if i < j:
-                    ax.axis('off')
-                if j == 0:
-                    ax.set_ylabel(ylabels[i], fontsize='x-large')
-                if i == 2:
-                    ax.set_xlabel(xlabels[j], fontsize='x-large')
-                                        
+                line, = axes[i, j].plot([], [], '-', color=c_env)
+                lines_env[i].append(line)
+         
     def update(t):
-        reset_axes()
-        if positions is not None:
-            t = positions[t]
-        axes[1,1].set_title(update_string.format(t))
+        """Animation function to be called sequentially."""
+        X = coords[t]
+        hdata, vdata = X[:, :-1], X[:, 1:]
+        if env_coords is not None:
+            X_env = env_coords[t]
+            hdata_env, vdata_env = X_env[:, :-1], X_env[:, 1:]
         for i in range(3):
             for j in range(3):
                 if i >= j:
-                    ax = axes[i, j]
-                    x, y = hdata[:t+1, j], vdata[:t+1, i]
-                    if scatter:
-                        ax.scatter(x[-1], y[-1], c=c)
-                        if show_history and t > 0:
-                            ax.scatter(x[:-1], y[:-1], s=1, c=c)
-                    if vector:
-                        ax.arrow(0, 0, x[-1], y[-1], color='r', zorder=0)
-                        if show_history and t > 0:
-                            for x_, y_ in zip(x[:-1], y[:-1]):
-                                ax.arrow(0, 0, x_, y_, color='r', zorder=0)
-
-    # Call animator
-    anim = animation.FuncAnimation(fig, update, frames=X.shape[0], interval=1000/fps)
-    
-    # Save animation
+                    lines[i][j].set_data(hdata[:, j], vdata[:, i])
+                    if env_coords is not None:
+                        lines_env[i][j].set_data(hdata_env[:, j],
+                                                 vdata_env[:, i])
+        # Display update
+        if update_vals is not None:
+            t = update_vals[t]
+        axes[1, 1].set_title(update_str.format(t))
+        return [line for row in lines for line in row]
+        
+    # Call animator and (maybe) save the animation
+    anim = animation.FuncAnimation(fig, update, init_func=None,
+                                   frames=coords.shape[0], interval=1000/fps)
     writer = animation.writers['ffmpeg'](fps=fps)
     if figname is not None:
-        anim.save(figname, writer=writer, dpi=dpi, progress_callback=None)
-    
+        anim.save(figname, writer=writer, dpi=dpi)
     return anim
     
 
-
-def corner_envelope(
+def corner_env(
     params,
     limits=None,
-    padding=0.75,
-    c='lightsteelblue',
+    skip=0,
+    padding=0.05,
+    edgecolor='k',
+    facecolor='lightsteelblue',
     fill=True,
-    show_initial=False,
+    show_init=False,
     clear_history=True,
     plot_boundary=True,
-    update_string='Turn = {}',
-    positions=None,
+    update_str='Turn = {}',
+    update_vals=None,
     figsize=(8, 8),
     gap=0.1,
     norm_labels=False,
@@ -466,44 +395,43 @@ def corner_envelope(
 ):
     """Corner plot animation of beam envelope.
 
-    The bounding 4D ellipse of a rotating self-consistent beam can be
-    parameterized as:
-
-        x = a cos(psi) + b sin(psi)
-        x' = a' cos(psi) + b' sin(psi)
-        y = e cos(psi) + e sin(psi)
-        y' = e' cos(psi) + e' sin(psi)
-
-    See reference [1] for more details. The parameters a, b, e, f, and
-    their derivatives define ellipses for the six pairwise relationships
-    between x, x', y, and y'.
+    The bounding 4D ellipse of the beam can be parameterized as
+        x = a cos(psi) + b sin(psi), x' = a' cos(psi) + b' sin(psi),
+        y = e cos(psi) + e sin(psi), y' = e' cos(psi) + e' sin(psi),
+    where 0 <= psi <= 2pi.
 
     Inputs
     ------
-    params : NumPy array, shape (nframes, 8)
-        Columns are [a,b,a',b',e,f,e',f']. Rows are frame number.
+    params : list or NumPy array, shape (nframes, 8)
+        Columns are [a, b, a', b', e, f, e', f'].
     limits : tuple
-        Manually set the maximum rms position and slope of the distribution
-        (umax, upmax). If None, auto-ranging is performed.
+        (`umax`, `upmax`), where u can be x or y. `umax` is the maximum extent
+        of the real-space plot windows, while `upmax` is the maximum extent of
+        the phase-space plot windows. If None, they are set automatically.
+    skip : int
+        The coordinates will be plotted every `skip` + 1 frames.
     padding : float
-        Fraction of umax and upmax to pad the axis ranges with. The edge of the
-        plot will be at umax * (1 + padding).
-    c : str
-        Color of ellipse boundaries.
+        Fraction of umax and upmax to pad the axis ranges with. The edge of
+        the plot will be at umax * (1 + padding).
+    edgecolor : str
+        Color of ellipse boundary.
+    facecolor : str
+        Color of the ellipse interior.
     fill : bool
-        Wheter to fill the ellipse.
-    show_initial : bool
+        Whether to fill the ellipse.
+    show_init : bool
         Whether to show static initial envelope in background.
     clear_history : bool
         Whether to clear the previous frames before plotting the new frame.
     plot_boundary : bool
         Whether to plot the ellipse boudary.
-    update_string : str
+    update_str : str
         Each new frame will display text indicating the turn or position. For
-        example: 'Turn = 5' or 's = 17.4 m'. The string that will be printed
-        is update_string.format(t), where t is a turn number or position.
-    positions : array like
-        Array which maps frame number to longitudinal position s.
+          example: 'Turn = 5' or 's = 17.4 m'. The string that will be printed
+          is update_str.format(f), where f = update_vals[t] and t is the frame
+          number.
+    update_vals : array like
+        Array which maps frame number to a value such as the s position.
     figsize : tuple
         Size of figure, (x_size, y_size).
     gap : float
@@ -520,179 +448,67 @@ def corner_envelope(
     Returns
     -------
     anim : matplotlib.animation object
-
-    References
-    ----------
-    [1] Danilov, V., Cousineau, S., Henderson, S., and Holmes, J., Phys. Rev.
-        ST Accel. Beams 6, 094202 (2003).
     """
-    # Get ellipse boundary data for x, x', y, y'
-    nframes = params.shape[0]
-    n_angles = 50
-    tracked = np.zeros((nframes, n_angles, 4))
-    for i in range(nframes):
-        x, xp, y, yp = ea.get_coords(params[i], n_angles)
-        tracked[i] = np.vstack([x, xp, y, yp]).T
-
-    # Configure axis limits, ticks and labels
-    labels = [r"$x$", r"$x'$", r"$y$", r"$y'$"]
-    if norm_labels:
-        labels = [l + '_n' for l in labels]
+    # Get ellipse coordinates
+    coords = ea.get_ellipse_coords(params)
+    nframes = coords.shape[0]
+    if update_vals is None:
+        update_vals = list(range(nframes))
         
+    # Skip frames
+    coords = coords[::skip+1]
+    update_vals = update_vals[::skip+1]
+    nframes = coords.shape[0]
+        
+    # Store initial ellipse
+    X_init = coords[0]
+    hdata_init, vdata_init = X_init[:, :-1], X_init[:, 1:]
+        
+    # Configure axis limits
     if limits is None:
-        x, xp, y, yp = tracked[0].T
-        umax = max(max(x), max(y))
-        upmax = max(max(xp), max(yp))
+        umax, upmax = get_u_up_max_global(coords)
     else:
         umax, upmax = limits
-    umax_padded, upmax_padded = (1+padding)*umax, (1+padding)*upmax
-    limits = 2 * [(-umax_padded, umax_padded), (-upmax_padded, upmax_padded)]
-    
-    utick, uptick = umax_padded * 0.8, upmax_padded * 0.8
-    ticks = np.around(
-        2 * [[-utick, 0, utick], [-uptick, 0, uptick]], decimals=1
-    )
-    xlimits, ylimits = limits[:-1], limits[1:]
-    xticks, yticks = ticks[:-1], ticks[1:]
-    xlabels, ylabels = labels[:-1], labels[1:]
+    limits = ((1 + padding)*umax, (1 + padding)*upmax)
 
     # Create figure
-    fig, axes = plt.subplots(3, 3, sharex='col', sharey='row', figsize=figsize)
-    fig.subplots_adjust(wspace=gap, hspace=gap)
+    fig, axes = setup_corner_axes_3x3(limits, gap, figsize, norm_labels)
     plt.close()
     
-    lines = [[],[],[]]
+    # Create list of Line2D objects
+    lines = [[], [], []]
     for i in range(3):
         for j in range(3):
             ax = axes[i, j]
-            line, = ax.plot([], [], 'k-', lw=1)
+            line, = ax.plot([], [], '-', color=edgecolor, lw=2)
             lines[i].append(line)
-            
-    for i in range(3):
-        for j in range(3):
-            ax = axes[i,j]
-            ax.spines['top'].set_visible(False)
-            ax.spines['right'].set_visible(False)
-            ax.set_xticks(xticks[j])
-            ax.set_yticks(yticks[i])
-            ax.set_xlim(xlimits[j])
-            ax.set_ylim(ylimits[i])
-            if i < j:
-                ax.axis('off')
-            if j == 0:
-                ax.set_ylabel(ylabels[i], fontsize='x-large')
-            if i == 2:
-                ax.set_xlabel(xlabels[j], fontsize='x-large')
-        
-    # Get initial data
-    data_init = tracked[0]
-    xdata_init, ydata_init = data_init[:, :-1], data_init[:, 1:]
 
     def update(t):
-
+        """Animation function to be called sequentially."""
         if clear_history:
-            [patch.remove() for ax in axes.flatten() for patch in ax.patches]
-        
-        data = tracked[t]
-        xdata, ydata = data[:, :-1], data[:, 1:]
-        if positions is not None:
-            t = positions[t]
-        axes[1,1].set_title(update_string.format(t))
+            [patch.remove() for ax in axes.ravel() for patch in ax.patches]
+        X = coords[t]
+        hdata, vdata = X[:, :-1], X[:, 1:]
         for i in range(3):
             for j in range(3):
                 if i >= j:
                     ax = axes[i, j]
                     if fill:
-                        ax.fill(xdata[:,j], ydata[:,i], facecolor=c, lw=0)
+                        ax.fill(hdata[:,j], vdata[:,i],
+                                facecolor=facecolor, lw=0)
                     if plot_boundary:
-                        lines[i][j].set_data(xdata[:, j], ydata[:, i])
-                    if show_initial and clear_history:
-                        ax.plot(xdata_init[:,j], ydata_init[:,i], 'k--', lw=0.5, alpha=0.25)
+                        lines[i][j].set_data(hdata[:, j], vdata[:, i])
+                    if show_init and clear_history:
+                        ax.plot(hdata_init[:,j], vdata_init[:,i], 'k--',
+                                lw=0.5, alpha=0.25)
+        # Display update
+        if update_vals is not None:
+            t = update_vals[t]
+        axes[1, 1].set_title(update_str.format(t))
                         
-    # Call animator
+    # Call animator and (maybe) save the animation
     anim = animation.FuncAnimation(fig, update, frames=nframes,
                                    interval=1000/fps)
-    # Save animation
-    writer = animation.writers['ffmpeg'](fps=fps)
-    if figname is not None:
-        anim.save(figname, writer=writer, dpi=dpi, progress_callback=None)
-
-    return anim
-    
-
-def xy_envelope(
-    params,
-    umax=None,
-    padding=0.75,
-    c='tab:blue',
-    fill=True,
-    clear_history=True,
-    alpha=1.0,
-    show_initial=False,
-    update_string='Turn = {}',
-    positions=None,
-    figsize=(4, 4),
-    gap=0.1,
-    norm_labels=False,
-    fps=5,
-    figname=None,
-    dpi=None,
-):
-    """Plot the ellipse in real space."""
-        
-    # Get ellipse boundary data for x and y
-    nframes = params.shape[0]
-    psi = np.linspace(0.0, 2*np.pi, 50)
-    cos, sin = np.cos(psi), np.sin(psi)
-    x, y = [], []
-    for i in range(nframes):
-        a, b, ap, bp, e, f, ep, fp = params[i]
-        x.append(a*cos + b*sin)
-        y.append(e*cos + f*sin)
-            
-    # Configure axis limits
-    if not umax:
-        umax = max(max(x[0]), max(y[0]))
-    umax_padded = (1 + padding) * umax
-
-    # Set up figure
-    fig, ax = plt.subplots(figsize=figsize)
-    plt.close()
-        
-    def reset_axes():
-        scale = 1.0
-        ax.set_xticks([-scale*umax, 0, scale*umax])
-        ax.set_yticks([-scale*umax, 0, scale*umax])
-        ax.set_xticks([])
-        ax.set_yticks([])
-        ax.set_xlim(-umax_padded, umax_padded)
-        ax.set_ylim(-umax_padded, umax_padded)
-        ax.set_xlabel('x', fontsize='x-large')
-        ax.set_ylabel('y', fontsize='x-large')
-        if show_initial:
-            ax.plot(x[0], y[0], 'k--', lw=1)
-    
-    def update(t):
-        if clear_history:
-            ax.clear()
-        phi = -ea.tilt_angle(params[t], degrees=True)
-        cx, cy = ea.radii(params[t])
-        ellipse = Ellipse((0, 0), 2*cx, 2*cy, fill=fill, facecolor=c, 
-                          alpha=alpha, edgecolor='k', lw=2)
-        transf = transforms.Affine2D().rotate_deg(phi)
-        ellipse.set_transform(transf + ax.transData)
-        ax.add_patch(ellipse)
-
-        if positions is not None:
-            t = positions[t]
-            ax.set_title(update_string.format(t))
-
-        reset_axes()
-
-    # Call animator
-    anim = animation.FuncAnimation(fig, update, frames=nframes, interval=1000/fps)
-    
-    # Save animation
     writer = animation.writers['ffmpeg'](fps=fps)
     if figname is not None:
         anim.save(figname, writer=writer, dpi=dpi, progress_callback=None)
