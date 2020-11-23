@@ -30,6 +30,17 @@ def get_u_up_max(X):
     xmax, xpmax, ymax, ypmax = 2 * np.std(X, axis=0)
     umax, upmax = max(xmax, ymax), max(xpmax, ypmax)
     return (umax, upmax)
+    
+    
+def get_u_up_max_global(coords):
+    """Get the maximum x{y} and x'{y'} extents for any frame in `coords`.
+
+    `coords` : NumPy array, shape (nframes, nparts, 4)
+        The beam coordinate arrays at each frame.
+    """
+    u_up_local_maxes = np.array([get_u_up_max(X) for X in coords])
+    umax_global, upmax_global = np.max(u_up_local_maxes, axis=0)
+    return (umax_global, upmax_global)
 
     
 def setup_corner_axes_3x3(limits, gap=0.1, figsize=(7, 7), norm_labels=False):
@@ -387,17 +398,8 @@ def corner_env(
     if type(params) != list:
         params = [params]
     
-    data_list = [get_ellipse_data(pvec) for pvec in params]
-    data = data_list[-1]
-
-    # Configure axis limits
-    if limits is None:
-        umax = max(max(data[0]), max(data[2]))
-        upmax = max(max(data[1]), max(data[3]))
-    else:
-        umax, upmax = limits
-    umax_padded, upmax_padded = (1+padding)*umax, (1+padding)*upmax
-    limits = (umax_padded, upmax_padded)
+    coords = np.array([get_ellipse_data(pvec).T for pvec in params])
+    limits = get_u_up_max_global(coords)
                 
     # Set up figure
     fig, axes = setup_corner_axes_3x3(limits, gap, figsize, norm_labels)
@@ -407,18 +409,18 @@ def corner_env(
             ax.set_prop_cycle('color', colorcycle)
 
     # Plot data
-    for data in data_list:
-        hdata, vdata = data[:-1], data[1:]
+    for X in coords:
+        X_horiz, X_vert = X[:, :-1], X[:, 1:]
         for i in range(3):
             for j in range(3):
                 ax = axes[i,j]
                 if i >= j:
                     if facecolor is not None:
-                        ax.fill(hdata[j], vdata[i], facecolor=facecolor,
-                                edgecolor='k', lw=1)
+                        ax.fill(X_horiz[:, j], X_vert[:, i],
+                                facecolor=facecolor, edgecolor='k', lw=1)
                     else:
                         color = edgecolor if len(params) == 1 else None
-                        ax.plot(hdata[j], vdata[i], color=color, lw=2)
+                        ax.plot(X_horiz[:, j], X_vert[:, i], color=color, lw=2)
     # Add legend
     if legend_kws is not None:
         axes[1, 1].legend(**legend_kws)

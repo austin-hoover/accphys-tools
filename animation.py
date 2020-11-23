@@ -20,7 +20,7 @@ from matplotlib.patches import Ellipse, transforms
 
 # My modules
 from . import envelope_analysis as ea
-from .plotting import setup_corner_axes_3x3, get_u_up_max
+from .plotting import setup_corner_axes_3x3, get_u_up_max, get_u_up_max_global
 from .utils import add_to_dict
 
 # Settings
@@ -28,17 +28,6 @@ plt.rcParams['animation.ffmpeg_path'] = '/usr/local/bin/ffmpeg'
 
 # Module level variables
 labels = [r"$x$", r"$x'$", r"$y$", r"$y'$"]
-        
-
-def get_u_up_max_global(coords):
-    """Get the maximum x{y} and x'{y'} extents for any frame in `coords`.
-
-    `coords` : NumPy array, shape (nframes, nparts, 4)
-        The beam coordinate arrays at each frame.
-    """
-    u_up_local_maxes = np.array([get_u_up_max(X) for X in coords])
-    umax_global, upmax_global = np.max(u_up_local_maxes, axis=0)
-    return (umax_global, upmax_global)
     
 
 def corner(
@@ -133,7 +122,7 @@ def corner(
     add_to_dict(hist_kws, 'histtype', 'step')
     add_to_dict(hist_kws, 'bins', 'auto')
     add_to_dict(hist_kws, 'color', c)
-    
+        
     # Setup
     if type(coords) is list:
         coords = np.array(coords)
