@@ -72,16 +72,12 @@ def get_ellipse_coords(params_list, npts=50):
     return np.array([get_coords(params, npts) for params in params_list])
     
     
-def get_parts(params_list, nparts):
+def get_coord_array(params_list, nparts):
     """Generate ideal particle trajectories on the envelope.
     
-    Returns a list of DataFrames, each with columns ['x','xp','y','yp']
-    giving the single particle position at each frame.
+    Returns NumPy array with shape (nframes, nparts, 4).
     """
-    coords = []
-    for params in params_list:
-        coords.append(get_coords(params, nparts).T)
-    return [pd.DataFrame(X, columns=['x','xp','y','yp']) for X in coords]
+    return np.array([get_coords(params, nparts) for params in params_list])
 
 def read(filename, positions=None):
     """Read envelope parameters and calculate statistics.
@@ -378,7 +374,7 @@ class Envelope:
         yp = ep*cos + fp*sin
         return np.array([x, xp, y, yp])
         
-    def generate_dist(self, nparts):
+    def generate_dist(self, nparts, density='uniform'):
         """Generate a distribution of particles from the envelope.
 
         Parameters
@@ -394,5 +390,10 @@ class Envelope:
         nparts = int(nparts)
         psis = np.linspace(0, 2*np.pi, nparts)
         X = np.array([self.get_part_coords(psi) for psi in psis])
-        radii = np.sqrt(np.random.random(size=(nparts, 1)))
-        return X * np.sqrt(np.random.random((nparts, 1)))
+        if density == 'uniform':
+            radii = np.sqrt(np.random.random(nparts))
+        elif density == 'on_ellipse':
+            radii = np.ones(nparts)
+        elif density == 'gaussian':
+            radii = np.random.normal(size=nparts)
+        return radii[:, np.newaxis] * X
