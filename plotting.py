@@ -87,8 +87,7 @@ def setup_corner_axes_3x3(limits, space=0.1, figsize=(7, 7), norm_labels=False,
     # Create figure
     if type(figsize) is int:
         figsize = (figsize, figsize)
-    fig, axes = plt.subplots(3, 3, sharex='col', sharey='row',
-                             figsize=figsize)
+    fig, axes = plt.subplots(3, 3, sharex='col', sharey='row', figsize=figsize)
     fig.subplots_adjust(wspace=space, hspace=space)
     
     # Configure axis labels
@@ -340,15 +339,15 @@ def corner_nohist(
 def corner_env(
     params,
     lw=None,
-    mm_mrad=False,
     limits=None,
     pad=0.2,
     space=0.1,
-    figsize=(6,6),
+    figsize=(5, 5),
     ec='black',
     fc=None,
     cmap=None,
     labelsize=8,
+    units='mm-mrad',
     norm_labels=False,
     legend_kws=None,
     tight=False,
@@ -364,8 +363,6 @@ def corner_env(
         these vectors is provided, each one will be plotted.
     init_params : array-like
         Initial envelope parameters (will be plotted in the background).
-    mm_mrad : boolean
-        Converts coordinates from m-rad to mm-mrad.
     limits : tuple
         Manually set the maximum rms position and slope of the distribution 
         (umax, upmax). If None, auto-ranging is performed.
@@ -374,8 +371,9 @@ def corner_env(
         plot will be at umax * (1 + pad).
     space : float
         Width of the space between the subplots.
-    figsize : tuple
-        The (x, y) size of the figure.
+    figsize : tuple or int
+        Size of the figure (x_size, y_size). If an int is provided, the
+        number is used as the size for both dimensions.
     ec : str
         The color of the ellipse boundary.
     fc : str
@@ -387,6 +385,9 @@ def corner_env(
         uniform from blue to yellow.
     labelsize : float or str
         The size of the tick labels.
+    units : str or bool
+        Whether to display units on the axis labels. Options are 'mm-mrad' or
+        'm-rad'. No units are displayed if None.
     norm_labels : boolean
         If True, add '_n' to the axis labels. E.g. 'x' -> 'x_n'.
     legend_kws : dict
@@ -402,27 +403,17 @@ def corner_env(
     -------
     axes : Matplotlib axes object
         3x3 array of Axes objects.
-        
-    To do
-    -----
-    Allow `cmap` to be a string.
     """    
     # Get ellipse boundary data for x, x', y, y'
-    def get_ellipse_data(pvec):
-        data = ea.get_coords(pvec).T
-        if mm_mrad:
-            data *= 1000
-        return data
-    
     if type(params) != list:
         params = [params]
-    
-    coords = np.array([get_ellipse_data(pvec).T for pvec in params])
+    coords = np.array([ea.get_coords(pvec) for pvec in params])
     umax, upmax = get_u_up_max_global(coords)
     limits = (((1+pad)*umax, (1+pad)*upmax))
                 
     # Set up figure
-    fig, axes = setup_corner_axes_3x3(limits, space, figsize, norm_labels)
+    fig, axes = setup_corner_axes_3x3(limits, space, figsize, norm_labels,
+                                      units=units)
     if len(params) > 1 and cmap is not None:
         colorcycle = [cmap(i) for i in np.linspace(0, 1, len(params))]
         for ax in axes.ravel():
