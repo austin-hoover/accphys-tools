@@ -1,26 +1,26 @@
-# Python
+# Standard
 import os
-
-# 3rd party
+# Third party
 import numpy as np
 import numpy.linalg as la
 import pandas as pd
 from sympy import pprint, Matrix
 from scipy.integrate import trapz
+from IPython.display import display, HTML
 
 
 # General functions
 #------------------------------------------------------------------------------
-
-# File movement
 def list_files(dir):
     """List all files in directory not starting with '.'"""
     files = os.listdir(dir)
     return [file for file in files if not file.startswith('.')]
+    
 
 def is_empty(dir):
     """Return True if directory is empty."""
     return len(list_files(dir)) > 0
+    
     
 def delete_files_not_folders(dir):
     """Delete all files in directory and subdirectories."""
@@ -29,37 +29,55 @@ def delete_files_not_folders(dir):
             if not file.startswith('.'):
                 os.remove(os.path.join(root, file))
                 
-def file_in_dir(file, dir):
-    """Return True if file is in directory."""
-    return file in list_files(dir)
+               
+def file_exists(file):
+    """Return True if the file exists."""
+    return os.path.isfile(file)
     
-# Miscellaneous
-def merge_lists(a, b):
-    """Returns [a[0], b[0], ..., a[-1], b[-1]]"""
+    
+def merge_lists(x, y):
+    """Returns [x[0], y[0], ..., x[-1], y[-1]]"""
     return [x for pair in zip(a, b) for x in pair]
     
-def add_to_dict(d, key, val):
-    """Add key-value pair if the key is not in the dictionary."""
-    if key not in d:
-        d[key] = val
-        
-def rand_rows(X, n):
-    """Return random subset of 2D array."""
-    nrows = X.shape[0]
-    if n >= nrows:
-        return X
-    idx = np.random.choice(X.shape[0], n, replace=False)
-    return X[idx, :]
+    
+def merge_dicts(*dictionaries):
+    """Given any number of dictionaries, shallow copy and merge into a new dict.
+    
+    Precedence goes to key value pairs in latter dictionaries. This function
+    will work in Python 2 or 3. Note that in version 3.5 or greater we can just
+    call `z = {**x, **y}`, and in 3.9 we can call `z = x | y`, to merge two
+    dictionaries (with the values of y replacing those in x).
+    
+    Example usage:
+        >> w = dict(a=1, b=2, c=3)
+        >> x = dict(e=4, f=5, c=6)
+        >> y = dict(g=7, h=8, f=7)
+        >> merge_dicts(w, x, y)
+        >> {'a': 1, 'b': 2, 'c': 6, 'e': 4, 'f': 7, 'g': 7, 'h': 8}
+    
+    Copied from the accepted answer here:'https://stackoverflow.com/questions/
+    /38987/how-do-i-merge-two-dictionaries-in-a-single-expression-in-python
+    -taking-union-o'.
+    """
+    result = {}
+    for dictionary in dictionaries:
+        result.update(dictionary)
+    return result
              
-# Printing
+             
 def show(V, name=None, dec=3):
     """Pretty print matrix with rounded entries."""
     if name:
         print(name, '=')
     pprint(Matrix(np.round(V, dec)))
+    
+
+def play(anim):
+    """Display matplotlib animation. For use in Jupyter notebook."""
+    display(HTML(anim.to_jshtml()))
 
 
-# Accelerator physics
+# Useful for accelerator physics
 #------------------------------------------------------------------------------
 def rotation_matrix(phi):
     return np.array([[np.cos(phi), np.sin(phi)], [-np.sin(phi), np.cos(phi)]])
@@ -72,19 +90,18 @@ def phase_adv_matrix(phi1, phi2):
     return R
     
     
-def mat2vec(S):
-    """Return vector of independent elements in 4x4 symmetric matrix S."""
-    return np.array([S[0,0], S[0,1], S[0,2], S[0,3], S[1,1],
-                     S[1,2], S[1,3], S[2,2], S[2,3], S[3,3]])
+def mat2vec(Sigma):
+    """Return vector of independent elements in 4x4 symmetric matrix Sigma."""
+    return Sigma[np.triu_indices(4)]
                      
                      
-def vec2mat(v):
+def vec2mat(vec):
     """Return 4x4 symmetric matrix from 10 element vector."""
-    s11, s12, s13, s14, s22, s23, s24, s33, s34, s44 = v
-    return np.array([[s11, s12, s13, s14],
-                     [s12, s22, s23, s24],
-                     [s13, s23, s33, s34],
-                     [s14, s24, s34, s44]])
+    Sigma = np.zeros((4, 4))
+    indices = np.triu_indices(4)
+    for val, (i, j) in zip(vec, zip(*indices)):
+        Sigma[i, j] = val
+    return symmetrize(Sigma)
                      
                      
 def symmetrize(M):
@@ -96,23 +113,30 @@ def symmetrize(M):
     return M + M.T - np.diag(M.diagonal())
     
     
+def rand_rows(X, n):
+    """Return random subset of 2D array."""
+    nrows = X.shape[0]
+    if n >= nrows:
+        return X
+    idx = np.random.choice(X.shape[0], n, replace=False)
+    return X[idx, :]
+    
+    
 def cov2corr(cov_mat):
-    """Convert covariance matrix to correlation matrix."""
+    """Return correlation matrix from covariance matrix."""
     D = np.sqrt(np.diag(cov_mat.diagonal()))
     Dinv = la.inv(D)
     corr_mat = la.multi_dot([Dinv, cov_mat, Dinv])
     return corr_mat
-    
-    
-def norm_mat_2D(alpha, beta):
-    return np.array([[beta, 0.0], [-alpha, 1.0]]) / np.sqrt(beta)
 
 
-def norm_mat(alpha_x, beta_x, alpha_y, beta_y):
+def Vmat_2D(alpha_x, beta_x, alpha_y, beta_y):
     """4D normalization matrix (uncoupled)"""
+    def V_uu(alpha, beta):
+        return np.array([[beta, 0.0], [-alpha, 1.0]]) / np.sqrt(beta)
     V = np.zeros((4, 4))
-    V[:2, :2] = norm_mat_2D(alpha_x, beta_x)
-    V[2:, 2:] = norm_mat_2D(alpha_y, beta_y)
+    V[:2, :2] = V_uu(alpha_x, beta_x)
+    V[2:, 2:] = V_uu(alpha_y, beta_y)
     return V
     
     
