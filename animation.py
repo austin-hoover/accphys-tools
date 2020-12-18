@@ -3,6 +3,7 @@ This module contains functions to animate the evolution of a beam of
 particles in phase space.
 
 To do:
+    * Add option to save animation
     * Plot multiple envelopes at once.
     * Speed up `corner` method.
 """
