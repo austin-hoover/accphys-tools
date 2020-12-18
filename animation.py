@@ -32,7 +32,9 @@ plt_kws_default = dict(ms=2, color='steelblue', marker='.', zorder=5, lw=0,
 diag_kws_default = dict(histtype='step', bins='auto', color='steelblue')
 env_kws_default = dict(color='k', lw=1, zorder=6)
 text_kws_default = dict()
-    
+artists_list = [] # Python can't find the variable, even when I declare it as
+                  # global within the function. Can't figure out why.
+                  
 
 def corner(
     coords, env_params=None, samples=2000, skip=0, pad=0.5, space=0.15,
@@ -177,7 +179,7 @@ def corner(
                 lines[i][j].set_data([], [])
                 if plt_env:
                     lines_env[i][j].set_data([], [])
-    artists_list = []
+                    
     def update(t):
         """Animation function to be called sequentially."""
         X, X_samp = coords[t], coords_samp[t]

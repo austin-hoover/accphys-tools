@@ -82,7 +82,7 @@ def get_coords(params, nparts=50):
         
     Returns
     -------
-    coords : NumPy array, shape (n_angles, 4)
+    coords : ndarray, shape (n_angles, 4)
         Columns are [x, x', y, y'], rows are different values of psi.
     """
     a, b, ap, bp, e, f, ep, fp = params
@@ -97,7 +97,13 @@ def get_coords(params, nparts=50):
 def get_ellipse_coords(params_list, npts=50):
     """Get ellipse coordinates at each frame.
     
-    env_params_list : array like, shape (nframes, 8)
+    Parameters
+    ----------
+    params_list : array like, shape (nframes, 8)
+    
+    Returns
+    -------
+    ndarray, shape (nframes, npts, 4)
     """
     return np.array([get_coords(params, npts) for params in params_list])
     
@@ -105,7 +111,7 @@ def get_ellipse_coords(params_list, npts=50):
 def get_coord_array(params_list, nparts):
     """Generate ideal particle trajectories on the envelope.
     
-    Returns NumPy array with shape (nframes, nparts, 4).
+    Returns ndarray with shape (nframes, nparts, 4).
     """
     return np.array([get_coords(params, nparts) for params in params_list])
 
@@ -114,7 +120,7 @@ def compute_stats(params):
     
     Parameters
     ----------
-    params : NumPy array, shape (nframes, 8)
+    params : ndarray, shape (nframes, 8)
         The envelope parameters at each frame. Columns are [a, b, a', b', e,
         f, e', f'].
     
@@ -175,7 +181,7 @@ def compute_stats(params):
             self.corr = corr
             self.beam = beam
             self.dfs = [self.twiss2D, self.twiss4D, self.moments,
-                        self.corr,self.beam]
+                        self.corr, self.beam]
     
     return params_df, Stats(twiss2D, twiss4D, moments, corr, beam)
 
@@ -459,7 +465,7 @@ class Envelope:
     def generate_dist(self, nparts, density='uniform'):
         """Generate a distribution of particles from the envelope.
 
-        Returns: NumPy array, shape (nparts, 4)
+        Returns: ndarray, shape (nparts, 4)
             The coordinate array for the distribution.
         """
         nparts = int(nparts)
@@ -478,7 +484,7 @@ class Envelope:
         
         Parameters
         ----------
-        M : NumPy array, shape (4, 4)
+        M : ndarray, shape (4, 4)
             The lattice transfer matrix.
         method : str
             If '4D', match to the lattice using the eigenvectors of the
@@ -488,7 +494,7 @@ class Envelope:
             
         Returns
         -------
-        NumPy array, shape (8,)
+        ndarray, shape (8,)
             The matched envelope parameters.
         """
         if method == 'auto':

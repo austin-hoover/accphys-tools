@@ -2,8 +2,11 @@
 import os
 # Third party
 import numpy as np
-import numpy.linalg as la
+import scipy
 import pandas as pd
+import sympy
+import IPython
+from numpy import linalg as la
 from sympy import pprint, Matrix
 from scipy.integrate import trapz
 from IPython.display import display, HTML
@@ -55,9 +58,7 @@ def merge_dicts(*dictionaries):
         >> merge_dicts(w, x, y)
         >> {'a': 1, 'b': 2, 'c': 6, 'e': 4, 'f': 7, 'g': 7, 'h': 8}
     
-    Copied from the accepted answer here:'https://stackoverflow.com/questions/
-    /38987/how-do-i-merge-two-dictionaries-in-a-single-expression-in-python
-    -taking-union-o'.
+    Copied from the accepted answer here: 'https://stackoverflow.com/questions//38987/how-do-i-merge-two-dictionaries-in-a-single-expression-in-python-taking-union-o'.
     """
     result = {}
     for dictionary in dictionaries:
@@ -140,17 +141,14 @@ def Vmat_2D(alpha_x, beta_x, alpha_y, beta_y):
     return V
     
     
-def get_phase_adv(beta_x, beta_y, s, units='deg'):
-    """Compute phase advance as function of s."""
-    n_pts = len(s)
-    phases = np.zeros((n_pts, 2))
-    for i in range(n_pts):
-        phases[i, 0] = trapz(1 / beta_x[:i], s[:i])
-        phases[i, 1] = trapz(1 / beta_y[:i], s[:i]) # radians
+def get_phase_adv(beta, positions, units='deg'):
+    """Compute the phase advance by integrating the beta function."""
+    npts = len(positions)
+    phases = np.zeros(npts)
+    for i in range(npts):
+        phases[i] = trapz(1/beta[:i], positions[:i]) # radians
     if units == 'deg':
         phases = np.degrees(phases)
     elif units == 'tune':
         phases /= 2*np.pi
-    phases_df = pd.DataFrame(phases, columns=['x','y'])
-    phases_df['s'] = s
-    return phases_df
+    return phases

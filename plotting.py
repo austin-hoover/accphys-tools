@@ -10,6 +10,8 @@ To do:
     * Create function: tune footprint.
 """
 
+# Standard
+from cycler import cycler
 # Third party
 import numpy as np
 import pandas as pd
@@ -440,20 +442,20 @@ def corner_env(
     # Get ellipse boundary data
     if type(params) not in [list, tuple, np.ndarray]:
         params = [params]
-    coords = np.array([ea.get_coords(pvec) for pvec in params])
+    coords = ea.get_ellipse_coords(params)
     
     # Set up figure
     limits = (1 + pad) * get_u_up_max_global(coords)
     fig, axes = setup_corner(limits, figsize, norm_labels, units, space,
                              plt_diag=False)
     if len(params) > 1 and cmap is not None:
-        colorcycle = [cmap(i) for i in np.linspace(0, 1, len(params))]
+        colors = [cmap(i) for i in np.linspace(0, 1, len(params))]
         for ax in axes.flat:
-            ax.set_prop_cycle('color', colorcycle)
+            ax.set_prop_cycle(cycler('color', colors))
             
     # Plot data
-    c = None if len(params) > 1 else 'k'
-    plt_kws = merge_dicts(dict(lw=None, color=c, zorder=10), plt_kws)
+    color = None if len(params) > 1 else 'k'
+    plt_kws = merge_dicts(dict(lw=None, color=color, zorder=10), plt_kws)
     fill_kws = merge_dicts(dict(lw=1, fc='lightsteelblue', ec='k', zorder=10),
                            fill_kws)
     for X in coords:
