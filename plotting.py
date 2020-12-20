@@ -198,7 +198,7 @@ def setup_corner(limits, figsize, norm_labels, units, space=None,
     # Preliminaries
     tight = space is None
     sharey = False if plt_diag else 'row'
-    if type(figsize) is int:
+    if type(figsize) in [int, float]:
         figsize = (figsize, figsize)
     if norm_labels:
         units = None
@@ -406,9 +406,9 @@ def corner_env(
     
     Inputs
     ------
-    params : array-like
-        Envelope parameters [a, b, a', b', e, f, e', f']. If a list of array of
-        these vectors is provided, each row will be plotted.
+    params : ndarray, shape (8,) or (n, 8)
+        Envelope parameters [a, b, a', b', e, f, e', f']. Each of the n rows
+        will be plotted.
     pad : float
         Fraction of umax and upmax to pad the axis ranges with. The edge of the 
         plot will be at umax * (1 + pad).
@@ -440,8 +440,10 @@ def corner_env(
         3x3 array of Axes objects.
     """    
     # Get ellipse boundary data
-    if type(params) not in [list, tuple, np.ndarray]:
-        params = [params]
+    if type(params) is not np.ndarray:
+        params = np.array(params)
+    if params.ndim == 1:
+        params = params[np.newaxis, :]
     coords = ea.get_ellipse_coords(params)
     
     # Set up figure
