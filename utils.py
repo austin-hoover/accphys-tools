@@ -64,6 +64,11 @@ def merge_dicts(*dictionaries):
     for dictionary in dictionaries:
         result.update(dictionary)
     return result
+    
+    
+def tprint(string, indent=4):
+    """Print with indent."""
+    print(indent*' ' + str(string))
              
              
 def show(V, name=None, dec=3):
@@ -81,13 +86,19 @@ def play(anim):
 # Useful for accelerator physics
 #------------------------------------------------------------------------------
 def rotation_matrix(phi):
-    return np.array([[np.cos(phi), np.sin(phi)], [-np.sin(phi), np.cos(phi)]])
+    C, S = np.cos(phi), np.sin(phi)
+    return np.array([[C, S], [-S, C]])
     
+    
+def rotation_matrix_4D(phi):
+    C, S = np.cos(phi), np.sin(phi)
+    return np.array([[C, 0, S, 0], [0, C, 0, S], [-S, 0, C, 0], [0, -S, 0, C]])
 
-def phase_adv_matrix(phi1, phi2):
+    
+def phase_adv_matrix(mu1, mu2):
     R = np.zeros((4, 4))
-    R[:2, :2] = rotation_matrix(phi1)
-    R[2:, 2:] = rotation_matrix(phi2)
+    R[:2, :2] = rotation_matrix(mu1)
+    R[2:, 2:] = rotation_matrix(mu2)
     return R
     
     
@@ -96,12 +107,12 @@ def mat2vec(Sigma):
     return Sigma[np.triu_indices(4)]
                      
                      
-def vec2mat(vec):
+def vec2mat(moment_vec):
     """Return 4x4 symmetric matrix from 10 element vector."""
     Sigma = np.zeros((4, 4))
     indices = np.triu_indices(4)
-    for val, (i, j) in zip(vec, zip(*indices)):
-        Sigma[i, j] = val
+    for moment, (i, j) in zip(moment_vec, zip(*indices)):
+        Sigma[i, j] = moment
     return symmetrize(Sigma)
                      
                      
@@ -132,12 +143,30 @@ def cov2corr(cov_mat):
 
 
 def Vmat_2D(alpha_x, beta_x, alpha_y, beta_y):
-    """4D normalization matrix (uncoupled)"""
+    """Normalization matrix (uncoupled)"""
     def V_uu(alpha, beta):
         return np.array([[beta, 0.0], [-alpha, 1.0]]) / np.sqrt(beta)
     V = np.zeros((4, 4))
     V[:2, :2] = V_uu(alpha_x, beta_x)
     V[2:, 2:] = V_uu(alpha_y, beta_y)
+    return V
+    
+    
+def Vmat_4D(ax, ay, bx, by, u, nu, mode=1):
+    """Construct V from the Twiss parameters for the case when one of the
+    intrinsic emittances is zero."""
+    cos, sin = np.cos(nu), np.sin(nu)
+    V = np.zeros((4, 4))
+    if mode == 1:
+        V[:2, :2] = [[np.sqrt(bx), 0],
+                     [-ax/np.sqrt(bx), (1-u)/np.sqrt(bx)]]
+        V[2:, :2] = [[np.sqrt(by)*cos, -np.sqrt(by)*sin],
+                     [(u*sin-ay*cos)/np.sqrt(by), (u*cos + ay*sin)/np.sqrt(by)]]
+    elif mode == 2:
+        V[2:, 2:] = [[np.sqrt(by), 0],
+                     [-ay/np.sqrt(by), (1-u)/np.sqrt(by)]]
+        V[:2, 2:] = [[np.sqrt(bx)*cos, -np.sqrt(bx)*sin],
+                     [(u*sin-ax*cos)/np.sqrt(bx), (u*cos + ax*sin)/np.sqrt(bx)]]
     return V
     
     
@@ -152,3 +181,51 @@ def get_phase_adv(beta, positions, units='deg'):
     elif units == 'tune':
         phases /= 2*np.pi
     return phases
+
+
+def get_moments_key(i, j):
+    """Return the key corresponding to Sigma[i, j].
+    
+    These keys are used for the column names when creating a DataFrame for
+    the beam moments.
+    """
+    dictionary = {
+        (0, 0):'x2' ,
+        (1, 0):'xxp',
+        (2, 0):'xy',
+        (3, 0):'xyp',
+        (1, 1):'xp2',
+        (2, 1):'yxp',
+        (3, 1):'xpyp',
+        (2, 2):'y2',
+        (3, 2):'yyp',
+        (3, 3):'yp2'
+    }
+    if i < j:
+        i, j = j, i
+    return dictionary[(i, j)]
+
+
+def get_moments_label(i, j):
+    """Return a string corresponding to Sigma[i, j], e.g. '<x^2>.'"""
+    dictionary = {
+        (0, 0):r"$\langle{x^2}\rangle$",
+        (1, 0):r"$\langle{xx'}\rangle$",
+        (2, 0):r"$\langle{xy}\rangle$",
+        (3, 0):r"$\langle{xy'}\rangle$",
+        (1, 1):r"$\langle{x'^2}\rangle$",
+        (2, 1):r"$\langle{yx'}\rangle$",
+        (3, 1):r"$\langle{x'y'}\rangle$",
+        (2, 2):r"$\langle{y^2}\rangle$",
+        (3, 2):r"$\langle{yy'}\rangle$",
+        (3, 3):r"$\langle{y'^2}\rangle$"
+    }
+    str_to_int = {'x':0, 'xp':1, 'y':2, 'yp':3}
+    if type(i) is str:
+        i = str_to_int[i]
+    if type(j) is str:
+        j = str_to_int[j]
+    {'x':0, 'xp':1, 'y':2, 'yp':3}
+    if i < j:
+        i, j = j, i
+    return dictionary[(i, j)]
