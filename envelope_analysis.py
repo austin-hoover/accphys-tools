@@ -2,9 +2,6 @@
 Analysis of the {2, 2} Danilov distribution.
 
 Reference: https://journals.aps.org/prab/pdf/10.1103/PhysRevSTAB.6.094202
-
-To do:
-    * Combine `stats_from_env_params` and `stats_from_moments` into one method.
 """
 
 # Standard
@@ -81,22 +78,25 @@ def get_coord_array(params_list, nparts):
     
     
 def rms_ellipse_dims(Sigma, x1='x', x2='y'):
-    """Get the """
+    """Return the tilt angle and radii of the rms ellipse in the x1-x2 plane.
+    
+    Check this method... it is not agreeing with envelope calculations.
+    """
     str_to_int = {'x':0, 'xp':1, 'y':2, 'yp':3}
     i, j = str_to_int[x1], str_to_int[x2]
     sii, sjj, sij = Sigma[0, 0], Sigma[2, 2], Sigma[0, 2]
-    phi = 0.5 * np.arctan2(2 * sij, sii - sjj)
+    angle = 0.5 * np.arctan2(2 * sij, sii - sjj)
     cx = np.sqrt(2) * np.sqrt(sii + sjj + np.sqrt((sii - sjj)**2 + 4*sij**2))
     cy = np.sqrt(2) * np.sqrt(sii + sjj - np.sqrt((sii - sjj)**2 + 4*sij**2))
-    return phi, cx, cy
+    return angle, cx, cy
     
     
 def intrinsic_emittances(Sigma):
-    # Get imaginary components of eigenvalues of S.U
+    """Return the intrinsic emittances from the covariance matrix."""
     U = np.array([[0,1,0,0], [-1,0,0,0], [0,0,0,1], [0,0,-1,0]])
     eigvals = la.eigvals(np.matmul(Sigma, U)).imag
     # Keep positive values
-    eigvals = eigvals[np.argwhere(eigvals >= 0).flatten()]
+    eigvals = eigvals[np.argwhere(eigvals >= 0).flat]
     # If one of the mode emittances is zero, both will be kept.
     # Remove the extra zero.
     if len(eigvals) > 2:
@@ -107,6 +107,7 @@ def intrinsic_emittances(Sigma):
     
     
 def get_twiss2D(Sigma):
+    """Return the 2D Twiss parameters from the covariance matrix."""
     ex = np.sqrt(la.det(Sigma[:2, :2]))
     ey = np.sqrt(la.det(Sigma[2:, 2:]))
     bx = Sigma[0, 0] / ex
@@ -117,6 +118,7 @@ def get_twiss2D(Sigma):
     
     
 def get_twiss4D(Sigma, mode):
+    """Return the 4D Twiss parameters from the covariance matrix."""
     ex = np.sqrt(la.det(Sigma[:2, :2]))
     ey = np.sqrt(la.det(Sigma[2:, 2:]))
     e1, e2 = intrinsic_emittances(Sigma)
@@ -135,6 +137,155 @@ def get_twiss4D(Sigma, mode):
 
 # Class definitions
 #------------------------------------------------------------------------------
+class Stats:
+    """Container for the beam statistics.
+
+    Attributes
+    ----------
+    mode : {1, 2}
+         The mode of the envelope, corresponding to the choice of which
+         intrinsic emittance is nonzero. Currently I do not know how to
+         determine this from the covariance matrix. I can find the intrinsic
+         emittances, but the order they are returned seems to be independent
+         of the beam mode.
+    twiss2D : pandas DataFrame
+        The 2D Twiss parameters. The columns are:
+            'ex': rms apparent emittance in x-x' plane
+            'ey': rms apparent emittance in y-y' plane
+            'bx': beta_x = <x^2> / ex
+            'by': beta_y = <y^2> / ey
+            'ax': alpha_x = -<xx'> / ex
+            'ay': alpha_y = -<yy'> / ey
+    twiss4D : pandas DataFrame
+        The 4D Twiss parameters. In the following 'l' can be 1 or 2 depending
+        on which of the two intrinsic emittances is nonzero. The columns are:
+            'e1': rms intrinsic emittance for mode 1
+            'e2': rms intrinsic emittance for mode 2
+            'e4D': rms 4D emittance = e1 * e2
+            'bx': beta_lx = <x^2> / el (l = 1 if e2=0, or 2 if e1=0)
+            'by': beta_ly = <y^2> / el
+            'ax': alpha_lx = -<xx'> / el
+            'ay': alpha_ly = -<yy'> / el
+            'u' : ey/el if l == 1, or ex/el if mode == 2
+            'nu': the x-y phase difference in the beam. It is related to the
+                  correlation coefficient as cos(nu) = x-y correlation
+                coefficent.
+    moments : pandas DataFrame
+        The 10 transverse beam moments. The columns are labeled "x2" for <x^2>,
+        "xxp" for <xx'>, etc.
+    corr : pandas DataFrame
+        The 10 transverse beam correlation coefficents. The columns labels are
+        the same as `moments`.
+    realspace : pandas DataFrame
+        The dimensions of the beam ellipse in real (x-y) space. If only the
+        moments are used the compute these quantities (and not the envelope
+        parameters), we assume the beam ellipse is defined by 4*x^T*Sigma*x,
+        where Sigma is the covariance matrix and x = [x, x', y, y']. The
+        columns are:
+            'angle': the tilt angle (in degrees) measured below the x-axis.
+            'cx' : the horizontal radius of the ellipse when `angle` is zero.
+            'cy' : the vertical radius of the ellipse when `angle` is zero.
+            'area': the area of the ellipse
+            'area_rel' the area normalized by the initial area (the first row)
+    env_params : pandas DataFrame
+        The envelope parameters of the beam ellipse. If only the moments are
+        provided, these parameters will be fit to the moments in a
+        least-squares sense.
+    """
+    def __init__(self, mode):
+        self.mode = mode
+        self.twiss2D = None
+        self.twiss4D = None
+        self.moments = None
+        self.corr = None
+        self.realspace = None
+        self.env_params = None
+
+    def dfs(self):
+        return [self.twiss2D, self.twiss4D, self.moments, self.corr,
+                self.realspace, self.env_params]
+                    
+    def _create_empty_arrays(self, data):
+        """Initialize empty ndarrays to store the statistics."""
+        self.nframes = data.shape[0]
+        self.env_params_arr = np.zeros((self.nframes, 8))
+        self.moments_arr = np.zeros((self.nframes, 10))
+        self.corr_arr = np.zeros((self.nframes, 10))
+        self.realspace_arr = np.zeros((self.nframes, 4))
+        self.twiss2D_arr = np.zeros((self.nframes, 6))
+        self.twiss4D_arr = np.zeros((self.nframes, 9))
+
+    def _create_dfs(self):
+        """Create pandas DataFrames from the ndarrays."""
+        self.env_params = pd.DataFrame(self.env_params_arr, columns=env_cols)
+        self.moments = pd.DataFrame(self.moments_arr, columns=moment_cols)
+        self.corr = pd.DataFrame(self.corr_arr, columns=moment_cols)
+        self.twiss2D = pd.DataFrame(self.twiss2D_arr, columns=twiss2D_cols)
+        self.twiss4D = pd.DataFrame(self.twiss4D_arr, columns=twiss4D_cols)
+        self.realspace = pd.DataFrame(self.realspace_arr,
+                                      columns=['angle','cx','cy','area'])
+        # Add/edit columns
+        self.moments[['x_rms','y_rms']] = np.sqrt(self.moments[['x2','y2']])
+        self.moments[['xp_rms','yp_rms']] = np.sqrt(self.moments[['xp2','yp2']])
+        self.realspace['area_rel'] = self.realspace['area'] / \
+                                     self.realspace.loc[0, 'area']
+        self.twiss4D['nu'] = np.degrees(self.twiss4D['nu'])
+        eps = self.twiss2D['ex'] + self.twiss2D['ey']
+        self.twiss2D['ex_frac'] = self.twiss2D['ex'] / eps
+        self.twiss2D['ey_frac'] = self.twiss2D['ey'] / eps
+        
+
+    def read_env(self, env_params):
+        """Calculate beam statistics from the envelope parameters.
+        
+        params : ndarray, shape (nframes, 8)
+            The envelope parameters at each frame. Columns are [a, b, a', b', e,
+            f, e', f'].
+        """
+        self._create_empty_arrays(env_params)
+        self.env_params_arr = env_params
+        
+        for i, params in enumerate(env_params):
+            env = Envelope(params=params, mode=self.mode)
+            self.moments_arr[i] = mat2vec(env.cov())
+            self.corr_arr[i] = mat2vec(env.corr())
+            self.twiss2D_arr[i, :4] = env.twiss2D()
+            self.twiss2D_arr[i, 4:] = env.emittances()
+            self.twiss4D_arr[i, :6] = env.twiss4D()
+            e1 = env.eps if self.mode == 1 else 0
+            e2 = env.eps if self.mode == 2 else 0
+            self.twiss4D_arr[i, 6:] = [e1, e2, env.eps]
+            angle = env.tilt_angle()
+            cx, cy = env.radii()
+            self.realspace_arr[i] = [np.degrees(angle), cx, cy, np.pi*cx*cy]
+            
+        self._create_dfs()
+
+    def read_moments(self, moments):
+        """Read the bunch moments.
+
+        moments : NumPy array, shape (nframes, 10)
+            Array containing the transverse beam moments at each frame. The
+            order should be ['x2','xxp','xy','xyp','xp2','yxp','xpyp','y2',
+            'yyp','yp2'], where x2 = <x^2>, xxp = <xx'>, etc.
+        """
+        self._create_empty_arrays(moments)
+        self.moments_arr = moments
+
+        for i, moment_vec in enumerate(moments):
+            cov_mat = vec2mat(moment_vec)
+            env = Envelope()
+            self.env_params_arr[i] = env.fit_cov(cov_mat)
+            corr_mat = cov2corr(cov_mat)
+            self.corr_arr[i] = mat2vec(corr_mat)
+            self.twiss2D_arr[i] = get_twiss2D(cov_mat)
+            self.twiss4D_arr[i] = get_twiss4D(cov_mat, self.mode)
+            angle, cx, cy = rms_ellipse_dims(cov_mat, 'x', 'y')
+            self.realspace_arr[i] = [np.degrees(angle), cx, cy, np.pi*cx*cy]
+            
+        self._create_dfs()
+
+
 class Envelope:
     """Class for the Danilov distribution envelope.
 
@@ -511,150 +662,3 @@ class Envelope:
         tprint('bx, by = {:.3f}, {:.3f} [m]'.format(bx, by))
         tprint('u = {:.3f}'.format(u))
         tprint('nu = {:.3f} [deg]'.format(u))
-
-
-class Stats:
-    """Container for the beam statistics.
-    
-    Attributes
-    ----------
-    mode : {1, 2}
-         The mode of the envelope, corresponding to the choice of which
-         intrinsic emittance is nonzero. Currently I do not know how to
-         determine this from the covariance matrix. I can find the intrinsic
-         emittances, but the order they are returned seems to be independent
-         of the beam mode.
-    twiss2D : pandas DataFrame
-        The 2D Twiss parameters. The columns are:
-            'ex': rms apparent emittance in x-x' plane
-            'ey': rms apparent emittance in y-y' plane
-            'bx': beta_x = <x^2> / ex
-            'by': beta_y = <y^2> / ey
-            'ax': alpha_x = -<xx'> / ex
-            'ay': alpha_y = -<yy'> / ey
-    twiss4D : pandas DataFrame
-        The 4D Twiss parameters. In the following 'l' can be 1 or 2 depending
-        on which of the two intrinsic emittances is nonzero. The columns are:
-            'e1': rms intrinsic emittance for mode 1
-            'e2': rms intrinsic emittance for mode 2
-            'e4D': rms 4D emittance = e1 * e2
-            'bx': beta_lx = <x^2> / el (l = 1 if e2=0, or 2 if e1=0)
-            'by': beta_ly = <y^2> / el
-            'ax': alpha_lx = -<xx'> / el
-            'ay': alpha_ly = -<yy'> / el
-            'u' : ey/el if l == 1, or ex/el if mode == 2
-            'nu': the x-y phase difference in the beam. It is related to the
-                  correlation coefficient as cos(nu) = x-y correlation
-                coefficent.
-    moments : pandas DataFrame
-        The 10 transverse beam moments. The columns are labeled "x2" for <x^2>,
-        "xxp" for <xx'>, etc.
-    corr : pandas DataFrame
-        The 10 transverse beam correlation coefficents. The columns labels are
-        the same as `moments`.
-    realspace : pandas DataFrame
-        The dimensions of the beam ellipse in real (x-y) space. If only the
-        moments are used the compute these quantities (and not the envelope
-        parameters), we assume the beam ellipse is defined by 4*x^T*Sigma*x,
-        where Sigma is the covariance matrix and x = [x, x', y, y']. The
-        columns are:
-            'angle': the tilt angle (in degrees) measured below the x-axis.
-            'cx' : the horizontal radius of the ellipse when `angle` is zero.
-            'cy' : the vertical radius of the ellipse when `angle` is zero.
-            'area': the area of the ellipse
-            'area_rel' the area normalized by the initial area (the first row)
-    env_params : pandas DataFrame
-        The envelope parameters of the beam ellipse. If only the moments are
-        provided, these parameters will be fit to the moments in a
-        least-squares sense.
-    """
-
-    def __init__(self, mode):
-        self.mode = mode
-        self.twiss2D = None
-        self.twiss4D = None
-        self.moments = None
-        self.corr = None
-        self.realspace = None
-        self.env_params = None
-        self.dfs = [self.twiss2D, self.twiss4D, self.moments, self.corr,
-                    self.realspace, self.env_params]
-                    
-    def _create_empty_arrays(self, data):
-        self.nframes = data.shape[0]
-        self.env_params_arr = np.zeros((self.nframes, 8))
-        self.moments_arr = np.zeros((self.nframes, 10))
-        self.corr_arr = np.zeros((self.nframes, 10))
-        self.realspace_arr = np.zeros((self.nframes, 4))
-        self.twiss2D_arr = np.zeros((self.nframes, 6))
-        self.twiss4D_arr = np.zeros((self.nframes, 9))
-
-    def _create_dfs(self):
-        self.env_params = pd.DataFrame(self.env_params_arr, columns=env_cols)
-        self.moments = pd.DataFrame(self.moments_arr, columns=moment_cols)
-        self.corr = pd.DataFrame(self.corr_arr, columns=moment_cols)
-        self.twiss2D = pd.DataFrame(self.twiss2D_arr, columns=twiss2D_cols)
-        self.twiss4D = pd.DataFrame(self.twiss4D_arr, columns=twiss4D_cols)
-        self.realspace = pd.DataFrame(self.realspace_arr,
-                                      columns=['angle','cx','cy','area'])
-        
-        # Add/edit columns
-        self.moments[['x_rms','y_rms']] = np.sqrt(self.moments[['x2','y2']])
-        self.moments[['xp_rms','yp_rms']] = np.sqrt(self.moments[['xp2','yp2']])
-        self.realspace['area_rel'] = self.realspace['area'] / \
-                                     self.realspace.loc[0, 'area']
-        self.twiss4D['nu'] = np.degrees(self.twiss4D['nu'])
-        eps = self.twiss2D['ex'] + self.twiss2D['ey']
-        self.twiss2D['ex_frac'] = self.twiss2D['ex'] / eps
-        self.twiss2D['ey_frac'] = self.twiss2D['ey'] / eps
-        
-
-    def read_env(self, env_params):
-        """Calculate beam statistics from the envelope parameters.
-        
-        params : ndarray, shape (nframes, 8)
-            The envelope parameters at each frame. Columns are [a, b, a', b', e,
-            f, e', f'].
-        """
-        self._create_empty_arrays(env_params)
-        self.env_params_arr = env_params
-        
-        for i, params in enumerate(env_params):
-            env = Envelope(params=params, mode=self.mode)
-            self.moments_arr[i] = mat2vec(env.cov())
-            self.corr_arr[i] = mat2vec(env.corr())
-            self.twiss2D_arr[i, :4] = env.twiss2D()
-            self.twiss2D_arr[i, 4:] = env.emittances()
-            self.twiss4D_arr[i, :6] = env.twiss4D()
-            e1 = env.eps if self.mode == 1 else 0
-            e2 = env.eps if self.mode == 2 else 0
-            self.twiss4D_arr[i, 6:] = [e1, e2, env.eps]
-            angle = env.tilt_angle()
-            cx, cy = env.radii()
-            self.realspace_arr[i] = [np.degrees(angle), cx, cy, np.pi*cx*cy]
-            
-        self._create_dfs()
-
-    def read_moments(self, moments):
-        """Read the bunch moments.
-
-        moments : NumPy array, shape (nframes, 10)
-            Array containing the transverse beam moments at each frame. The
-            order should be ['x2','xxp','xy','xyp','xp2','yxp','xpyp','y2',
-            'yyp','yp2'], where x2 = <x^2>, xxp = <xx'>, etc.
-        """
-        self._create_empty_arrays(moments)
-        self.moments_arr = moments
-
-        for i, moment_vec in enumerate(moments):
-            cov_mat = vec2mat(moment_vec)
-            env = Envelope()
-            self.env_params_arr[i] = env.fit_cov(cov_mat)
-            corr_mat = cov2corr(cov_mat)
-            self.corr_arr[i] = mat2vec(corr_mat)
-            self.twiss2D_arr[i] = get_twiss2D(cov_mat)
-            self.twiss4D_arr[i] = get_twiss4D(cov_mat, self.mode)
-            angle, cx, cy = rms_ellipse_dims(cov_mat, 'x', 'y')
-            self.realspace_arr[i] = [np.degrees(angle), cx, cy, np.pi*cx*cy]
-            
-        self._create_dfs()
