@@ -1,0 +1,4 @@
+sol: solenoid, l=2.5, ks=1;
+fodo: sequence, l = 5;
+sol, at = 2.5;
+endsequence;

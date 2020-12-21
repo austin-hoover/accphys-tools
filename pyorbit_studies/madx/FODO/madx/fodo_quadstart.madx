@@ -1,0 +1,37 @@
+// Single FODO cell
+
+TITLE,'fodo_driftstart.madx';
+ 
+E0 := 0.938272310; // proton mass [GeV]  
+EK := 1.00;        // injection kinetic energy [GeV] 
+BEAM, PARTICLE=PROTON, ENERGY=EK+E0;    
+
+phase_x := 80; // total phase advance in x plane 
+phase_y := 80; // total phase advance in y plane
+k0x := 0.5049168449;
+eta := 0.5; // quadrupole filling factor
+length := 5.0; // total lattice length
+length_quad := eta*length/2;
+length_drift := (1-eta)*length/2; // space between quadrupoles
+
+QF1: QUADRUPOLE, L=0.5*length_quad, K1=k0x;
+QD: QUADRUPOLE, L=length_quad, K1=-k0x;
+QF2: QUADRUPOLE, L=0.5*length_quad, K1=k0x;
+D: DRIFT, L=length_drift;
+
+FODO: LINE=(QF1,D,QD,D,QF2);
+USE, PERIOD=FODO;
+
+// Set total phase advance
+MATCH, SEQUENCE=FODO;
+CONSTRAINT, SEQUENCE=FODO, RANGE=#E, MUX=phase_x/360, MUY=phase_y/360;
+VARY, NAME=QF->K1, STEP=1E-6;
+VARY, NAME=QD->K1, STEP=1E-6;
+LMDIF, CALLS=500, TOLERANCE=1E-20;
+ENDMATCH;
+
+TWISS;
+PLOT, HAXIS=S, VAXIS=BETX, BETY;
+SAVE, sequence=FODO, FILE='LATTICE.lat', BARE=false, NOEXPR=true;
+
+

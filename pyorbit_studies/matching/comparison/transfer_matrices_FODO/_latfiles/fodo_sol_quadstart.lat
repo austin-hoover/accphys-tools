@@ -1,0 +1,15 @@
+ks := 0.2;
+k0x = 0.5049168449;
+
+qf1: quadrupole, l=0.625, k1=k0x;
+sol1: solenoid, l=0.625, ks=ks;
+qd: quadrupole, l=1.25, k1=-k0x;
+sol2: solenoid, l=0.625, ks=ks;
+qf2: quadrupole, l=0.625, k1=k0x;
+fodo: sequence, l = 5;
+qf1, at = 0.3125;
+sol1, at = 1.25;
+qd, at = 2.5;
+sol2, at = 3.75;
+qf2, at = 4.6875;
+endsequence;

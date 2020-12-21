@@ -1,0 +1,9 @@
+qf1: quadrupole, l=0.625, k1=0.5049168449;
+qf2: quadrupole, l=0.625, k1=0.5049168449;
+qd: quadrupole, l=1.25, k1=-0.5049168449;
+
+fodo: sequence, l = 5;
+qf1, at = 0.3125;
+qd, at = 2.5;
+qf2, at = 4.6875;
+endsequence;
