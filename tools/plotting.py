@@ -2,7 +2,8 @@
 This module contains functions to visualize accelerator physics data.
 
 To do:
-    * Add `grid` option to `corner` and `corner_env`.
+    * Add grid option to `corner` and `corner_env`.
+    * Add other plotting options to `corner`, such as kde.
     * Possibly create separate file for plotting utility functions.
     * Add function: tune space resonance lines (complete; on hardrive currently)
     * Create function: tune footprint.

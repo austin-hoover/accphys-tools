@@ -3,11 +3,12 @@ This module contains functions to animate the evolution of a beam of
 particles in phase space.
 
 To do:
-    * Add option to save animation
-    * Plot multiple envelopes at once.
-    * Speed up `corner` method.
+    * Add option to save animation.
+    * Add more plotting options to `corner`, such as kde.
 """
 
+# Standard
+from cycler import cycler
 # Third party
 import numpy as np
 import matplotlib
@@ -136,7 +137,7 @@ def corner(
     nframes = coords.shape[0]
     
     # Take random sample of particles for scatter plots
-    coords_samp, (nframes, nparts, ndims) = coords, coords.shape
+    coords_samp, (nframes, nparts, ndim) = coords, coords.shape
     if nparts > samples:
         idx = np.random.choice(nparts, samples, replace=False)
         coords_samp = coords[:, idx, :]
@@ -256,17 +257,19 @@ def _corner_nodiag(fig, axes, coords, coords_env, texts, fps, env_kws,
     
 
 def corner_env(
-    params, skip=0, figsize=(5, 5), pad=0.5, space=0.15, ec='k',
+    params, skip=0, figsize=(5, 5), pad=0.25, space=0.15, ec='k',
     fc='lightsteelblue', fill=True, plot_boundary=True, show_init=False,
     clear_history=True, text_fmt='', text_vals=None, units='mm-mrad',
-    norm_labels=False, fps=5
+    norm_labels=False, fps=5, cmap=None
 ):
     """Corner plot with beam envelope (ellipse) only.
 
     Inputs
     ------
-    params : list or ndarray, shape (nframes, 8)
-        Columns are [a, b, a', b', e, f, e', f'].
+    params : ndarray, shape (nframes, 8)
+        If shape is (nframes, 8), gives the envelope parameters at each frame.
+        If a list of these arrays is provided, each envelope in the list will
+        be plotted.
     skip : int
         The coordinates will be plotted every skip + 1 frames.
     figsize : tuple or int
@@ -302,14 +305,21 @@ def corner_env(
         Whether to add an 'n' subscript to axis labels. Ex: 'x' --> 'x_n'.
     fps : int
         Frames per second.
+    cmap : str
+        The colormap to use as a cycler if plotting multiple envelopes. If
+        None, use matplotlib's default cycler.
 
     Returns
     -------
     anim : output from matplotlib.animation.FuncAnimation
     """
     # Get ellipse coordinates
-    coords = get_ellipse_coords(params)
-    nframes = coords.shape[0]
+    if params.ndim == 2:
+        params = [params]
+    n_envelopes, nframes, _ = params.shape
+    coords_list = [get_ellipse_coords(p) for p in params]
+    if n_envelopes > 1:
+        fill = False
     
     # Configure text updates
     if text_vals is None:
@@ -319,31 +329,40 @@ def corner_env(
     texts = [text_fmt.format(val) for val in text_vals]
         
     # Skip frames
-    coords = coords[::skip+1]
+    for i in range(n_envelopes):
+        coords_list[i] = coords_list[i][::skip+1]
     texts = texts[::skip+1]
-    nframes = coords.shape[0]
+    nframes = coords_list[0].shape[0]
         
     # Store initial ellipse
-    X_init = coords[0]
+    X_init = coords_list[0][0]
     hdata_init, vdata_init = X_init[:, :-1], X_init[:, 1:]
         
     # Configure axis limits
-    limits = (1 + pad) * get_u_up_max_global(coords)
+    limits_list = np.array([(1 + pad) * get_u_up_max_global(coords)
+                            for coords in coords_list])
+    limits = np.max(limits_list, axis=0)
 
     # Create figure
     fig, axes = setup_corner(limits, figsize, norm_labels, units, space,
                              plt_diag=False, fontsize='small')
-    _set_ticks_props(
-        axes, xlabelsize='small', ylabelsize='small')
+    _set_ticks_props(axes, xlabelsize='small', ylabelsize='small')
+    if cmap is not None:
+        colors = [cmap(i) for i in np.linspace(0, 1, n_envelopes)]
+        for ax in axes.flat:
+            ax.set_prop_cycle(cycler('color', colors))
     plt.close()
     
     # Create list of Line2D objects
-    lines = [[], [], []]
-    for i in range(3):
-        for j in range(3):
-            ax = axes[i, j]
-            line, = ax.plot([], [], '-', color=ec, lw=1)
-            lines[i].append(line)
+    lines_list = []
+    for coords in coords_list:
+        lines = [[], [], []]
+        for i in range(3):
+            for j in range(i + 1):
+                ax = axes[i, j]
+                line, = ax.plot([], [], '-', lw=1)
+                lines[i].append(line)
+        lines_list.append(lines)
 
     def update(t):
         """Animation function to be called sequentially."""
@@ -351,18 +370,21 @@ def corner_env(
             for ax in axes.flat:
                 for patch in ax.patches:
                     patch.remove()
-        X = coords[t]
-        hdata, vdata = X[:, :-1], X[:, 1:]
-        for i in range(3):
-            for j in range(i + 1):
-                ax = axes[i, j]
-                if fill:
-                    ax.fill(hdata[:, j], vdata[:, i], fc=fc, lw=0)
-                if plot_boundary:
-                    lines[i][j].set_data(hdata[:, j], vdata[:, i])
-                if show_init and clear_history:
-                    ax.plot(hdata_init[:,j], vdata_init[:,i], 'k--', lw=0.5,
-                            alpha=0.25)
+                    
+        for i, coords in enumerate(coords_list):
+            X = coords[t]
+            hdata, vdata = X[:, :-1], X[:, 1:]
+            for j in range(3):
+                for k in range(j + 1):
+                    ax = axes[j, k]
+                    
+                    if plot_boundary:
+                        lines_list[i][j][k].set_data(hdata[:, k], vdata[:, j])
+                    if fill:
+                        ax.fill(hdata[:, k], vdata[:, j], fc=fc, lw=0)
+                    if show_init and clear_history:
+                        ax.plot(hdata_init[:, k], vdata_init[:, j], 'k--',
+                                lw=0.5, alpha=0.25)
         # Display text
         for old_text in axes[1, 2].texts:
             old_text.set_visible(False)
