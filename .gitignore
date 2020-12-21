@@ -1,6 +1,6 @@
 *.pyc
 .DS_Store
 .ipynb_checkpoints
-.npy
-.dat
-.png
+*.npy
+*.dat
+*.png
