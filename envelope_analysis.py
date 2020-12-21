@@ -23,7 +23,6 @@ from .utils import (
     phase_adv_matrix,
     Vmat_2D,
     Vmat_4D,
-    Stats
 )
 
 # Module level variables
