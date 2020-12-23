@@ -3,7 +3,7 @@ This module contains functions to visualize accelerator physics data.
 
 To do:
     * Add grid option to `corner` and `corner_env`.
-    * Add other plotting options to `corner`, such as kde.
+    * Add kde plotting options to `corner` scatter plots.
     * Possibly create separate file for plotting utility functions.
     * Add function: tune space resonance lines (complete; on hardrive currently)
     * Create function: tune footprint.
@@ -26,10 +26,6 @@ from .utils import rand_rows, merge_dicts
 # Module level variables
 _labels = [r"$x$", r"$x'$", r"$y$", r"$y'$"]
 _labels_norm = [r"$x_n$", r"$x_n'$", r"$y_n$", r"$y_n'$"]
-plt_kws_default = dict(s=3, c='steelblue', marker='.', ec='none', zorder=5)
-diag_kws_default = dict(histtype='step', bins='auto', color='steelblue')
-env_kws_default = dict(color='k', lw=1, zorder=5)
-text_kws_default = dict(horizontalalignment='center')
 
 
 def save(figname, dir, **kwargs):
@@ -334,13 +330,21 @@ def corner(
     numpy.ndarray
         The array of subplots.
     """
-    # Configure key word arguments (to do: use the `setdefault` dict method)
-    plt_kws = merge_dicts(plt_kws_default, plt_kws)
-    if diag_kws_default['color'] != plt_kws['c']:
-        diag_kws_default['color'] = plt_kws['c']
-    diag_kws = merge_dicts(diag_kws_default, diag_kws)
-    env_kws = merge_dicts(env_kws_default, env_kws)
-    text_kws = merge_dicts(text_kws_default, text_kws)
+    # Set default key word arguments
+    plt_kws.setdefault('s', 3)
+    plt_kws.setdefault('c', 'steelblue')
+    plt_kws.setdefault('marker', '.')
+    plt_kws.setdefault('ec', 'none')
+    plt_kws.setdefault('zorder', 5)
+    if diag_kind == 'hist':
+        diag_kws.setdefault('histtype', 'step')
+        diag_kws.setdefault('bins', 'auto')
+    elif diag_kind == 'kde':
+        diag_kws.setdefault('lw', 1)
+    env_kws.setdefault('color', 'k')
+    env_kws.setdefault('lw', 1)
+    env_kws.setdefault('zorder', 6)
+    text_kws.setdefault('horizontalalignment', 'center')
     
     # Get data
     X_samp = rand_rows(X, samples) # sample of particles for scatter plots
@@ -370,7 +374,15 @@ def corner(
             for j in range(i + 1):
                 ax = axes[i, j]
                 if i == j:
-                    ax.hist(X[:, i], **diag_kws)
+                    data = X[:, i]
+                    if diag_kind == 'kde':
+                        from scipy.stats import gaussian_kde
+                        gkde = gaussian_kde(data)
+                        umax = limits[i % 2]
+                        ind = np.linspace(-umax, umax, 1000)
+                        ax.plot(ind, gkde.evaluate(ind), **diag_kws)
+                    elif diag_kind == 'hist':
+                        ax.hist(data, **diag_kws)
                 else:
                     ax.scatter(X_samp[:, j], X_samp[:, i], **plt_kws)
                     if env_params is not None:
@@ -445,6 +457,16 @@ def corner_env(
         params = params[np.newaxis, :]
     coords = ea.get_ellipse_coords(params)
     
+    # Set default key word arguments
+    color = None if len(params) > 1 else 'k'
+    plt_kws.setdefault('lw', None)
+    plt_kws.setdefault('color', color)
+    plt_kws.setdefault('zorder', 10)
+    fill_kws.setdefault('lw', 1)
+    fill_kws.setdefault('fc', 'lightsteelblue')
+    fill_kws.setdefault('ec', 'k')
+    fill_kws.setdefault('zorder', 10)
+    
     # Set up figure
     limits = (1 + pad) * get_u_up_max_global(coords)
     fig, axes = setup_corner(limits, figsize, norm_labels, units, space,
@@ -455,10 +477,7 @@ def corner_env(
             ax.set_prop_cycle(cycler('color', colors))
             
     # Plot data
-    color = None if len(params) > 1 else 'k'
-    plt_kws = merge_dicts(dict(lw=None, color=color, zorder=10), plt_kws)
-    fill_kws = merge_dicts(dict(lw=1, fc='lightsteelblue', ec='k', zorder=10),
-                           fill_kws)
+
     for X in coords:
         X_horiz, X_vert = X[:, :-1], X[:, 1:]
         for i in range(3):

@@ -28,13 +28,7 @@ from .utils import merge_dicts
 plt.rcParams['animation.ffmpeg_path'] = '/usr/local/bin/ffmpeg'
 
 # Module level variables
-plt_kws_default = dict(ms=2, color='steelblue', marker='.', zorder=5, lw=0,
-                       markeredgewidth=0, fillstyle='full')
-diag_kws_default = dict(histtype='step', bins='auto', color='steelblue')
-env_kws_default = dict(color='k', lw=1, zorder=6)
-text_kws_default = dict()
-artists_list = [] # Python can't find the variable, even when I declare it as
-                  # global within the function. Can't figure out why.
+artists_list = []
                   
 
 def corner(
@@ -105,13 +99,23 @@ def corner(
     """
     plt_env = env_params is not None
     
-    # Configure key word arguments
-    plt_kws = merge_dicts(plt_kws_default, plt_kws)
-    if diag_kws_default['color'] != plt_kws['color']:
-        diag_kws_default['color'] = plt_kws['color']
-    diag_kws = merge_dicts(diag_kws_default, diag_kws)
-    env_kws = merge_dicts(env_kws_default, env_kws)
-    text_kws = merge_dicts(text_kws_default, text_kws)
+    # Set default key word arguments
+    plt_kws.setdefault('ms', 2)
+    plt_kws.setdefault('color', 'steelblue')
+    plt_kws.setdefault('marker', '.')
+    plt_kws.setdefault('zorder', 5)
+    plt_kws.setdefault('lw', 0)
+    plt_kws.setdefault('markeredgewidth', 0)
+    plt_kws.setdefault('fillstyle', 'full')
+    if diag_kind == 'hist':
+        diag_kws.setdefault('histtype', 'step')
+        diag_kws.setdefault('bins', 'auto')
+        diag_kws.setdefault('color', plt_kws['color'])
+    elif diag_kind == 'kde':
+        diag_kws.setdefault('lw', 1)
+    env_kws.setdefault('color', 'k')
+    env_kws.setdefault('lw', 1)
+    env_kws.setdefault('zorder', 6)
             
     # Process particle coordinates
     if type(coords) is list:
