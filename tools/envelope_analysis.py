@@ -13,13 +13,14 @@ import pandas as pd
 import scipy.optimize as opt
 from scipy.integrate import trapz
 # Local
+from . import coupling as BL
 from .utils import (
     mat2vec,
     vec2mat,
     cov2corr,
     phase_adv_matrix,
     Vmat_2D,
-    Vmat_4D,
+    Vmat_4D
 )
 
 # Module level variables

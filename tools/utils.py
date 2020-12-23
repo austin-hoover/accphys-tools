@@ -152,24 +152,6 @@ def Vmat_2D(alpha_x, beta_x, alpha_y, beta_y):
     return V
     
     
-def Vmat_4D(ax, ay, bx, by, u, nu, mode=1):
-    """Construct V from the Twiss parameters for the case when one of the
-    intrinsic emittances is zero."""
-    cos, sin = np.cos(nu), np.sin(nu)
-    V = np.zeros((4, 4))
-    if mode == 1:
-        V[:2, :2] = [[np.sqrt(bx), 0],
-                     [-ax/np.sqrt(bx), (1-u)/np.sqrt(bx)]]
-        V[2:, :2] = [[np.sqrt(by)*cos, -np.sqrt(by)*sin],
-                     [(u*sin-ay*cos)/np.sqrt(by), (u*cos + ay*sin)/np.sqrt(by)]]
-    elif mode == 2:
-        V[2:, 2:] = [[np.sqrt(by), 0],
-                     [-ay/np.sqrt(by), (1-u)/np.sqrt(by)]]
-        V[:2, 2:] = [[np.sqrt(bx)*cos, -np.sqrt(bx)*sin],
-                     [(u*sin-ax*cos)/np.sqrt(bx), (u*cos + ax*sin)/np.sqrt(bx)]]
-    return V
-    
-    
 def get_phase_adv(beta, positions, units='deg'):
     """Compute the phase advance by integrating the beta function."""
     npts = len(positions)
