@@ -334,7 +334,7 @@ def corner(
     numpy.ndarray
         The array of subplots.
     """
-    # Configure key word arguments
+    # Configure key word arguments (to do: use the `setdefault` dict method)
     plt_kws = merge_dicts(plt_kws_default, plt_kws)
     if diag_kws_default['color'] != plt_kws['c']:
         diag_kws_default['color'] = plt_kws['c']
