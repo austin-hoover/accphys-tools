@@ -13,8 +13,8 @@ from cycler import cycler
 import numpy as np
 import matplotlib
 import pandas as pd
-import pandas as pd
 import seaborn as sns
+import scipy
 from matplotlib import pyplot as plt, ticker
 from matplotlib import animation
 from pandas.plotting._matplotlib.tools import _set_ticks_props
@@ -66,8 +66,8 @@ def corner(
         and 'hist' options are not implemented yet.
     diag_kind : {'hist', 'kde', 'none'}
         The kind of plot to make on the diagonal subplots. If 'none', these are
-        excluded and a 3x3 grid is produced. Note: the 'kde' option is not
-        implemented yet.
+        excluded and a 3x3 grid is produced. Note: the 'kde' option currently
+        does not work.
     hist_height : float in range [0, 1]
         Reduce the height of the histograms on the diagonal, which normally
         extend to the top of the plotting window, by this factor.
@@ -158,12 +158,11 @@ def corner(
         return _corner_nodiag(fig, axes, coords_samp, coords_env, texts, fps,
                               env_kws, text_kws, **plt_kws)
 
-    # Compute the maximum histogram height to keep the ylimit fixed
+    # Compute the maximum histogram height among frames to keep the ylimit fixed
     max_heights = np.zeros((nframes, 4))
-    bins = diag_kws['bins']
     for i, X in enumerate(coords):
         for j in range(4):
-            max_heights[i, j] = np.max(np.histogram(X[:, j], bins=bins)[0])
+            max_heights[i, j] = np.max(np.histogram(X[:, j], bins='auto')[0])
     axes[0, 0].set_ylim(0, np.max(max_heights) / hist_height)
 
     # Create array of Line2D objects
@@ -194,16 +193,25 @@ def corner(
                 if plt_env:
                     X_env = coords_env[t]
                     lines_env[i][j].set_data(X_env[:, j], X_env[:, i])
-        # Remove old histograms
-        global artists_list
-        for artists in artists_list:
-            for artist in artists:
-                artist.remove()
-        # Plot new histograms
-        artists_list = []
-        for i, ax in enumerate(axes.diagonal()):
-            heights, bin_edges, artists = ax.hist(X[:, i], **diag_kws)
-            artists_list.append(artists)
+        # Plot diagonal
+        if diag_kind == 'hist':
+            global artists_list
+            for artists in artists_list:
+                for artist in artists:
+                    artist.remove()
+            artists_list = []
+            for i, ax in enumerate(axes.diagonal()):
+                heights, bin_edges, artists = ax.hist(X[:, i], **diag_kws)
+                artists_list.append(artists)
+        elif diag_kind == 'kde':
+            for i, ax in enumerate(axes.diagonal()):
+                for line in ax.lines:
+                    ax.remove()
+                gkde = scipy.stats.gaussian_kde(X[:, i])
+                umax = limits[i % 2]
+                ind = np.linspace(-umax, umax, 1000)
+                ax.plot(ind, gkde.evaluate(ind), **diag_kws)
+                
         # Display text
         for old_text in axes[1, 2].texts:
             old_text.set_visible(False)

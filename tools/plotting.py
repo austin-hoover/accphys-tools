@@ -303,8 +303,7 @@ def corner(
         and 'hist' options are not implemented yet.
     diag_kind : {'hist', 'kde', 'none'}
         The kind of plot to make on the diagonal subplots. If 'none', these are
-        excluded and a 3x3 grid is produced. Note: the 'kde' option is not
-        implemented yet.
+        excluded and a 3x3 grid is produced.
     hist_height : float in range [0, 1]
         Reduce the height of the histograms on the diagonal, which normally
         extend to the top of the plotting window, by this factor.
@@ -376,8 +375,7 @@ def corner(
                 if i == j:
                     data = X[:, i]
                     if diag_kind == 'kde':
-                        from scipy.stats import gaussian_kde
-                        gkde = gaussian_kde(data)
+                        gkde = scipy.stats.gaussian_kde(data)
                         umax = limits[i % 2]
                         ind = np.linspace(-umax, umax, 1000)
                         ax.plot(ind, gkde.evaluate(ind), **diag_kws)
