@@ -20,7 +20,6 @@ from .utils import (
     cov2corr,
     phase_adv_matrix,
     Vmat_2D,
-    Vmat_4D
 )
 
 # Module level variables
