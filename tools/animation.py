@@ -315,11 +315,12 @@ def corner_env(
     """
     # Get ellipse coordinates
     if params.ndim == 2:
-        params = [params]
+        params = params[np.newaxis, :]
     n_envelopes, nframes, _ = params.shape
     coords_list = [get_ellipse_coords(p) for p in params]
     if n_envelopes > 1:
         fill = False
+        ec = None
     
     # Configure text updates
     if text_vals is None:
@@ -360,7 +361,7 @@ def corner_env(
         for i in range(3):
             for j in range(i + 1):
                 ax = axes[i, j]
-                line, = ax.plot([], [], '-', lw=1)
+                line, = ax.plot([], [], '-', lw=1, color=ec)
                 lines[i].append(line)
         lines_list.append(lines)
 
