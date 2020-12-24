@@ -3,7 +3,6 @@ This module contains functions to visualize accelerator physics data.
 
 To do:
     * Add grid option to `corner` and `corner_env`.
-    * Add kde plotting options to `corner` scatter plots.
     * Possibly create separate file for plotting utility functions.
     * Add function: tune space resonance lines (complete; on hardrive currently)
     * Create function: tune footprint.
@@ -103,12 +102,28 @@ def set_labels(ax_list, labels=[], kind='xlabel', **kws):
 
             
 def set_limits(ax_list, limits=[], dim='x'):
-    """Set the x or y axis limits for the list of subplots."""
+    """Set the x and/or y axis limits for the list of subplots.
+    
+    dim : {'x', 'y', or 'xy'}
+    """
     for ax, lim in zip(ax_list, limits):
-        if dim == 'x':
+        if 'x' in dim:
             ax.set_xlim(lim)
-        elif dim == 'y':
+        if 'y' in dim:
             ax.set_ylim(lim)
+            
+
+def set_ticks(ax_list, ticks=[], dim='x'):
+    """Set the same x and/or y axis ticks for the list of subplots.
+    
+    dim : {'x', 'y', or 'xy'}
+    """
+    for ax in ax_list:
+        if 'x' in dim:
+            ax.set_xticks(ticks)
+        if 'y' in dim:
+            ax.set_yticks(ticks)
+            
             
 
 def hide_axis_labels(ax_list, dim='x'):
