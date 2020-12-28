@@ -15,6 +15,7 @@ from scipy.integrate import trapz
 # Local
 from . import coupling as BL
 from .utils import (
+    tprint,
     mat2vec,
     vec2mat,
     cov2corr,
@@ -561,7 +562,14 @@ class Envelope:
         return np.array([x, xp, y, yp])
         
     def generate_dist(self, nparts, density='uniform'):
-        """Generate a distribution of particles from the envelope.
+        """Generate a transverse distribution of particles from the envelope.
+        
+        nparts : int
+            The number of particles in the distribution.
+        density : {'uniform', 'on_ellipse', 'gaussian'}
+            If 'uniform', uniformly fill the envelope interior. If
+            'on_ellipse', uniformly fill the envelope boundary. If 'gaussian',
+            fill the interior of the envelope with a gaussian density.
 
         Returns: ndarray, shape (nparts, 4)
             The coordinate array for the distribution.
@@ -661,4 +669,4 @@ class Envelope:
         tprint('ax, ay = {:.3f}, {:.3f} [rad]'.format(ax, ay))
         tprint('bx, by = {:.3f}, {:.3f} [m]'.format(bx, by))
         tprint('u = {:.3f}'.format(u))
-        tprint('nu = {:.3f} [deg]'.format(u))
+        tprint('nu = {:.3f} [deg]'.format(np.degrees(nu)))
