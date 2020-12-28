@@ -41,10 +41,10 @@ sim_type = ['unmatched_vs_matched', 'mode1_vs_mode2', 'other'][0]
 # General
 mass = 0.93827231 # GeV/c^2
 energy = 1.0 # GeV/c^2
-intensity = 2e14
+intensity = 4e14
 
 # Lattice
-latfile = '_latfiles/fodo_driftstart.lat'
+latfile = '_latfiles/fodo_quadstart.lat'
 latseq = 'fodo'
 fringe = False
 

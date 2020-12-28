@@ -34,12 +34,12 @@ from tools.utils import delete_files_not_folders
 # General
 mass = 0.93827231 # GeV/c^2
 energy = 1.0 # GeV/c^2
-intensity = 1e14
-nturns_track = 25
+intensity = 0e14
+nturns_track = 50
 nparts = int(1e5)
 ntestparts = 100
-track_bunch = True
-store_bunch_coords = True
+track_bunch = False
+store_bunch_coords = False
 
 # Lattice
 latfile = '_latfiles/fodo_quadstart.lat'
@@ -49,7 +49,7 @@ fringe = False
 # Initial beam
 mode = 2
 eps = 50e-6 # intrinsic emitance
-ex_frac = 0.5 # ex/eps
+ex_frac = 0.18 # ex/eps
 nu = np.radians(90) # x-y phase difference
 
 # Space charge solver
@@ -58,10 +58,10 @@ min_solver_spacing = 1e-6
 gridpts = (128, 128, 1) # (x, y, z)
 
 # Matching
-match = True 
+match = False 
 tol = 1e-4 # absolute tolerance for cost function
 verbose = 2 # {0 (silent), 1 (report once at end), 2 (report at each step)}
-perturb_radius = 0.2 # If nonzero, perturb the matched envelope. 
+perturb_radius = 0.0 # If nonzero, perturb the matched envelope. 
 
 # Output data locations
 files = {
@@ -73,15 +73,15 @@ files = {
 }
 
 delete_files_not_folders('_output/')
-
         
 # Envelope
 #------------------------------------------------------------------------------
 
 # Create envelope matched to bare lattice
-lattice = hf.lattice_from_file(latfile, latseq, fringe)
+# lattice = hf.lattice_from_file(latfile, latseq, fringe)
+lattice = hf.fodo_lattice(80 + 1.801, 80 - 1.801, 5.0, 0.5, angle=0, start='quad')
 env = Envelope(eps, mode, ex_frac, mass, energy, length=lattice.getLength())
-env.match_bare(lattice)
+env.match_bare(lattice, '2D')
     
 # Match with space charge
 env.set_spacecharge(intensity)
