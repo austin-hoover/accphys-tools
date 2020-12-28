@@ -34,7 +34,7 @@ from tools.utils import delete_files_not_folders
 # General
 mass = 0.93827231 # GeV/c^2
 energy = 1.0 # GeV/c^2
-intensity = 0e14
+intensity = 2e14
 nturns_track = 50
 nparts = int(1e5)
 ntestparts = 100
@@ -78,8 +78,7 @@ delete_files_not_folders('_output/')
 #------------------------------------------------------------------------------
 
 # Create envelope matched to bare lattice
-# lattice = hf.lattice_from_file(latfile, latseq, fringe)
-lattice = hf.fodo_lattice(80 + 1.801, 80 - 1.801, 5.0, 0.5, angle=0, start='quad')
+lattice = hf.lattice_from_file(latfile, latseq, fringe)
 env = Envelope(eps, mode, ex_frac, mass, energy, length=lattice.getLength())
 env.match_bare(lattice, '2D')
     
