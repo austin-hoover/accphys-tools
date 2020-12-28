@@ -227,7 +227,7 @@ def corner(
 def _corner_nodiag(fig, axes, coords, coords_env, texts, fps, env_kws,
                    text_kws, **plt_kws):
     """Corner plot without diagonal. Helper function for `corner` method."""
-    plt_env = coords is not None
+    plt_env = coords_env is not None
     nframes = coords.shape[0]
     lines = [[], [], []]
     lines_env = [[], [], []]
