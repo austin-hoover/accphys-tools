@@ -1,12 +1,14 @@
 """
 This script compares the s-dependent beam envelope parameters for two beams in the same
 lattice. Currently two simulation types are available:
-    1. Mismatched beam vs. matched beam. In the former case a beam is created
-       which is matched to the bare lattice, but tracked with the inclusion of
-       space charge. In the latter case the beam is matched to the lattice with space
-       charge.
-    2. Mode 1 vs. mode 2. The modes differ in which of the beam's two intrinsic
-       emittances is set to zero.
+    (0) Mismatched beam vs. matched beam. In the former case a beam is created
+        which is matched to the bare lattice, but tracked with the inclusion of
+        space charge. In the latter case the beam is matched to the lattice with space
+        charge.
+    (1) Mode 1 vs. mode 2. The modes differ in which of the beam's two intrinsic
+        emittances is set to zero.
+    (2) Bare lattice vs. lattice with space charge. Both beams are matched to the bare
+        lattice, but the second is tracked with the inclusion of space charge.
 """
 
 # Standard 
@@ -35,8 +37,8 @@ from tools.utils import delete_files_not_folders
 # Settings
 #------------------------------------------------------------------------------
 
-# Simulation type
-sim_type = ['unmatched_vs_matched', 'mode1_vs_mode2', 'other'][0]
+# Simulation type (see options in comments at top of script)
+sim_type = 2
 
 # General
 mass = 0.93827231 # GeV/c^2
@@ -75,37 +77,40 @@ lattice = hf.lattice_from_file(latfile, latseq, fringe)
 perveance = hf.get_perveance(mass, energy, intensity/lattice.getLength())
 solver_nodes = set_env_solver_nodes(lattice, perveance, max_solver_spacing)
 
-def initialize(mode=1, match=True):
+def initialize(mode=1, match=True, I=0):
+    """Create envelope matched w/o sc, then (possibly) match with sc."""
     env = Envelope(eps, mode, ex_frac, mass, energy, lattice.getLength())
     env.match_bare(lattice, sc_nodes=solver_nodes)
-    env.set_spacecharge(intensity)
+    env.set_spacecharge(intensity) # global: defined at top of script
     if match:
         print 'Matching.'
         env.match(lattice, solver_nodes, verbose=2)
     return env
 
 # Initialize the two envelopes
-if sim_type == 'unmatched_vs_matched':
+if sim_type == 0:
     envelopes = [initialize(mode, _match) for _match in (False, True)]
-elif sim_type == 'mode1_vs_mode2':
-    envelopes = [initialize(_mode) for _mode in (1, 2)]
+elif sim_type == 1:
+    envelopes = [initialize(_mode, match=True) for _mode in (1, 2)]
+elif sim_type == 2:
+    envelopes = [initialize(mode, match=False) for _ in (1, 2)]
 else:
     print 'Unknown sim_type.'
-    envelopes = [initialize() for _ in range(2)]
     
 # Store the column titles for two-column comparison figures
 file = open('_output/figures/figure_column_titles.txt', 'w')
-if sim_type == 'unmatched_vs_matched':
+if sim_type == 0:
     file.write('Unmatched/Matched')
-elif sim_type == 'mode1_vs_mode2':
+elif sim_type == 1:
     file.write('Mode 1/Mode 2')
+elif sim_type == 2:
+    file.write('Q = 0/Q > 0')
 else:
     file.write('Left/Right')
     
 # Store the beam mode for each column
-modes = [1, 2] if sim_type == 'mode1_vs_mode2' else [mode, mode]
+modes = [1, 2] if sim_type == 1 else [mode, mode]
 np.savetxt('_output/data/modes.txt', modes)
-
     
 # Simulation
 #------------------------------------------------------------------------------
@@ -116,6 +121,8 @@ np.save('_output/data/positions.npy', positions)
 env_params_list, transfer_matrices = [], []
 
 for i, env in enumerate(envelopes, start=1):
+    if sim_type == 2:
+        hf.toggle_spacecharge_nodes(solver_nodes, 'off' if i == 1 else 'on')
     M = env.transfer_matrix(lattice)
     env.track(lattice)
     env_params = get_analysis_nodes_data(env_monitor_nodes, 'env_params')
