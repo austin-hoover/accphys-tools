@@ -420,6 +420,7 @@ def corner_env(
     space=None,
     figsize=(5, 5),
     cmap=None,
+    cmap_range=(0, 1),
     units='mm-mrad',
     norm_labels=False,
     legend_kws=None,
@@ -450,6 +451,10 @@ def corner_env(
         None, it will use the default color cycle. If we provide something
         like plt.cm.viridis, the different envelopes will be perceptually
         uniform from blue to yellow.
+    cmap_range : (min, max)
+        The locations for the color cycle to to start and end in the color map.
+        (0, 1) would use the entire color map, while (0.5, 1) would start at
+        the midpoint and go until the end.
     units : str or bool
         Whether to display units on the axis labels. Options are 'mm-mrad' or
         'm-rad'. No units are displayed if None.
@@ -485,12 +490,12 @@ def corner_env(
     fig, axes = setup_corner(limits, figsize, norm_labels, units, space,
                              plt_diag=False)
     if len(params) > 1 and cmap is not None:
-        colors = [cmap(i) for i in np.linspace(0, 1, len(params))]
+        start, end = cmap_range
+        colors = [cmap(i) for i in np.linspace(start, end, len(params))]
         for ax in axes.flat:
             ax.set_prop_cycle(cycler('color', colors))
             
     # Plot data
-
     for X in coords:
         X_horiz, X_vert = X[:, :-1], X[:, 1:]
         for i in range(3):
