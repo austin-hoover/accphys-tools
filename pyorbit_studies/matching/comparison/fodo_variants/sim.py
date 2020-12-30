@@ -1,11 +1,6 @@
 """
-This script calculates the effective transfer matrix for the matched beam as 
-a function of intensity. It does so for the following variants of the FODO
-lattice:
-    * FODO, equal x/y tunes
-    * FODO, unequal x/y tunes (change the quad strengths)
-    * FODO, skew quadrupoles (tilt quadrupoles opposite directions)
-    * FODO, solenoids inserted between quadrupoles
+Store the matched beam parameters as a function of s for each (lattice, mode, 
+intensity). 
 """
 
 # Standard 
@@ -33,67 +28,84 @@ from tools.utils import delete_files_not_folders
 # General
 mass = 0.93827231 # GeV/c^2
 energy = 1.0 # GeV
-intensities = np.linspace(0.75e14, 6e14, 8)
-start = 'quad'
+intensities = np.linspace(0, 5e14, 8)
 
 # Lattice
-if start == 'drift':
-    latfiles = [
-        '_latfiles/fodo_driftstart.lat',
-        '_latfiles/fodo_split_driftstart.lat',
-        '_latfiles/fodo_skew_driftstart.lat',
-        '_latfiles/fodo_sol_driftstart.lat'
-    ]
-elif start == 'quad':
-    latfiles = [
-        '_latfiles/fodo_quadstart.lat',
-        '_latfiles/fodo_split_quadstart.lat',
-        '_latfiles/fodo_skew_quadstart.lat',
-        '_latfiles/fodo_sol_quadstart.lat'
-    ]
+latfiles = [
+    '_latfiles/fodo_quadstart.lat',
+    '_latfiles/fodo_split_quadstart.lat',
+    '_latfiles/fodo_skew_quadstart.lat',
+    '_latfiles/fodo_sol_quadstart.lat',
+]
+latnames = [
+    'fodo',
+    'fodo_split',
+    'fodo_skew',
+    'fodo_sol'
+]
 latseq = 'fodo'
 fringe = False
 
-# Beam
-mode = 2
-eps = 50e-6
-ex_ratio = 0.5
-nu = np.radians(90)
+# Initial beam
+eps = 50e-6 # intrinsic emitance
+ex_frac = 0.5 # ex/eps
+nu = np.radians(90) # x-y phase difference
+
+# Matching
+match = True 
+tol = 1e-4 # absolute tolerance for cost function
+verbose = 2 # {0 (silent), 1 (report once at end), 2 (report at each step)}
 
 # Space charge solver
-max_solver_spacing = 0.01
+max_solver_spacing = 0.01 # [m]
 
-delete_files_not_folders('_output/')
+# Output data locations
+files = {
+    'positions': '_output/data/positions_{}.npy', 
+    'perveances': '_output/data/perveances.npy', 
+    'tracked_env_params_list': '_output/data/tracked_env_params_list_{}_{}.npy',
+    'transfer_mats': '_output/data/transfer_mats_{}_{}.npy',
+}
+data = {key:None for key in files.keys()}
+
+delete_files_not_folders('_output')
 
 #------------------------------------------------------------------------------
 
-lattice = hf.lattice_from_file(latfiles[0], latseq, fringe)
-env = Envelope(eps, mode, ex_ratio, mass, energy, length=lattice.getLength())
-
-for i, latfile in enumerate(latfiles):
-    
+for latname, latfile in zip(latnames, latfiles):
     print latfile
-    tracked_params_list, transfer_mats = [], []
     
-    for intensity in tqdm(intensities):
-        lattice = hf.lattice_from_file(latfile, latseq, fringe)        
-        env.match_bare(lattice)
-        env.set_spacecharge(intensity)
-        solver_nodes = set_env_solver_nodes(lattice, env.perveance, max_solver_spacing)
-        if intensity > 0:
-            env.match(lattice, solver_nodes, verbose=0)
-        transfer_mats.append(env.transfer_matrix(lattice))
-        
-        env_monitor_nodes = add_analysis_nodes(lattice, kind='env_monitor')
-        env.track(lattice)    
-        tracked_params_list.append(
-            get_analysis_nodes_data(env_monitor_nodes, 'env_params'))
-    
-    positions = get_analysis_nodes_data(env_monitor_nodes, 'position')
-    np.savetxt('_output/data/positions{}.txt'.format(i), positions)
-    np.save('_output/data/transfer_mats{}.npy'.format(i), transfer_mats)
-    np.save('_output/data/tracked_params_list{}.npy'.format(i), tracked_params_list)
-        
-perveances = hf.get_perveance(mass, energy, intensities/lattice.getLength())
-np.savetxt('_output/data/perveances.dat', perveances)
-np.savetxt('_output/data/mode.txt', [mode])
+    for mode in (1, 2):
+        print 'Mode', mode
+        lattice = hf.lattice_from_file(latfile, latseq, fringe)
+        env = Envelope(eps, mode, ex_frac, mass, energy, lattice.getLength())
+        tracked_env_params_list, transfer_mats = [], []
+
+        for intensity in tqdm(intensities):
+
+            lattice = hf.lattice_from_file(latfile, latseq, fringe)
+            env.match_bare(lattice)
+            env.set_spacecharge(intensity)
+            solver_nodes = set_env_solver_nodes(lattice, env.perveance, max_solver_spacing)
+            if match and intensity > 0:
+                env.match(lattice, solver_nodes, verbose=0)
+
+            transfer_mats.append(env.transfer_matrix(lattice))
+            env_monitor_nodes = add_analysis_nodes(lattice, kind='env_monitor')
+            env.track(lattice)
+            tracked_env_params = get_analysis_nodes_data(env_monitor_nodes, 'env_params')
+            tracked_env_params_list.append(tracked_env_params)
+
+            # Save data
+            data['positions'] = get_analysis_nodes_data(env_monitor_nodes, 'position')
+            data['perveances'] = hf.get_perveance(mass, energy, intensities/lattice.getLength())
+            data['tracked_env_params_list'] = tracked_env_params_list
+            data['transfer_mats'] = transfer_mats
+
+            for key in files.keys():
+                np.save(files[key].format(latname, mode), data[key])
+            
+            
+file = open('_output/data/latnames.txt', 'w')
+for latname in latnames:
+    file.write(latname + '\n')
