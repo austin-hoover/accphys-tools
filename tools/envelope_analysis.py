@@ -56,7 +56,7 @@ def get_coords(params, nparts=50):
     return coords
     
     
-def get_ellipse_coords(params_list, npts=50):
+def get_ellipse_coords(params_list, npts=100):
     """Get ellipse coordinates at each frame.
     
     Parameters
