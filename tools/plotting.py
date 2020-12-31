@@ -568,12 +568,17 @@ def scatter_color_by_density(ax, x, y):
     return ax
 
 
-def vector(ax, v, origin=(0, 0), c='k', lw=None):
+def vector(ax, v, origin=(0, 0), c='k', lw=None, style='->', head_width=0.4,
+           head_length=0.8):
     """Plot 2D vector `v` as an arrow."""
-    prop = dict(arrowstyle='->,head_width=0.4,head_length=0.8',
-                shrinkA=0, shrinkB=0, fc=c, ec=c, lw=lw)
+    props = {}
+    props['arrowstyle'] = '{},head_width={},head_length={}'.format(
+        style, head_width, head_length)
+    props['shrinkA'] = props['shrinkB'] = 0
+    props['fc'] = props['ec'] = c
+    props['lw'] = lw
     ax.annotate('', xy=(origin[0]+v[0], origin[1]+v[1]),
-                xytext=origin, arrowprops=prop)
+                xytext=origin, arrowprops=props)
     return ax
 
 
