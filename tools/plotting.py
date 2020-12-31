@@ -284,7 +284,7 @@ def corner(
     figsize=(6, 6),
     kind='scatter',
     diag_kind='hist',
-    hist_height=0.7,
+    hist_height=0.6,
     units='mm-mrad',
     norm_labels=False,
     text=None,

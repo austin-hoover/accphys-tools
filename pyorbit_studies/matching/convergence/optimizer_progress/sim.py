@@ -1,5 +1,12 @@
 """
-This script 
+This script first computes the matched envelope using the 'replace by average'
+method and stores the beam parameters at each iteration. Then, for each of
+these initial beams, it tracks and stores the turn-by-turn and s-dependent
+parameters. This allows us to view the progress of the algorithm as the
+beam approaches the matched solution. 
+
+Unfortunately there is no `callback` option for scipy.optimize.least_squares,
+so we cannot view its progress.
 """
 
 # Standard 
@@ -67,7 +74,7 @@ intensity = 0.1e14
 nturns = 15
 
 # Match and store optimizer history
-print 'Matching. method =', method
+print 'Matching.'
 lattice = hf.lattice_from_file(latfile, latseq, fringe)
 env = Envelope(eps, mode, ex_frac, mass, energy, lattice.getLength())
 env.set_spacecharge(intensity)
@@ -98,23 +105,3 @@ for twiss_params in tqdm(result.history):
 np.save('_output/data/sdep_params_list.npy', sdep_params_list)
 np.save('_output/data/positions.npy', 
         get_analysis_nodes_data(monitor_nodes, 'position'))
-
-
-
-
-# def cost_func(env, lattice):
-#     residuals = env._mismatch_error(lattice)
-#     return 0.5 * np.sum(residuals**2)
-#
-# costs_arr = []
-# for method in ('lsq', 'replace_by_avg'):
-#     print 'Method =', method
-#     costs = []
-#     for intensity in tqdm(intensities):
-#         lattice = hf.lattice_from_file(latfile, latseq, fringe)
-#         env.set_spacecharge(intensity)
-#         solver_nodes = set_env_solver_nodes(lattice, env.perveance, max_solver_spacing)
-#         env.match(lattice, solver_nodes, method=method, tol=tol, verbose=0)
-#         costs.append(cost_func(env, lattice))
-#     costs_arr.append(costs)
-# np.save('_output/data/costs_arr.npy', costs_arr)

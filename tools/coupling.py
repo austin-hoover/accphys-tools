@@ -11,6 +11,11 @@ import numpy.linalg as la
 U = np.array([[0, 1, 0, 0], [-1, 0, 0, 0], [0, 0, 0, 1], [0, 0, -1, 0]])
 
 
+def is_symplectic(V, tol=1e-5):
+    diff = U - la.multi_dot([V.T, U, V])
+    return np.all(np.abs(diff) < tol)
+
+
 def normalize(eigvecs):
     """Normalize of transfer matrix eigenvectors."""
     v1, _, v2, _ = eigvecs.T

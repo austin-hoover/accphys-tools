@@ -34,7 +34,7 @@ from tools.utils import delete_files_not_folders
 # General
 mass = 0.93827231 # GeV/c^2
 energy = 1.0 # GeV/c^2
-intensity = 2e14
+intensity = 0.5e14
 nturns_track = 50
 nparts = int(1e5)
 ntestparts = 100
@@ -42,14 +42,14 @@ track_bunch = False
 store_bunch_coords = False
 
 # Lattice
-latfile = '_latfiles/fodo_quadstart.lat'
+latfile = '_latfiles/fodo_skew_quadstart.lat'
 latseq = 'fodo'
 fringe = False
 
 # Initial beam
-mode = 2
+mode = 1
 eps = 50e-6 # intrinsic emitance
-ex_frac = 0.18 # ex/eps
+ex_frac = 0.5 # ex/eps
 nu = np.radians(90) # x-y phase difference
 
 # Space charge solver
@@ -58,10 +58,12 @@ min_solver_spacing = 1e-6
 gridpts = (128, 128, 1) # (x, y, z)
 
 # Matching
-match = False 
+match = True 
 tol = 1e-4 # absolute tolerance for cost function
 verbose = 2 # {0 (silent), 1 (report once at end), 2 (report at each step)}
 perturb_radius = 0.0 # If nonzero, perturb the matched envelope. 
+method = 'replace_by_avg'
+# method = 'replace_by_avg'
 
 # Output data locations
 files = {
@@ -80,14 +82,14 @@ delete_files_not_folders('_output/')
 # Create envelope matched to bare lattice
 lattice = hf.lattice_from_file(latfile, latseq, fringe)
 env = Envelope(eps, mode, ex_frac, mass, energy, length=lattice.getLength())
-env.match_bare(lattice, '2D')
+env.match_bare(lattice, '4D')
     
 # Match with space charge
 env.set_spacecharge(intensity)
 solver_nodes = set_env_solver_nodes(lattice, env.perveance, max_solver_spacing)
 if match:
     print 'Matching.'
-    env.match(lattice, solver_nodes, tol=tol, verbose=verbose)
+    env.match(lattice, solver_nodes, tol=tol, verbose=verbose, method=method)
 if perturb_radius > 0:
     print 'Perturbing envelope (radius = {:.2f}).'.format(perturb_radius)
     env.perturb(perturb_radius)

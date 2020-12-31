@@ -43,7 +43,7 @@ sim_type = 2
 # General
 mass = 0.93827231 # GeV/c^2
 energy = 1.0 # GeV/c^2
-intensity = 4e14
+intensity = 1e14
 
 # Lattice
 latfile = '_latfiles/fodo_quadstart.lat'
@@ -51,9 +51,9 @@ latseq = 'fodo'
 fringe = False
 
 # Initial beam
-mode = 2
+mode = 1
 eps = 50e-6 # intrinsic emitance
-ex_frac = 0.5 # ex/eps
+ex_frac = 0.3 # ex/eps
 nu = np.radians(90) # x-y phase difference
 
 # Space charge solver

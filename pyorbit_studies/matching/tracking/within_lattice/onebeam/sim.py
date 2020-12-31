@@ -41,11 +41,11 @@ from tools.utils import delete_files_not_folders
 # General
 mass = 0.93827231 # GeV/c^2
 energy = 1.0 # GeV/c^2
-intensity = 1e14
+intensity = 2e14
 nparts = int(1e5)
 ntestparts = 100
-track_bunch = True
-store_bunch_coords = True
+track_bunch = False
+store_bunch_coords = False
 
 # Lattice
 latfile = '_latfiles/fodo_quadstart.lat'
@@ -53,7 +53,7 @@ latseq = 'fodo'
 fringe = False
 
 # Initial beam
-mode = 2
+mode = 1
 eps = 50e-6 # intrinsic emitance
 ex_frac = 0.5 # ex/eps
 nu = np.radians(90) # x-y phase difference
@@ -68,6 +68,7 @@ match = True
 tol = 1e-4 # absolute tolerance for cost function
 verbose = 2 # {0 (silent), 1 (report once at end), 2 (report at each step)}
 perturb_radius = 0. # if nonzero, perturb the matched envelope
+method = None
 
 # Output data locations
 files = {
@@ -95,7 +96,7 @@ env.set_spacecharge(intensity)
 solver_nodes = set_env_solver_nodes(lattice, env.perveance, max_solver_spacing)
 if match:
     print 'Matching.'
-    env.match(lattice, solver_nodes, tol=tol, verbose=verbose)
+    env.match(lattice, solver_nodes, tol=tol, verbose=verbose, method=method)
 if perturb_radius > 0:
     print 'Perturbing envelope (radius = {:.2f}).'.format(perturb_radius)
     env.perturb(perturb_radius)

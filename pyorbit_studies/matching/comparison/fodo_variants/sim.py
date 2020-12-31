@@ -28,7 +28,7 @@ from tools.utils import delete_files_not_folders
 # General
 mass = 0.93827231 # GeV/c^2
 energy = 1.0 # GeV
-intensities = np.linspace(0, 5e14, 8)
+intensities = np.linspace(0, 10e14, 8)
 
 # Lattice
 latfiles = [
