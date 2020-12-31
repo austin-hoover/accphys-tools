@@ -63,7 +63,7 @@ delete_files_not_folders('_output/')
 
 #------------------------------------------------------------------------------
 
-intensity = 4e14
+intensity = 0.1e14
 nturns = 15
 
 # Match and store optimizer history
@@ -72,7 +72,7 @@ lattice = hf.lattice_from_file(latfile, latseq, fringe)
 env = Envelope(eps, mode, ex_frac, mass, energy, lattice.getLength())
 env.set_spacecharge(intensity)
 solver_nodes = set_env_solver_nodes(lattice, env.perveance, max_solver_spacing)
-result = env.match(lattice, solver_nodes, method=method, verbose=0)
+result = env.match(lattice, solver_nodes, method=method, verbose=2)
 
 # Using the seed from each iteration, track and store the turn-by-turn 
 # envelope parameters at the lattice entrance
