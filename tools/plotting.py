@@ -280,7 +280,7 @@ def setup_corner(limits, figsize, norm_labels, units, space=None,
 def corner(
     X, env_params=None, samples=2000, pad=0.5, figsize=(6, 6), dims='all',
     kind='scatter', diag_kind='hist', hist_height=0.6, units='mm-mrad',
-    norm_labels=False, text=None, diag_kws={}, env_kws={}, text_kws={},
+    norm_labels=False, text=None, ax=None, diag_kws={}, env_kws={}, text_kws={},
     **plt_kws
 ):
     """Plot the pairwise relationships between the beam phase space coordinates.
@@ -324,6 +324,9 @@ def corner(
         Whether to add an 'n' subscript to axis labels. Ex: 'x' --> 'x_n'.
     text : str
         If provided, annotate the figure with `text`.
+    ax : matplotlib.pyplot.Axes object
+        If plotting only a 2D projection of the data (for example if
+        dims=('x','y'), the data will be plotted on this axis.)
     {plt, diag, env, text}_kws : dict
         Key word arguments. They are passed to the following functions:
         * plt_kws  : `plt.scatter`. This doesn't need to be passed as a dict.
@@ -369,8 +372,8 @@ def corner(
     plt_diag = diag_kind != 'none'
     limits = (1 + pad) * get_u_up_max(X) # axis limits
     if dims != 'all':
-        return _corner_2D(X, X_env, dims, kind, figsize, limits, units,
-                          norm_labels, env_kws, **plt_kws)
+        return _corner_2D(X, X_env, dims, kind, diag_kind, figsize, limits,
+                          units, norm_labels, ax, env_kws, **plt_kws)
     fig, axes = setup_corner(limits, figsize, norm_labels, units,
                              plt_diag=plt_diag, fontsize='medium')
 
@@ -423,16 +426,14 @@ def corner(
     return axes
     
     
-def _corner_2D(X, X_env, dims, kind, figsize, limits, units, norm_labels,
-               env_kws, **plt_kws):
+def _corner_2D(X, X_env, dims, kind, diag_kind, figsize, limits, units,
+               norm_labels, ax, env_kws, **plt_kws):
     """Helper function for plotting 2D projection.
 
     This sort of repeats everything from `setup_corner_axes`. Maybe we can add
     an option to that method to construct a 1x1, 2x2, or 3x3 grid based on the
     projections that are being plotted.
     """
-    if type(figsize) in [int, float]:
-       figsize = (figsize, figsize)
     if norm_labels:
        units = None
     labels = get_labels(units, norm_labels)
@@ -442,7 +443,10 @@ def _corner_2D(X, X_env, dims, kind, figsize, limits, units, norm_labels,
     j, i = str_to_int[dims[0]], str_to_int[dims[1]]
     x, y = X[:, j], X[:, i]
     
-    fig, ax = plt.subplots(figsize=figsize, tight_layout=True)
+    if ax is None:
+        if type(figsize) in [int, float]:
+           figsize = (figsize, figsize)
+        fig, ax = plt.subplots(figsize=figsize, tight_layout=True)
     if kind == 'scatter':
         ax.scatter(x, y, **plt_kws)
     elif kind == 'scatter_density':
@@ -450,10 +454,11 @@ def _corner_2D(X, X_env, dims, kind, figsize, limits, units, norm_labels,
     if X_env is not None:
         ax.plot(X_env[:, j], X_env[:, i], **env_kws)
 
+    if ax is None:
+        ax.set_xlabel(labels[j])
+        ax.set_ylabel(labels[i])
     ax.set_xlim(limits[j])
     ax.set_ylim(limits[i])
-    ax.set_xlabel(labels[j])
-    ax.set_ylabel(labels[i])
     ax.yaxis.set_major_locator(ticker.MaxNLocator(3))
     ax.xaxis.set_major_locator(ticker.MaxNLocator(3))
     ax.yaxis.set_minor_locator(ticker.AutoMinorLocator(4))
@@ -463,7 +468,7 @@ def _corner_2D(X, X_env, dims, kind, figsize, limits, units, norm_labels,
     
 def corner_env(
     params, fill=False, pad=0.5, space=None, figsize=(5, 5), dims='all',
-    cmap=None, cmap_range=(0, 1), units='mm-mrad', norm_labels=False,
+    cmap=None, cmap_range=(0, 1), units='mm-mrad', norm_labels=False, ax=None,
     legend_kws=None, fill_kws={}, **plt_kws
 ):
     """Plot the 6 transverse phase space ellipses of the beam.
@@ -504,6 +509,9 @@ def corner_env(
         'm-rad'. No units are displayed if None.
     norm_labels : boolean
         If True, add '_n' to the axis labels. E.g. 'x' -> 'x_n'.
+    ax : matplotlib.pyplot.Axes object
+        If plotting only a 2D projection of the data (for example if
+        dims=('x','y'), the data will be plotted on this axis.)
     legend_kws : dict
         Key word args for the legend.
         
@@ -533,7 +541,7 @@ def corner_env(
     # Create figure
     if dims != 'all':
         return _corner_env_2D(coords, dims, figsize, fill, limits, units,
-                              norm_labels, fill_kws, **plt_kws)
+                              norm_labels, ax, fill_kws, **plt_kws)
     
     fig, axes = setup_corner(limits, figsize, norm_labels, units,
                              space, plt_diag=False)
@@ -562,7 +570,7 @@ def corner_env(
     return axes
     
     
-def _corner_env_2D(coords, dims, figsize, fill, limits, units, norm_labels,
+def _corner_env_2D(coords, dims, figsize, fill, limits, units, norm_labels, ax,
                    fill_kws, **plt_kws):
     """Helper function for plotting envelope in only one projection.
     
@@ -570,8 +578,6 @@ def _corner_env_2D(coords, dims, figsize, fill, limits, units, norm_labels,
     an option to that method to construct a 1x1, 2x2, or 3x3 grid based on the
     projections that are being plotted.
     """
-    if type(figsize) in [int, float]:
-       figsize = (figsize, figsize)
     if norm_labels:
        units = None
     labels = get_labels(units, norm_labels)
@@ -579,17 +585,22 @@ def _corner_env_2D(coords, dims, figsize, fill, limits, units, norm_labels,
     limits = 2 * [(-umax, umax), (-upmax, upmax)]
            
     j, i = str_to_int[dims[0]], str_to_int[dims[1]]
-    fig, ax = plt.subplots(figsize=figsize, tight_layout=True)
+    
+    if ax is None:
+        if type(figsize) in [int, float]:
+           figsize = (figsize, figsize)
+        fig, ax = plt.subplots(figsize=figsize, tight_layout=True)
     for X in coords:
         if fill:
             ax.fill(X[:, j], X[:, i], **fill_kws)
         else:
             ax.plot(X[:, j], X[:, i], **plt_kws)
     
+    if ax is None:
+        ax.set_xlabel(labels[j])
+        ax.set_ylabel(labels[i])
     ax.set_xlim(limits[j])
     ax.set_ylim(limits[i])
-    ax.set_xlabel(labels[j])
-    ax.set_ylabel(labels[i])
     ax.yaxis.set_major_locator(ticker.MaxNLocator(3))
     ax.xaxis.set_major_locator(ticker.MaxNLocator(3))
     ax.yaxis.set_minor_locator(ticker.AutoMinorLocator(4))
