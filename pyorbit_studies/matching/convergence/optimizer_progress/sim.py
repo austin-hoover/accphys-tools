@@ -40,22 +40,23 @@ from tools.utils import delete_files_not_folders
 #------------------------------------------------------------------------------
 
 # General
+intensity = 2e14
 mass = 0.93827231 # GeV/c^2
 energy = 1.0 # GeV/c^2
 
 # Lattice
-latfile = '_latfiles/fodo_skew_quadstart.lat'
+latfile = '_latfiles/fodo_skew_driftstart.lat'
 latseq = 'fodo'
 fringe = False
 
 # Initial beam
 mode = 1
 eps = 50e-6 # intrinsic emitance
-ex_frac = 0.5 # ex/eps
+ex_frac = 0.3 # ex/eps
 nu = np.radians(90) # x-y phase difference
 
 # Space charge solver
-max_solver_spacing = 0.05 # [m]
+max_solver_spacing = 0.01 # [m]
 min_solver_spacing = 1e-6
 
 # Matching
@@ -70,7 +71,6 @@ delete_files_not_folders('_output/')
 
 #------------------------------------------------------------------------------
 
-intensity = 0.1e14
 nturns = 15
 
 # Match and store optimizer history
@@ -83,17 +83,20 @@ result = env.match(lattice, solver_nodes, method=method, verbose=2)
 
 # Using the seed from each iteration, track and store the turn-by-turn 
 # envelope parameters at the lattice entrance
-print 'Collecting s-dependent data.'
+print 'Collecting turn-by-turn data.'
 tbt_params_list = []
+costs = []
 for twiss_params in tqdm(result.history):
     env.fit_twiss4D(twiss_params)
+    costs.append(env._mismatch_error(lattice, ssq=True))
     tbt_params = env.track_store_params(lattice, nturns)
     tbt_params_list.append(tbt_params)
 np.save('_output/data/tbt_params_list.npy', tbt_params_list)
+np.save('_output/data/costs.npy', costs)
 
 # Using the seed from each iteration, track and store the s-dependent
 # envelope parameters
-print 'Collecting turn-by-turn data.'
+print 'Collecting s-dependent data.'
 monitor_nodes = add_analysis_nodes(lattice, kind='env_monitor')
 sdep_params_list = []
 for twiss_params in tqdm(result.history):

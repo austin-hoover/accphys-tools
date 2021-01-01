@@ -80,24 +80,25 @@ def cost_func(env, lattice):
 
 cost_lists = []
 matched_params_lists = []
+tbt_params_lists = []
 
 for method in ('lsq', 'replace_by_avg'):
     print 'Method =', method
     cost_list = []
-    matched_params_list = []
+    tbt_params_list = [] 
     for intensity in tqdm(intensities):
         lattice = hf.lattice_from_file(latfile, latseq, fringe)
         env.match_bare(lattice)
         env.set_spacecharge(intensity)
         solver_nodes = set_env_solver_nodes(lattice, env.perveance, max_solver_spacing)
         if intensity > 0:
-            env.match(lattice, solver_nodes, method=method, tol=tol, verbose=2)
-        matched_params_list.append(env.params)
+            env.match(lattice, solver_nodes, method=method, tol=tol, verbose=0)
         cost_list.append(cost_func(env, lattice))
+        tbt_params_list.append(env.track_store_params(lattice, 20))
     cost_lists.append(cost_list)
-    matched_params_lists.append(matched_params_list)
+    tbt_params_lists.append(tbt_params_list)
     
 np.save('_output/data/cost_lists.npy', cost_lists)
-np.save('_output/data/matched_params_lists.npy', matched_params_lists)
+np.save('_output/data/tbt_params_lists.npy', tbt_params_lists)
 np.save('_output/data/perveances.npy', 
         hf.get_perveance(mass, energy, intensities/lattice.getLength()))
