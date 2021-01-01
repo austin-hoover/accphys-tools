@@ -58,6 +58,13 @@ def get_u_up_max_global(coords):
     return np.array([umax_global, upmax_global])
     
     
+def colorcycle(cmap, nsamples=1, start_end=(0, 1)):
+    """Return color cycle from colormap."""
+    start, end = start_end
+    colors = [cmap(i) for i in np.linspace(start, end, nsamples)]
+    return cycler('color', colors)
+    
+    
 def despine(ax_list, sides=('top', 'right')):
     """Remove the axis spines."""
     # Might want to look at this function in seaborn: https://github.com/mwaskom/seaborn/blob/master/seaborn/utils.py
@@ -126,7 +133,6 @@ def set_ticks(ax_list, ticks=[], dim='x'):
             ax.set_yticks(ticks)
             
             
-
 def hide_axis_labels(ax_list, dim='x'):
     """Turn off tick labels and offset text along u axis, where u = x or y"""
     for ax in ax_list:
