@@ -145,6 +145,13 @@ def toggle_grid(axes_list, switch='off', **kws):
     grid = {'off':False, 'on':True}[switch]
     for ax in axes_list:
         ax.grid(grid, **kws)
+        
+        
+def remove_annotations(axes):
+    """Deleta all text (as well as arrows) from the figure."""
+    for ax in axes.flat:
+        for annotation in ax.texts:
+            annotation.set_visible(False)
             
         
 def set_share_axes(axes, sharex=False, sharey=False, type_if_1D='row'):

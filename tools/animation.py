@@ -21,7 +21,8 @@ from pandas.plotting._matplotlib.tools import _set_ticks_props
 from matplotlib.patches import Ellipse, transforms
 # Local
 from .envelope_analysis import get_ellipse_coords
-from .plotting import setup_corner, get_u_up_max_global
+from .plotting import setup_corner, get_u_up_max_global, remove_annotations
+from .plotting import vector as arrowplot
 from .utils import merge_dicts
 
 # Settings
@@ -32,10 +33,12 @@ artists_list = []
                   
 
 def corner(
-    coords, env_params=None, samples=2000, skip=0, pad=0.5, space=0.15,
-    figsize=(7, 7), kind='scatter', diag_kind='hist', hist_height=0.7,
-    units='mm-mrad', norm_labels=False, text_fmt='', text_vals=None, fps=1,
-    diag_kws={}, env_kws={}, text_kws={}, **plt_kws
+    coords, env_params=None, vectors=None, show_history=False, samples=2000,
+    skip=0, pad=0.5,
+    space=0.15, figsize=(7, 7), kind='scatter', diag_kind='hist',
+    hist_height=0.7, units='mm-mrad', norm_labels=False, text_fmt='',
+    text_vals=None, fps=1, diag_kws={}, env_kws={}, text_kws={},
+    **plt_kws
 ):
     """Frame-by-frame phase space projections of the beam.
     
@@ -44,9 +47,13 @@ def corner(
     coords : list or ndarray, shape (nframes, nparts, 4)
         Each element contains the transverse beam coordinate array at a
         particular frame.
-    env_params : list or ndarray, shape (nframes, 8) [optional]
+    env_params : ndarray, shape (nframes, 8)
         The envelope parameters at each frame. They are not plotted if none
         are provided.
+    vectors : list or ndarray, shape (2, nframes, 4)
+        If provided, plot the eigenvectors at each frame. The first vector will
+        be plotted as an arrow with its tail at the origin. The second vector
+        will be plotted with its tail at the tip of the first eigenvector.
     samples : int
         The number of randomly sampled particles to use in the off-diagonal
         subplots.
@@ -98,8 +105,13 @@ def corner(
     anim : output from matplotlib.animation.FuncAnimation
     """
     plt_env = env_params is not None
+    plt_vec = vectors is not None
     
     # Set default key word arguments
+    if 's' in plt_kws:
+        ms = plt_kws['s']
+        plt_kws.pop('s', None)
+        plt_kws['ms'] = ms
     plt_kws.setdefault('ms', 2)
     plt_kws.setdefault('color', 'steelblue')
     plt_kws.setdefault('marker', '.')
@@ -124,6 +136,8 @@ def corner(
     if len(coords.shape) == 2: # single particle bunch
         coords = coords[:, np.newaxis, :]
     coords_env = get_ellipse_coords(env_params) if plt_env else None
+    if plt_vec and type(vectors) in [list, tuple]:
+        vectors = np.array(vectors)
         
     # Configure text updates
     if text_vals is None:
@@ -137,6 +151,8 @@ def corner(
     coords = coords[::plot_every]
     if plt_env:
         coords_env = coords_env[::plot_every]
+    if plt_vec:
+        vectors = vectors[:, ::plot_every]
     texts = texts[::plot_every]
     nframes = coords.shape[0]
     
@@ -155,8 +171,9 @@ def corner(
     plt.close()
 
     if not plt_diag:
-        return _corner_nodiag(fig, axes, coords_samp, coords_env, texts, fps,
-                              env_kws, text_kws, **plt_kws)
+        return _corner_nodiag(fig, axes, coords, coords_env, vectors,
+                              show_history, texts, fps, env_kws, text_kws,
+                              **plt_kws)
 
     # Compute the maximum histogram height among frames to keep the ylimit fixed
     max_heights = np.zeros((nframes, 4))
@@ -186,14 +203,25 @@ def corner(
                     
     def update(t):
         """Animation function to be called sequentially."""
-        X, X_samp = coords[t], coords_samp[t]
+        remove_annotations(axes)
+        X = coords[t]
+        if show_history and t > 0:
+            _coords_samp = coords_samp[:t+1]
+        else:
+            _coords_samp = coords_samp[[t]]
+        # Scatter plots
         for i in range(4):
             for j in range(i):
-                lines[i][j].set_data(X_samp[:, j], X_samp[:, i])
+                for X_samp in _coords_samp:
+                    lines[i][j].set_data(X_samp[:, j], X_samp[:, i])
                 if plt_env:
                     X_env = coords_env[t]
                     lines_env[i][j].set_data(X_env[:, j], X_env[:, i])
-        # Plot diagonal
+                if plt_vec:
+                    v1, v2 = vectors[0, t], vectors[1, t]
+                    arrowplot(axes[i, j], v1[[j,i]], origin=(0, 0), c='r')
+                    arrowplot(axes[i, j], v2[[j,i]], origin=(v1[[j,i]]), c='b')
+        # Diagonal plots
         if diag_kind == 'hist':
             global artists_list
             for artists in artists_list:
@@ -213,8 +241,6 @@ def corner(
                 ax.plot(ind, gkde.evaluate(ind), **diag_kws)
                 
         # Display text
-        for old_text in axes[1, 2].texts:
-            old_text.set_visible(False)
         axes[1, 2].annotate(texts[t], xy=(0.35, 0), xycoords='axes fraction',
                             **text_kws)
 
@@ -224,10 +250,11 @@ def corner(
     return anim
     
     
-def _corner_nodiag(fig, axes, coords, coords_env, texts, fps, env_kws,
-                   text_kws, **plt_kws):
+def _corner_nodiag(fig, axes, coords, coords_env, vectors, show_history, texts,
+                   fps, env_kws, text_kws, **plt_kws):
     """Corner plot without diagonal. Helper function for `corner` method."""
     plt_env = coords_env is not None
+    plt_vec = vectors is not None
     nframes = coords.shape[0]
     lines = [[], [], []]
     lines_env = [[], [], []]
@@ -245,21 +272,29 @@ def _corner_nodiag(fig, axes, coords, coords_env, texts, fps, env_kws,
                 lines[i][j].set_data([], [])
                 if plt_env:
                     lines_env[i][j].set_data([], [])
+
     def update(t):
         """Animation function to be called sequentially."""
-        X = coords[t]
-        hdata, vdata = X[:, :-1], X[:, 1:]
+        remove_annotations(axes)
         if plt_env:
             X_env = coords_env[t]
-            hdata_env, vdata_env = X_env[:, :-1], X_env[:, 1:]
+        if show_history and t > 0:
+            _coords = coords[:t+1]
+        else:
+            _coords = coords[[t]]
         for i in range(3):
             for j in range(i + 1):
-                lines[i][j].set_data(hdata[:, j], vdata[:, i])
+                ax = axes[i, j]
+                for X in _coords:
+                    lines[i][j].set_data(X[:, j], X[:, i + 1])
                 if plt_env:
-                    lines_env[i][j].set_data(hdata_env[:, j], vdata_env[:, i])
-                    
-        for old_text in axes[1, 2].texts:
-            old_text.set_visible(False)
+                    lines_env[i][j].set_data(X_env[:, j], X_env[:, i + 1])
+                if plt_vec:
+                    v1, v2 = vectors[0, t], vectors[1, t]
+                    arrowplot(ax, v1[[j, i+1]], origin=(0, 0), c='r',
+                              head_width=0.2, head_length=0.4)
+                    arrowplot(ax, v2[[j, i+1]], origin=(v1[[j, i+1]]),
+                              c='b', head_width=0.2, head_length=0.4)
         axes[1, 2].annotate(texts[t], xy=(0.35, 0.5), xycoords='axes fraction',
                             **text_kws)
                             
@@ -405,5 +440,74 @@ def corner_env(
                         
     # Call animator and (maybe) save the animation
     anim = animation.FuncAnimation(fig, update, frames=nframes,
+                                   interval=1000/fps)
+    return anim
+
+
+
+
+
+#-------------------------------------------------------------------------------
+
+def corner_eigvecs(
+    v1_tracked, v2_tracked, skip=0, pad=0.5, space=0.15,
+    figsize=(6, 6), units='mm-mrad', norm_labels=False, text_fmt='',
+    text_vals=None, fps=1, text_kws={}, **plt_kws
+):
+    # Configure text updates
+    nframes = v1_tracked.shape[0]
+    if text_vals is None:
+        text_vals = list(range(nframes))
+    if text_fmt is None: # display empty text
+        text_fmt = ''
+    texts = [text_fmt.format(val) for val in text_vals]
+        
+    # Skip frames
+    plot_every = skip + 1
+    v1_tracked = v1_tracked[::plot_every]
+    v2_tracked = v2_tracked[::plot_every]
+    texts = texts[::plot_every]
+    nframes = v1_tracked.shape[0]
+    
+    # Create figure
+    umax1, upmax1 = (1 + pad) * get_u_up_max_global(v1_tracked)
+    umax2, upmax2 = (1 + pad) * get_u_up_max_global(v1_tracked)
+    umax = max(umax1, umax2)
+    upmax = max(upmax1, upmax2)
+    fig, axes = setup_corner((umax, upmax), figsize, norm_labels, units, space,
+                              plt_diag=False, fontsize='small')
+    _set_ticks_props(axes, xlabelsize='small', ylabelsize='small')
+    plt.close()
+
+    lines1 = [[], [], []]
+    lines2 = [[], [], []]
+    lines_list = [lines1, lines2]
+    for i in range(3):
+        for j in range(i + 1):
+            for lines in lines_list:
+                line, = axes[i, j].plot([], [], **plt_kws)
+                lines[i].append(line)
+
+    def init():
+        """Plot the background of each frame."""
+        for i in range(3):
+            for j in range(i):
+                for lines in lines_list:
+                    lines[i][j].set_data([], [])
+
+    def update(t):
+        """Animation function to be called sequentially."""
+        v1 = v1_tracked[t]
+        v2 = v2_tracked[t]
+        for i in range(3):
+            for j in range(i + 1):
+                lines[i][j].set_data(hdata[:, j], vdata[:, i])
+                    
+        for old_text in axes[1, 2].texts:
+            old_text.set_visible(False)
+        axes[1, 2].annotate(texts[t], xy=(0.35, 0.5), xycoords='axes fraction',
+                            **text_kws)
+                            
+    anim = animation.FuncAnimation(fig, update, init_func=init, frames=nframes,
                                    interval=1000/fps)
     return anim
