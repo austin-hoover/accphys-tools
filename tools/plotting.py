@@ -183,16 +183,18 @@ def set_share_axes(axes, sharex=False, sharey=False, type_if_1D='row'):
         hide_axis_labels(axes[:-1, :].flat, 'x')
     if sharey:
         hide_axis_labels(axes[:, 1:].flat, 'y')
+        
+        
+def setup_corner(
+    limits=(1, 1), figsize=(5, 5), norm_labels=False, units=None, space=None,
+    plt_diag=False, dims='all', **text_kws
+):
+    """Set up lower left corner of scatter plot matrix. A 4D example:
 
-
-def setup_corner(limits, figsize, norm_labels, units, space=None,
-                 plt_diag=False, **text_kws):
-    """Set up lower left corner plot.
-    
-    X O O O
-    X X O O
-    X X X O
-    X X X X
+        X O O O
+        X X O O
+        X X X O
+        X X X X
     
     Inputs
     ------
@@ -212,6 +214,9 @@ def setup_corner(limits, figsize, norm_labels, units, space=None,
         optimizer is used to determined the spacing.
     plt_diag : bool
         Whether to include the subplots on the diagonal (4x4 vs. 3x3).
+    dims : list or tuple
+        The names of the dimensions to compare ('x', 'y'), or 'all' if the full
+        phase space is to be plotted.
     **text_kws
         Key word arguments for axis text.
 
@@ -220,8 +225,8 @@ def setup_corner(limits, figsize, norm_labels, units, space=None,
     fig, axes
     """
     # Preliminaries
-    tight = space is None
-    sharey = False if plt_diag else 'row'
+    if figsize is None:
+        figsize = 6 if dims == 'all' else 3
     if type(figsize) in [int, float]:
         figsize = (figsize, figsize)
     if norm_labels:
@@ -234,27 +239,33 @@ def setup_corner(limits, figsize, norm_labels, units, space=None,
     locators = 2 * [loc_u, loc_up]
     mlocators = 2 * [mloc_u, mloc_up]
     
-    # Create figure
-    nrows, ncols = (4, 4) if plt_diag else (3, 3)
-    fig, axes = plt.subplots(nrows, ncols, sharex='col', sharey=sharey,
-                             figsize=figsize)
-    if not tight:
+    # Only 2 variables plotted
+    if dims != 'all':
+        fig, ax = plt.subplots(figsize=figsize)
+        j, i = [str_to_int[dim] for dim in dims]
+        ax.set_xlim(limits[j])
+        ax.set_ylim(limits[i])
+        ax.set_xlabel(labels[j])
+        ax.set_ylabel(labels[i])
+        ax.xaxis.set_major_locator(locators[j])
+        ax.yaxis.set_major_locator(locators[i])
+        ax.xaxis.set_minor_locator(locators[j])
+        ax.yaxis.set_minor_locator(locators[i])
+        return fig, ax
+    
+    n = 4 if plt_diag else 3
+    sharey = False if plt_diag else 'row'
+    fig, axes = plt.subplots(n, n, figsize=figsize, sharex='col',
+                             sharey=sharey)
+    l_col, b_row, diag = axes[:, 0], axes[-1, :], axes.diagonal()
+    if space is None:
         fig.subplots_adjust(wspace=space, hspace=space)
     make_lower_triangular(axes)
     despine(axes.flat, ('top', 'right'))
 
     # Configure axis sharing
-    l_col, b_row, diag = axes[:, 0], axes[-1, :], axes.diagonal()
     if plt_diag:
         l_col = l_col[1:]
-        l_col_labels = labels[1:]
-        l_col_limits = limits[1:]
-        l_col_locators = locators[1:]
-        l_col_mlocators = mlocators[1:]
-        b_row_labels = labels
-        b_row_limits = limits
-        b_row_locators = locators
-        b_row_mlocators = mlocators
         for i, row in enumerate(axes[1:, :]): # share scatter plot y axis
             set_share_axes(row[:i+1], sharey=True)
         set_share_axes(diag, sharey=True) # share histogram y axis
@@ -262,36 +273,30 @@ def setup_corner(limits, figsize, norm_labels, units, space=None,
         despine(diag, 'left')
         toggle_grid(diag, 'off')
     else:
-        l_col_labels = labels[1:]
-        l_col_limits = limits[1:]
-        l_col_locators = locators[1:]
-        l_col_mlocators = mlocators[1:]
-        b_row_labels = labels[:-1]
-        b_row_limits = limits[:-1]
-        b_row_locators = locators[:-1]
-        b_row_mlocators = mlocators[:-1]
         for row in axes:
             set_share_axes(row, sharey=True)
 
     # Set axis limits, labels, and ticks
-    set_labels(b_row, b_row_labels, 'xlabel', **text_kws)
-    set_labels(l_col, l_col_labels, 'ylabel', **text_kws)
+    set_labels(b_row, labels, 'xlabel', **text_kws)
+    set_labels(l_col, labels[1:], 'ylabel', **text_kws)
     fig.align_labels()
-    set_limits(b_row, b_row_limits, 'x')
-    set_limits(l_col, l_col_limits, 'y')
-    for ax, locator, mlocator in zip(l_col, l_col_locators, l_col_mlocators):
+    set_limits(b_row, limits, 'x')
+    set_limits(l_col, limits[1:], 'y')
+    for ax, locator, mlocator in zip(l_col, locators[1:], mlocators[1:]):
         ax.yaxis.set_major_locator(locator) # better way to do this?
         ax.yaxis.set_minor_locator(mlocator)
-    for ax, locator, mlocator in zip(b_row, b_row_locators, b_row_mlocators):
+    for ax, locator, mlocator in zip(b_row, locators, mlocators):
         ax.xaxis.set_major_locator(locator)
         ax.xaxis.set_minor_locator(mlocator)
-    if tight:
+    _set_ticks_props(axes, xlabelsize='small', ylabelsize='small')
+    
+    if space is None:
         plt.tight_layout(rect=[0, 0, 1.025, 0.975])
     return fig, axes
 
     
 def corner(
-    X, env_params=None, samples=2000, pad=0.5, figsize=(6, 6), dims='all',
+    X, env_params=None, samples=2000, pad=0.5, figsize=None, dims='all',
     kind='scatter', diag_kind='hist', hist_height=0.6, units='mm-mrad',
     norm_labels=False, text=None, ax=None, diag_kws={}, env_kws={}, text_kws={},
     **plt_kws
@@ -355,6 +360,8 @@ def corner(
     numpy.ndarray
         The array of subplots.
     """
+    plt_diag = diag_kind != 'none'
+    
     # Set default key word arguments
     if kind == 'scatter' or kind == 'scatter_density':
         plt_kws.setdefault('s', 3)
@@ -380,32 +387,36 @@ def corner(
     if env_params is not None:
         env = ea.Envelope(params=env_params)
         X_env = env.generate_dist(50, 'on_ellipse')
+    limits = (1 + pad) * get_u_up_max(X) # axis limits
     
     # Create figure
-    plt_diag = diag_kind != 'none'
-    limits = (1 + pad) * get_u_up_max(X) # axis limits
-    if dims != 'all':
-        return _corner_2D(X, X_env, dims, kind, diag_kind, figsize, limits,
-                          units, norm_labels, ax, env_kws, **plt_kws)
-    fig, axes = setup_corner(limits, figsize, norm_labels, units,
+    fig, axes = setup_corner(limits, figsize, norm_labels, units, dims=dims,
                              plt_diag=plt_diag, fontsize='medium')
 
     # Plot
-    if diag_kind == 'none':
-        hdata, vdata = X_samp[:, :-1], X_samp[:, 1:]
+    if dims != 'all':
+        j, i = [str_to_int[dim] for dim in dims]
+        x, y = X_samp[:, j], X_samp[:, i]
+        ax = axes
+        if kind == 'scatter':
+            ax.scatter(x, y, **plt_kws)
+        elif kind == 'scatter_density':
+            ax = scatter_density(ax, x, y, **plt_kws)
         if X_env is not None:
-            hdata_env, vdata_env = X_env[:, :-1], X_env[:, 1:]
+            ax.plot(X_env[:, j], X_env[:, i], **env_kws)
+        return axes
+
+    if not plt_diag:
         for i in range(3):
             for j in range(i + 1):
                 ax = axes[i, j]
-                x, y = hdata[:, j], vdata[:, i]
+                x, y = X[:, j], X[:, i+1]
                 if kind == 'scatter':
                     ax.scatter(x, y, **plt_kws)
                 elif kind == 'scatter_density':
                     scatter_density(ax, x, y, **plt_kws)
                 if X_env is not None:
                     ax.plot(x, y, **env_kws)
-                    
     else:
         for i in range(4):
             for j in range(i + 1):
@@ -439,50 +450,10 @@ def corner(
     return axes
     
     
-def _corner_2D(X, X_env, dims, kind, diag_kind, figsize, limits, units,
-               norm_labels, ax, env_kws, **plt_kws):
-    """Helper function for plotting 2D projection.
-
-    This sort of repeats everything from `setup_corner_axes`. Maybe we can add
-    an option to that method to construct a 1x1, 2x2, or 3x3 grid based on the
-    projections that are being plotted.
-    """
-    if norm_labels:
-       units = None
-    labels = get_labels(units, norm_labels)
-    umax, upmax = limits
-    limits = 2 * [(-umax, umax), (-upmax, upmax)]
-           
-    j, i = str_to_int[dims[0]], str_to_int[dims[1]]
-    x, y = X[:, j], X[:, i]
-    
-    if ax is None:
-        if type(figsize) in [int, float]:
-           figsize = (figsize, figsize)
-        fig, ax = plt.subplots(figsize=figsize, tight_layout=True)
-    if kind == 'scatter':
-        ax.scatter(x, y, **plt_kws)
-    elif kind == 'scatter_density':
-        ax = scatter_density(ax, x, y, **plt_kws)
-    if X_env is not None:
-        ax.plot(X_env[:, j], X_env[:, i], **env_kws)
-
-    if ax is None:
-        ax.set_xlabel(labels[j])
-        ax.set_ylabel(labels[i])
-    ax.set_xlim(limits[j])
-    ax.set_ylim(limits[i])
-    ax.yaxis.set_major_locator(ticker.MaxNLocator(3))
-    ax.xaxis.set_major_locator(ticker.MaxNLocator(3))
-    ax.yaxis.set_minor_locator(ticker.AutoMinorLocator(4))
-    ax.xaxis.set_minor_locator(ticker.AutoMinorLocator(4))
-    return ax
-    
-    
 def corner_env(
-    params, fill=False, pad=0.5, space=None, figsize=(5, 5), dims='all',
+    params, fill=False, pad=0.5, space=None, figsize=None, dims='all',
     cmap=None, cmap_range=(0, 1), units='mm-mrad', norm_labels=False, ax=None,
-    legend_kws=None, fill_kws={}, **plt_kws
+    legend_kws=None, fill_kws={}, label_kws={}, **plt_kws
 ):
     """Plot the 6 transverse phase space ellipses of the beam.
     
@@ -526,7 +497,9 @@ def corner_env(
         If plotting only a 2D projection of the data (for example if
         dims=('x','y'), the data will be plotted on this axis.)
     legend_kws : dict
-        Key word args for the legend.
+        Key word arguments for the legend.
+    label_kws : dict
+        Key word arguments for the axis labels.
         
     Returns
     -------
@@ -552,73 +525,44 @@ def corner_env(
     fill_kws.setdefault('zorder', 10)
             
     # Create figure
+    if figsize is None:
+        figsize = 6 if dims == 'all' else 3
+    fig, axes = setup_corner(limits, figsize, norm_labels, units, space,
+                             dims=dims, fontsize='medium')
     if dims != 'all':
-        return _corner_env_2D(coords, dims, figsize, fill, limits, units,
-                              norm_labels, ax, fill_kws, **plt_kws)
-    
-    fig, axes = setup_corner(limits, figsize, norm_labels, units,
-                             space, plt_diag=False)
-                 
+        ax = axes
+        
     # Set color cycle
     if len(params) > 1 and cmap is not None:
         start, end = cmap_range
         colors = [cmap(i) for i in np.linspace(start, end, len(params))]
         color_cycle = cycler('color', colors)
-        for ax in axes.flat:
+        if dims != 'all':
             ax.set_prop_cycle(color_cycle)
+        else:
+            for ax in axes.flat:
+                ax.set_prop_cycle(color_cycle)
             
     # Plot data
+    idx = [str_to_int[dim] for dim in dims]
     for X in coords:
-        X_horiz, X_vert = X[:, :-1], X[:, 1:]
-        for i in range(3):
-            for j in range(i + 1):
-                ax = axes[i, j]
-                if fill:
-                    ax.fill(X_horiz[:, j], X_vert[:, i], **fill_kws)
-                else:
-                    ax.plot(X_horiz[:, j], X_vert[:, i], **plt_kws)
-    # Add legend (this messes up formatting if tight_layout is used)
-    if legend_kws is not None:
+        if dims != 'all':
+            j, i = idx
+            if fill:
+                ax.fill(X[:, j], X[:, i], **fill_kws)
+            else:
+                ax.plot(X[:, j], X[:, i], **plt_kws)
+        else:
+            for i in range(3):
+                for j in range(i + 1):
+                    ax = axes[i, j]
+                    if fill:
+                        ax.fill(X[:, j], X[:, i+1], **fill_kws)
+                    else:
+                        ax.plot(X[:, j], X[:, i+1], **plt_kws)
+    if legend_kws is not None and n > 2:
         axes[1, 1].legend(**legend_kws)
     return axes
-    
-    
-def _corner_env_2D(coords, dims, figsize, fill, limits, units, norm_labels, ax,
-                   fill_kws, **plt_kws):
-    """Helper function for plotting envelope in only one projection.
-    
-    This sort of repeats everything from `setup_corner_axes`. Maybe we can add
-    an option to that method to construct a 1x1, 2x2, or 3x3 grid based on the
-    projections that are being plotted.
-    """
-    if norm_labels:
-       units = None
-    labels = get_labels(units, norm_labels)
-    umax, upmax = limits
-    limits = 2 * [(-umax, umax), (-upmax, upmax)]
-           
-    j, i = str_to_int[dims[0]], str_to_int[dims[1]]
-    
-    if ax is None:
-        if type(figsize) in [int, float]:
-           figsize = (figsize, figsize)
-        fig, ax = plt.subplots(figsize=figsize, tight_layout=True)
-    for X in coords:
-        if fill:
-            ax.fill(X[:, j], X[:, i], **fill_kws)
-        else:
-            ax.plot(X[:, j], X[:, i], **plt_kws)
-    
-    if ax is None:
-        ax.set_xlabel(labels[j])
-        ax.set_ylabel(labels[i])
-    ax.set_xlim(limits[j])
-    ax.set_ylim(limits[i])
-    ax.yaxis.set_major_locator(ticker.MaxNLocator(3))
-    ax.xaxis.set_major_locator(ticker.MaxNLocator(3))
-    ax.yaxis.set_minor_locator(ticker.AutoMinorLocator(4))
-    ax.xaxis.set_minor_locator(ticker.AutoMinorLocator(4))
-    return ax
     
     
 def fft(x, y, grid=True, legend=False, figname=None):

@@ -132,3 +132,34 @@ def Sigma(ax, ay, bx, by, u, nu, eps, mode=1):
                            [s12, s22, s23, s24],
                            [s13, s23, s33, s34],
                            [s14, s24, s34, s44]])
+
+
+
+
+
+def is_stable(M):
+    for eigval in la.eigvals(M):
+        if abs(la.norm(eigval) - 1) > 1e-5:
+            return False
+    return True
+
+def eigvals(M):
+    return la.eig(self.M)
+
+def eigvecs(M):
+    eigvals, eigvecs = la.eig(M)
+    v1, _, v2, _ = eigvecs.T
+    return [v1, v2]
+
+def eigtunes(M, deg=True):
+    tunes = np.arccos(la.eigvals(M).real)[[0, 2]]
+    return np.degrees(tunes) if deg else tunes
+
+def has_unequal_eigtunes(M, tol=1e-5):
+    mu1, mu2 = eigtunes(M)
+    return abs(mu1 - mu2) > tol
+
+def normal_form(M):
+    eigvals, eigvecs = la.eig(M)
+    V = construct_V(eigvecs)
+    return la.multi_dot([la.inv(V), M, V])

@@ -20,7 +20,7 @@ from .utils import (
     vec2mat,
     cov2corr,
     phase_adv_matrix,
-    Vmat_2D,
+    Vmat_2D
 )
 
 # Module level variables
@@ -604,7 +604,7 @@ class Envelope:
             The matched envelope parameters.
         """
         if method == 'auto':
-            method = '4D' if unequal_eigtunes(M) else '2D'
+            method = '4D' if BL.has_unequal_eigtunes(M) else '2D'
         if method == '2D':
             lattice_params = params_from_transfer_matrix(M)
             ax, ay = [lattice_params[key] for key in ('alpha_x', 'alpha_y')]
@@ -616,10 +616,13 @@ class Envelope:
             self.norm_transform(V)
         return self.params
         
-    def track(self, M, nturns):
+    def track(self, M, nturns=1):
         """Track the envelope using the transfer matrix `M`."""
+        tracked_params = [self.params]
         for _ in range(nturns):
             self.transform(M)
+            tracked_params.append(self.params)
+        return np.array(tracked_params)
 
     def perturb(self, radius=0.1):
         """Randomly perturb the 4D Twiss parameters."""

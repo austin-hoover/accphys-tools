@@ -23,10 +23,12 @@ from matplotlib.patches import Ellipse, transforms
 from .envelope_analysis import get_ellipse_coords
 from .plotting import (
     setup_corner,
+    get_labels,
     get_u_up_max,
     get_u_up_max_global,
     remove_annotations,
-    vector as arrowplot)
+    vector as arrowplot,
+    str_to_int)
 
 # Settings
 plt.rcParams['animation.ffmpeg_path'] = '/usr/local/bin/ffmpeg'
@@ -36,12 +38,10 @@ artists_list = []
                   
 
 def corner(
-    coords, env_params=None, vectors=None, show_history=False, samples=2000,
-    skip=0, pad=0.5,
-    space=0.15, figsize=(7, 7), kind='scatter', diag_kind='hist',
-    hist_height=0.7, units='mm-mrad', norm_labels=False, text_fmt='',
-    text_vals=None, fps=1, diag_kws={}, env_kws={}, text_kws={},
-    **plt_kws
+    coords, env_params=None, dims='all', samples=2000, skip=0, pad=0.5,
+    space=0.15, figsize=None, kind='scatter', diag_kind='hist', hist_height=0.7,
+    units='mm-mrad', norm_labels=False, text_fmt='', text_vals=None, fps=1,
+    diag_kws={}, env_kws={}, text_kws={}, **plt_kws
 ):
     """Frame-by-frame phase space projections of the beam.
     
@@ -53,6 +53,11 @@ def corner(
     env_params : ndarray, shape (nframes, 8)
         The envelope parameters at each frame. They are not plotted if none
         are provided.
+    dims : str or tuple
+        If 'all', plot all 6 phase space projections. Otherwise provide a tuple
+        containing (horiz_dim, vert_dim) which gives the dimension to plot on
+        the horizontal and vertical axes. Dimension names are {'x', 'xp', 'y',
+        'yp'}.
     samples : int
         The number of randomly sampled particles to use in the off-diagonal
         subplots.
@@ -66,7 +71,8 @@ def corner(
         Width of the space between the subplots.
     figsize : tuple or int
         Size of the figure (x_size, y_size). If an int is provided, the number
-        is used as the size for both dimensions.
+        is used as the size for both dimensions. Default (6, 6) with diagonals
+        (5, 5) without diagonals, or (3, 3) if only one subplot.
     kind : {'scatter', 'hist', 'kde'}
         The kind of plot to make on the off-diagonal subplots. Note: the 'kde'
         and 'hist' options are not implemented yet.
@@ -104,6 +110,7 @@ def corner(
     anim : output from matplotlib.animation.FuncAnimation
     """
     plt_env = env_params is not None
+    plt_diag = diag_kind != 'none'
     
     # Set default key word arguments
     if 's' in plt_kws:
@@ -155,18 +162,24 @@ def corner(
     if nparts > samples:
         idx = np.random.choice(nparts, samples, replace=False)
         coords_samp = coords[:, idx, :]
+    limits = (1 + pad) * get_u_up_max_global(coords)
     
     # Create figure
-    plt_diag = diag_kind != 'none'
-    limits = (1 + pad) * get_u_up_max_global(coords)
+    if figsize is None:
+        if dims != 'all':
+            figsize = 3
+        else:
+            figsize = 6 if plt_diag else 5
     fig, axes = setup_corner(limits, figsize, norm_labels, units, space,
-                             plt_diag, fontsize='small')
-    _set_ticks_props(axes, xlabelsize='small', ylabelsize='small')
+                             plt_diag, dims=dims, fontsize='medium')
     plt.close()
 
+    if dims != 'all':
+        return _corner_2D(fig, axes, coords_samp, coords_env, dims, texts, fps,
+                          env_kws, text_kws, **plt_kws)
     if not plt_diag:
-        return _corner_nodiag(fig, axes, coords, coords_env, show_history,
-                              texts, fps, env_kws, text_kws, **plt_kws)
+        return _corner_nodiag(fig, axes, coords_samp, coords_env, texts, fps,
+                              env_kws, text_kws, **plt_kws)
 
     # Compute the maximum histogram height among frames to keep the ylimit fixed
     max_heights = np.zeros((nframes, 4))
@@ -272,13 +285,36 @@ def _corner_nodiag(fig, axes, coords, coords_env, texts, fps, env_kws,
         axes[1, 2].annotate(texts[t], xy=(0.35, 0.5), xycoords='axes fraction',
                             **text_kws)
                             
-    anim = animation.FuncAnimation(fig, update, init_func=init, frames=nframes,
+    return animation.FuncAnimation(fig, update, init_func=init, frames=nframes,
                                    interval=1000/fps)
-    return anim
+    
+
+def _corner_2D(fig, ax, coords, coords_env, dims, texts, fps, env_kws,
+               text_kws, **plt_kws):
+    """2D scatter plot (helper function for `corner`)."""
+    nframes = coords.shape[0]
+    j, i = [str_to_int[dim] for dim in dims]
+    coords_x, coords_y = coords[:, :, j], coords[:, :, i]
+    
+    line, = ax.plot([], [], **plt_kws)
+    line_env, = ax.plot([], [], **env_kws)
+    def init():
+        line.set_data([], [])
+        line_env.set_data([], [])
+        
+    def update(t):
+        X = coords[t]
+        line.set_data(X[:, j], X[:, i])
+        if coords_env is not None:
+            X_env = coords_env[t]
+            line_env.set_data(X_env[:, j], X_env[:, i])
+        
+    return animation.FuncAnimation(fig, update, init_func=init, frames=nframes,
+                                   interval=1000/fps)
     
 
 def corner_env(
-    params, skip=0, figsize=(5, 5), pad=0.25, space=0.15, ec='k',
+    params, dims='all', skip=0, figsize=None, pad=0.25, space=0.15, ec='k',
     fc='lightsteelblue', fill=True, plot_boundary=True, show_init=False,
     clear_history=True, text_fmt='', text_vals=None, units='mm-mrad',
     norm_labels=False, fps=5, cmap=None
@@ -291,6 +327,11 @@ def corner_env(
         If shape is (nframes, 8), gives the envelope parameters at each frame.
         If a list of these arrays is provided, each envelope in the list will
         be plotted.
+    dims : str or tuple
+        If 'all', plot all 6 phase space projections. Otherwise provide a tuple
+        containing (horiz_dim, vert_dim) which gives the dimension to plot on
+        the horizontal and vertical axes. Dimension names are {'x', 'xp', 'y',
+        'yp'}.
     skip : int
         The coordinates will be plotted every skip + 1 frames.
     figsize : tuple or int
@@ -339,6 +380,7 @@ def corner_env(
         params = params[np.newaxis, :]
     n_envelopes, nframes, _ = params.shape
     coords_list = [get_ellipse_coords(p) for p in params]
+    X_init = coords_list[0][0]
     if n_envelopes > 1:
         fill = False
         ec = None
@@ -356,10 +398,6 @@ def corner_env(
     texts = texts[::skip+1]
     nframes = coords_list[0].shape[0]
         
-    # Store initial ellipse
-    X_init = coords_list[0][0]
-    hdata_init, vdata_init = X_init[:, :-1], X_init[:, 1:]
-        
     # Configure axis limits
     limits_list = np.array([(1 + pad) * get_u_up_max_global(coords)
                             for coords in coords_list])
@@ -367,13 +405,18 @@ def corner_env(
 
     # Create figure
     fig, axes = setup_corner(limits, figsize, norm_labels, units, space,
-                             plt_diag=False, fontsize='small')
-    _set_ticks_props(axes, xlabelsize='small', ylabelsize='small')
+                             dims=dims, plt_diag=False, fontsize='medium')
     if cmap is not None:
-        colors = [cmap(i) for i in np.linspace(0, 1, n_envelopes)]
+        colors = [cmap(i) for i in np.linspace(0, 1, len(coords_list))]
         for ax in axes.flat:
             ax.set_prop_cycle(cycler('color', colors))
     plt.close()
+    
+    if dims != 'all':
+        if cmap is not None:
+            ax.set_prop_cycle(cycler('color', colors))
+        return _corner_env_2D(fig, axes, coords_list, dims, clear_history,
+                              show_init, plot_boundary, fill, fc, ec, fps)
     
     # Create list of Line2D objects
     lines_list = []
@@ -404,7 +447,7 @@ def corner_env(
                     if fill:
                         ax.fill(hdata[:, k], vdata[:, j], fc=fc, lw=0)
                     if show_init and clear_history:
-                        ax.plot(hdata_init[:, k], vdata_init[:, j], 'k--',
+                        ax.plot(X_init[:, k], X_init[:, j+1], 'k--',
                                 lw=0.5, alpha=0.25)
         # Display text
         for old_text in axes[1, 2].texts:
@@ -412,10 +455,35 @@ def corner_env(
         axes[1, 2].annotate(texts[t], xy=(0.35, 0.5), xycoords='axes fraction')
                         
     # Call animator and (maybe) save the animation
-    anim = animation.FuncAnimation(fig, update, frames=nframes,
+    return animation.FuncAnimation(fig, update, frames=nframes,
                                    interval=1000/fps)
-    return anim
-
+    
+    
+def _corner_env_2D(fig, ax, coords_list, dims, clear_history,
+                   show_init, plot_boundary, fill, fc, ec, fps):
+    X_init = coords_list[0][0]
+    lines = []
+    for coords in coords_list:
+        line, = ax.plot([], [], '-', lw=1, color=ec)
+        lines.append(line)
+    k, j = [str_to_int[dim] for dim in dims]
+    
+    def update(t):
+        if clear_history:
+             for patch in ax.patches:
+                 patch.remove()
+        for line, coords in zip(lines, coords_list):
+            X = coords[t]
+            if plot_boundary:
+                line.set_data(X[:, k], X[:, j])
+            if fill:
+                ax.fill(X[:, k], X[:, j], fc=fc, lw=0)
+            if show_init and clear_history:
+                ax.plot(X_init[:, k], X_init[:, j], 'k--',
+                        lw=0.5, alpha=0.25)
+    return animation.FuncAnimation(fig, update, frames=coords_list[0].shape[0],
+                                   interval=1000/fps)
+        
 
 def corner_onepart(
     X, vectors=None, show_history=False, skip=0, pad=0.5, space=0.15,
@@ -456,7 +524,6 @@ def corner_onepart(
     umax, upmax = (1 + pad) * get_u_up_max(X)
     fig, axes = setup_corner((umax, upmax), figsize, norm_labels, units, space,
                               plt_diag=False, fontsize='small')
-    _set_ticks_props(axes, xlabelsize='small', ylabelsize='small')
     plt.close()
 
     lines = [[], [], []]
