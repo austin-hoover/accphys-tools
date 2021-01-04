@@ -201,8 +201,7 @@ def corner(
         # Scatter plots
         for i in range(4):
             for j in range(i):
-                for X_samp in _coords_samp:
-                    lines[i][j].set_data(X_samp[:, j], X_samp[:, i])
+                lines[i][j].set_data(X_samp[:, j], X_samp[:, i])
                 if plt_env:
                     X_env = coords_env[t]
                     lines_env[i][j].set_data(X_env[:, j], X_env[:, i])
