@@ -55,9 +55,7 @@ def corner(
         are provided.
     dims : str or tuple
         If 'all', plot all 6 phase space projections. Otherwise provide a tuple
-        containing (horiz_dim, vert_dim) which gives the dimension to plot on
-        the horizontal and vertical axes. Dimension names are {'x', 'xp', 'y',
-        'yp'}.
+        like ('x', 'yp') which plots x vs. y'.
     samples : int
         The number of randomly sampled particles to use in the off-diagonal
         subplots.
@@ -329,9 +327,7 @@ def corner_env(
         be plotted.
     dims : str or tuple
         If 'all', plot all 6 phase space projections. Otherwise provide a tuple
-        containing (horiz_dim, vert_dim) which gives the dimension to plot on
-        the horizontal and vertical axes. Dimension names are {'x', 'xp', 'y',
-        'yp'}.
+        like ('x', 'yp') which plots x vs. y'.
     skip : int
         The coordinates will be plotted every skip + 1 frames.
     figsize : tuple or int

@@ -214,9 +214,9 @@ def setup_corner(
         optimizer is used to determined the spacing.
     plt_diag : bool
         Whether to include the subplots on the diagonal (4x4 vs. 3x3).
-    dims : list or tuple
-        The names of the dimensions to compare ('x', 'y'), or 'all' if the full
-        phase space is to be plotted.
+    dims : str or tuple
+        If 'all', plot all 6 phase space projections. Otherwise provide a tuple
+        like ('x', 'yp') which plots x vs. y'.
     **text_kws
         Key word arguments for axis text.
 
@@ -249,14 +249,14 @@ def setup_corner(
         ax.set_ylabel(labels[i])
         ax.xaxis.set_major_locator(locators[j])
         ax.yaxis.set_major_locator(locators[i])
-        ax.xaxis.set_minor_locator(locators[j])
-        ax.yaxis.set_minor_locator(locators[i])
+        ax.xaxis.set_minor_locator(mlocators[j])
+        ax.yaxis.set_minor_locator(mlocators[i])
         return fig, ax
     
-    n = 4 if plt_diag else 3
+    nrows = ncols = 4 if plt_diag else 3
     sharey = False if plt_diag else 'row'
-    fig, axes = plt.subplots(n, n, figsize=figsize, sharex='col',
-                             sharey=sharey)
+    fig, axes = plt.subplots(nrows, ncols, figsize=figsize,
+                             sharex='col', sharey=sharey)
     l_col, b_row, diag = axes[:, 0], axes[-1, :], axes.diagonal()
     if space is None:
         fig.subplots_adjust(wspace=space, hspace=space)
@@ -323,9 +323,7 @@ def corner(
         is used as the size for both dimensions.
     dims : str or tuple
         If 'all', plot all 6 phase space projections. Otherwise provide a tuple
-        containing (horiz_dim, vert_dim) which gives the dimension to plot on
-        the horizontal and vertical axes. Dimension names are {'x', 'xp', 'y',
-        'yp'}.
+        like ('x', 'yp') which plots x vs. y'.
     kind : {'scatter', 'scatter_density', 'hist', 'kde'}
         The kind of plot to make on the off-diagonal subplots. Note: the 'kde'
         and 'hist' options are not implemented yet.
@@ -473,9 +471,7 @@ def corner_env(
         is used as the size for both dimensions.
     dims : str or tuple
         If 'all', plot all 6 phase space projections. Otherwise provide a tuple
-        containing (horiz_dim, vert_dim) which gives the dimension to plot on
-        the horizontal and vertical axes. Dimension names are {'x', 'xp', 'y',
-        'yp'}.
+        like ('x', 'yp') which plots x vs. y'.
     ec, fc : str
         Color of the ellipse boundary (ec) and interior (fc). If either are
         None,
