@@ -482,9 +482,9 @@ def _corner_env_2D(fig, ax, coords_list, dims, clear_history,
         
 
 def corner_onepart(
-    X, vectors=None, show_history=False, skip=0, pad=0.5, space=0.15,
-    figsize=(6, 6), units='mm-mrad', norm_labels=False, text_fmt='',
-    text_vals=None, fps=1, text_kws={}, **plt_kws
+    X, dims='all', vecs=None, show_history=False, skip=0, pad=0.5,
+    space=0.15, figsize=None, units='mm-mrad', norm_labels=False,
+    text_fmt='', text_vals=None, fps=1, text_kws={}, **plt_kws
 ):
     # Set default key word arguments
     if 's' in plt_kws:
@@ -492,7 +492,7 @@ def corner_onepart(
         plt_kws.pop('s', None)
         plt_kws['ms'] = ms
     plt_kws.setdefault('ms', 10)
-    plt_kws.setdefault('color', 'steelblue')
+    plt_kws.setdefault('color', 'k')
     plt_kws.setdefault('marker', '.')
     plt_kws.setdefault('zorder', 5)
     plt_kws.setdefault('lw', 0)
@@ -510,47 +510,58 @@ def corner_onepart(
     # Skip frames
     plot_every = skip + 1
     X = X[::plot_every]
-    if vectors is not None:
-        vectors = np.array(vectors)
-        vectors = vectors[:, ::plot_every]
+    if vecs is not None:
+        vecs = np.array(vecs)
+        vecs = vecs[:, ::plot_every]
     texts = texts[::plot_every]
     nframes = X.shape[0]
     
     # Create figure
-    umax, upmax = (1 + pad) * get_u_up_max(X)
-    fig, axes = setup_corner((umax, upmax), figsize, norm_labels, units, space,
-                              plt_diag=False, fontsize='small')
+    limits = (1 + pad) * get_u_up_max(X)
+    fig, axes = setup_corner(limits, figsize, norm_labels, units, space,
+                             plt_diag=False, dims=dims)
     plt.close()
-
-    lines = [[], [], []]
-    for i in range(3):
-        for j in range(i + 1):
-            line, = axes[i, j].plot([], [], **plt_kws)
-            lines[i].append(line)
-
+            
+    # Create Line2D objects
+    if dims != 'all':
+        ax = axes
+        line, = ax.plot([], [], **plt_kws)
+    else:
+        lines = [[], [], []]
+        for i in range(3):
+            for j in range(i + 1):
+                line, = axes[i, j].plot([], [], **plt_kws)
+                lines[i].append(line)
+                
     def init():
         """Plot the background of each frame."""
-        for i in range(3):
-            for j in range(i):
-                lines[i][j].set_data([], [])
+        if dims != 'all':
+            line.set_data([], [])
+        else:
+            for i in range(3):
+                for j in range(i):
+                    lines[i][j].set_data([], [])
 
     def update(t):
         """Animation function to be called sequentially."""
-        remove_annotations(axes)
         _X = X[:t+1] if show_history and t > 0 else X[[t]]
-        for i in range(3):
-            for j in range(i + 1):
-                ax = axes[i, j]
-                lines[i][j].set_data(_X[:, j], _X[:, i+1])
-                if vectors is not None:
-                    v1, v2 = vectors[0][t], vectors[1][t]
-                    arrowplot(ax, v1[[j, i+1]], origin=(0, 0), c='r',
-                              head_width=0.2, head_length=0.4)
-                    arrowplot(ax, v2[[j, i+1]], origin=(v1[[j, i+1]]),
-                              c='b', head_width=0.2, head_length=0.4)
-
-        axes[1, 2].annotate(texts[t], xy=(0.35, 0.5), xycoords='axes fraction',
-                            **text_kws)
+        if dims != 'all':
+            j, i = [str_to_int[dim] for dim in dims]
+            line.set_data(_X[:, j], _X[:, i+1])
+        else:
+            remove_annotations(axes)
+            for i in range(3):
+                for j in range(i + 1):
+                    ax = axes[i, j]
+                    lines[i][j].set_data(_X[:, j], _X[:, i+1])
+                    if vecs is not None:
+                        v1, v2 = vecs[0][t], vecs[1][t]
+                        arrowplot(ax, v1[[j, i+1]], origin=(0, 0), c='r',
+                                  head_width=0.2, head_length=0.4)
+                        arrowplot(ax, v2[[j, i+1]], origin=(v1[[j, i+1]]),
+                                  c='b', head_width=0.2, head_length=0.4)
+            axes[1, 2].annotate(texts[t], xy=(0.35, 0.5),
+                                xycoords='axes fraction', **text_kws)
                             
     anim = animation.FuncAnimation(fig, update, init_func=init, frames=nframes,
                                    interval=1000/fps)

@@ -142,6 +142,7 @@ def hide_axis_labels(ax_list, dim='x'):
         
         
 def toggle_grid(axes_list, switch='off', **kws):
+    """Turn grid on or off."""
     grid = {'off':False, 'on':True}[switch]
     for ax in axes_list:
         ax.grid(grid, **kws)
@@ -186,7 +187,7 @@ def set_share_axes(axes, sharex=False, sharey=False, type_if_1D='row'):
         
         
 def setup_corner(
-    limits=(1, 1), figsize=(5, 5), norm_labels=False, units=None, space=None,
+    limits=(1, 1), figsize=None, norm_labels=False, units=None, space=None,
     plt_diag=False, dims='all', **text_kws
 ):
     """Set up lower left corner of scatter plot matrix. A 4D example:
@@ -226,7 +227,10 @@ def setup_corner(
     """
     # Preliminaries
     if figsize is None:
-        figsize = 6 if dims == 'all' else 3
+        if dims == 'all':
+            figsize = 6 if plt_diag else 5
+        else:
+            figsize = 3
     if type(figsize) in [int, float]:
         figsize = (figsize, figsize)
     if norm_labels:
@@ -262,7 +266,7 @@ def setup_corner(
         fig.subplots_adjust(wspace=space, hspace=space)
     make_lower_triangular(axes)
     despine(axes.flat, ('top', 'right'))
-
+    
     # Configure axis sharing
     if plt_diag:
         l_col = l_col[1:]
@@ -282,14 +286,16 @@ def setup_corner(
     fig.align_labels()
     set_limits(b_row, limits, 'x')
     set_limits(l_col, limits[1:], 'y')
-    for ax, locator, mlocator in zip(l_col, locators[1:], mlocators[1:]):
-        ax.yaxis.set_major_locator(locator) # better way to do this?
-        ax.yaxis.set_minor_locator(mlocator)
-    for ax, locator, mlocator in zip(b_row, locators, mlocators):
-        ax.xaxis.set_major_locator(locator)
-        ax.xaxis.set_minor_locator(mlocator)
-    _set_ticks_props(axes, xlabelsize='small', ylabelsize='small')
     
+    for row, loc, mloc in zip(axes[1:], locators[1:], mlocators[1:]):
+        for ax in row:
+            ax.yaxis.set_major_locator(loc)
+            ax.yaxis.set_minor_locator(mloc)
+    for col, loc, mloc in zip(axes.T, locators, mlocators):
+        for ax in col:
+            ax.xaxis.set_major_locator(loc)
+            ax.xaxis.set_minor_locator(mloc)
+    _set_ticks_props(axes, xlabelsize='small', ylabelsize='small')
     if space is None:
         plt.tight_layout(rect=[0, 0, 1.025, 0.975])
     return fig, axes
@@ -358,7 +364,7 @@ def corner(
     numpy.ndarray
         The array of subplots.
     """
-    plt_diag = diag_kind != 'none'
+    plt_diag = diag_kind not in ('none', None)
     
     # Set default key word arguments
     if kind == 'scatter' or kind == 'scatter_density':
@@ -521,8 +527,6 @@ def corner_env(
     fill_kws.setdefault('zorder', 10)
             
     # Create figure
-    if figsize is None:
-        figsize = 6 if dims == 'all' else 3
     fig, axes = setup_corner(limits, figsize, norm_labels, units, space,
                              dims=dims, fontsize='medium')
     if dims != 'all':
