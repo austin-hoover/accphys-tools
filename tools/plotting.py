@@ -286,8 +286,8 @@ def setup_corner(
     fig.align_labels()
     set_limits(b_row, limits, 'x')
     set_limits(l_col, limits[1:], 'y')
-    
-    for row, loc, mloc in zip(axes[1:], locators[1:], mlocators[1:]):
+    start = 0 if plt_diag else 1
+    for row, loc, mloc in zip(axes, locators[start:], mlocators[start:]):
         for ax in row:
             ax.yaxis.set_major_locator(loc)
             ax.yaxis.set_minor_locator(mloc)
