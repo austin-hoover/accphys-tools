@@ -1,3 +1,5 @@
+"""Various utility functions."""
+
 # Standard
 import os
 # Third party
@@ -12,14 +14,13 @@ from scipy.integrate import trapz
 from IPython.display import display, HTML
 
 
-# General functions
-#------------------------------------------------------------------------------
+# File processing
 def list_files(dir):
     """List all files in directory not starting with '.'"""
     files = os.listdir(dir)
     return [file for file in files if not file.startswith('.')]
     
-
+    
 def is_empty(dir):
     """Return True if directory is empty."""
     return len(list_files(dir)) > 0
@@ -32,12 +33,13 @@ def delete_files_not_folders(dir):
             if not file.startswith('.'):
                 os.remove(os.path.join(root, file))
                 
-               
+                
 def file_exists(file):
     """Return True if the file exists."""
     return os.path.isfile(file)
     
     
+# Lists and dicts
 def merge_lists(x, y):
     """Returns [x[0], y[0], ..., x[-1], y[-1]]"""
     return [x for pair in zip(a, b) for x in pair]
@@ -66,6 +68,7 @@ def merge_dicts(*dictionaries):
     return result
     
     
+# Display
 def tprint(string, indent=4):
     """Print with indent."""
     print(indent*' ' + str(string))
@@ -77,56 +80,33 @@ def show(V, name=None, dec=3):
         print(name, '=')
     pprint(Matrix(np.round(V, dec)))
     
-
+    
 def play(anim):
     """Display matplotlib animation. For use in Jupyter notebook."""
     display(HTML(anim.to_jshtml()))
+    
+    
+# NumPy arrays
+def apply(M, X):
+    """Apply M to each row of X."""
+    return np.apply_along_axis(lambda x: np.matmul(M, x), 1, X)
 
 
-# Useful for accelerator physics
-#------------------------------------------------------------------------------
-def rotation_matrix(phi):
-    C, S = np.cos(phi), np.sin(phi)
-    return np.array([[C, S], [-S, C]])
-    
-    
-def rotation_matrix_4D(phi):
-    C, S = np.cos(phi), np.sin(phi)
-    return np.array([[C, 0, S, 0], [0, C, 0, S], [-S, 0, C, 0], [0, -S, 0, C]])
+def normalize(X):
+    """Normalize all rows of X to unit length."""
+    return np.apply_along_axis(lambda x: x/la.norm(x), 1, X)
 
-    
-def phase_adv_matrix(mu1, mu2):
-    R = np.zeros((4, 4))
-    R[:2, :2] = rotation_matrix(mu1)
-    R[2:, 2:] = rotation_matrix(mu2)
-    return R
-    
-    
-def mat2vec(Sigma):
-    """Return vector of independent elements in 4x4 symmetric matrix Sigma."""
-    return Sigma[np.triu_indices(4)]
-                     
-                     
-def vec2mat(moment_vec):
-    """Return 4x4 symmetric matrix from 10 element vector."""
-    Sigma = np.zeros((4, 4))
-    indices = np.triu_indices(4)
-    for moment, (i, j) in zip(moment_vec, zip(*indices)):
-        Sigma[i, j] = moment
-    return symmetrize(Sigma)
-                     
-                     
+
 def symmetrize(M):
     """Return a symmetrized version of M.
     
-    M : NumPy array
-        A square upper or lower triangular matrix.
+    M : A square upper or lower triangular matrix.
     """
     return M + M.T - np.diag(M.diagonal())
     
     
 def rand_rows(X, n):
-    """Return random subset of 2D array."""
+    """Return n random elements of X."""
     nrows = X.shape[0]
     if n >= nrows:
         return X
@@ -134,12 +114,55 @@ def rand_rows(X, n):
     return X[idx, :]
     
     
+# General math
 def cov2corr(cov_mat):
-    """Return correlation matrix from covariance matrix."""
+    """Convert covariance matrix to correlation matrix."""
     D = np.sqrt(np.diag(cov_mat.diagonal()))
     Dinv = la.inv(D)
     corr_mat = la.multi_dot([Dinv, cov_mat, Dinv])
     return corr_mat
+    
+    
+def rotation_matrix(phi):
+    """2D rotation matrix (cw)""".
+    C, S = np.cos(phi), np.sin(phi)
+    return np.array([[C, S], [-S, C]])
+
+
+# Accelerator physics
+def rotation_matrix_4D(phi):
+    C, S = np.cos(phi), np.sin(phi)
+    return np.array([[C, 0, S, 0], [0, C, 0, S], [-S, 0, C, 0], [0, -S, 0, C]])
+
+
+def phase_adv_matrix(mu1, mu2):
+    R = np.zeros((4, 4))
+    R[:2, :2] = rotation_matrix(mu1)
+    R[2:, 2:] = rotation_matrix(mu2)
+    return R
+    
+    
+def rotate_vec(x, phi):
+    return np.matmul(rotation_matrix_4D(phi), x)
+
+
+def rotate_mat(M, phi):
+    R = rotation_matrix_4D(phi)
+    return la.multi_dot([R, M, R.T])
+    
+    
+def mat2vec(Sigma):
+    """Return vector of independent elements in 4x4 symmetric matrix Sigma."""
+    return Sigma[np.triu_indices(4)]
+                  
+                  
+def vec2mat(moment_vec):
+    """Return 4x4 symmetric matrix from 10 element vector."""
+    Sigma = np.zeros((4, 4))
+    indices = np.triu_indices(4)
+    for moment, (i, j) in zip(moment_vec, zip(*indices)):
+        Sigma[i, j] = moment
+    return symmetrize(Sigma)
 
 
 def Vmat_2D(alpha_x, beta_x, alpha_y, beta_y):
