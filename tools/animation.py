@@ -33,7 +33,8 @@ from .plotting import (
 
 # Settings
 plt.rcParams['animation.ffmpeg_path'] = '/usr/local/bin/ffmpeg'
-
+plt.rcParams['grid.color'] = '#b0b0b0'
+ 
 # Module level variables
 artists_list = []
 
@@ -435,15 +436,16 @@ def _corner_env_2D(fig, ax, coords_list, dims, clear_history,
 
 def corner_onepart(
     X, dims='all', vecs=None, show_history=False, skip=0, pad=0.5,
-    space=0.15, figsize=None, units='mm-mrad', norm_labels=False,
-    text_fmt='', text_vals=None, fps=1, text_kws={}, **plt_kws
+    space=0.15, figsize=None, grid=True, units='mm-mrad', norm_labels=False,
+    text_fmt='', text_vals=None, fps=1, figname=None, dpi=600, text_kws={},
+    grid_kws={}, **plt_kws
 ):
     # Set default key word arguments
     if 's' in plt_kws:
         ms = plt_kws['s']
         plt_kws.pop('s', None)
         plt_kws['ms'] = ms
-    plt_kws.setdefault('ms', 10)
+    plt_kws.setdefault('ms', 8)
     plt_kws.setdefault('color', 'k')
     plt_kws.setdefault('marker', '.')
     plt_kws.setdefault('zorder', 5)
@@ -472,6 +474,9 @@ def corner_onepart(
     limits = (1 + pad) * get_u_up_max(X)
     fig, axes = setup_corner(limits, figsize, norm_labels, units, space,
                              plt_diag=False, dims=dims)
+    if not grid:
+        for ax in axes.flat:
+            ax.grid(False)
     plt.close()
             
     # Create Line2D objects
@@ -517,4 +522,8 @@ def corner_onepart(
                             
     anim = animation.FuncAnimation(fig, update, init_func=init, frames=nframes,
                                    interval=1000/fps)
+                                   
+    if figname:
+        writer = animation.writers['ffmpeg']()
+        anim.save(figname, writer=writer, dpi=dpi)
     return anim
