@@ -71,7 +71,7 @@ def extract_twiss(V):
     b2y = V[2, 2]**2
     a1x = -np.sqrt(b1x) * V[1, 0]
     a2y = -np.sqrt(b2y) * V[3, 2]
-    u = 1 - V[0, 0] * V[1, 1]
+    u = 1 - (V[0, 0] * V[1, 1])
     nu1 = np.arctan2(-V[2, 1], V[2, 0])
     nu2 = np.arctan2(-V[0, 3], V[0, 2])
     b1y = (V[2, 0] / np.cos(nu1))**2
