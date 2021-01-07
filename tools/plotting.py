@@ -15,6 +15,7 @@ import numpy as np
 import pandas as pd
 import matplotlib
 from matplotlib import pyplot as plt, animation, ticker
+from matplotlib.lines import Line2D
 import seaborn as sns
 import scipy
 from pandas.plotting._matplotlib.tools import _set_ticks_props
@@ -687,4 +688,27 @@ def unit_circle(ax, **kws):
     kws.setdefault('ls', '--')
     psi = np.linspace(0, 2*np.pi, 50)
     ax.plot(np.cos(psi), np.sin(psi), **kws)
+    return ax
+
+
+def eigvals_complex_plane(ax, eigvals, colors=('r','b'), legend=True, **kws):
+    unit_circle(ax)
+    c1, c2 = colors
+    print(eigvals)
+    ax.scatter(eigvals.real, eigvals.imag, c=[c1, c1, c2, c2], **kws)
+    xmax = 1.75
+    ax.set_xlim((-xmax, xmax))
+    ax.set_ylim((-xmax, xmax))
+    ax.set_xticks([-1, 0, 1])
+    ax.set_yticks([-1, 0, 1])
+    ax.set_xlabel('Real')
+    ax.set_ylabel('Imag')
+    if legend:
+        mu1, mu2 = np.degrees(np.arccos(eigvals[[0, 2]].real))
+        lines = [Line2D([0], [0], marker='o', lw=0, color=c1, ms=2),
+                        Line2D([0], [0], marker='o', lw=0, color=c2, ms=2)]
+        labels = [r'$\mu_1 = {:.2f}\degree$'.format(mu1),
+                  r'$\mu_2 = {:.2f}\degree$'.format(mu2)]
+        ax.legend(lines, labels, loc='upper right', handletextpad=0.1,
+                  fontsize='small', framealpha=1)
     return ax
