@@ -414,13 +414,14 @@ def corner(
     # Diagonal plots
     if plt_diag:
         scatter_axes = axes[1:, :-1]
-        for ax, data, lim in zip(axes.diagonal(), X.T, limits):
+        for i, (ax, data) in enumerate(zip(axes.diagonal(), X.T)):
             if diag_kind == 'kde':
                 gkde = scipy.stats.gaussian_kde(data)
+                lim = limits[i % 2]
                 ind = np.linspace(-lim, lim, 1000)
                 ax.plot(ind, gkde.evaluate(ind), **diag_kws)
             elif diag_kind == 'hist':
-                ax.hist(data, **diag_kws)
+                g = ax.hist(data, **diag_kws)
         # Change height
         top_left_ax = axes[0, 0]
         new_ylim = (1.0 / hist_height) * top_left_ax.get_ylim()[1]
