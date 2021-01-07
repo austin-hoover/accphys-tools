@@ -398,7 +398,7 @@ def corner(
     fig, axes = setup_corner(limits, figsize, norm_labels, units, dims=dims,
                              plt_diag=plt_diag, fontsize='medium')
 
-    # Plot
+    # Single particle
     if dims != 'all':
         j, i = [str_to_int[dim] for dim in dims]
         x, y = X_samp[:, j], X_samp[:, i]
@@ -410,45 +410,37 @@ def corner(
         if X_env is not None:
             ax.plot(X_env[:, j], X_env[:, i], **env_kws)
         return axes
-
-    if not plt_diag:
-        for i in range(3):
-            for j in range(i + 1):
-                ax = axes[i, j]
-                x, y = X[:, j], X[:, i+1]
-                if kind == 'scatter':
-                    ax.scatter(x, y, **plt_kws)
-                elif kind == 'scatter_density':
-                    scatter_density(ax, x, y, **plt_kws)
-                if X_env is not None:
-                    ax.plot(x, y, **env_kws)
-    else:
-        for i in range(4):
-            for j in range(i + 1):
-                ax = axes[i, j]
-                if i == j:
-                    data = X[:, i]
-                    if diag_kind == 'kde':
-                        gkde = scipy.stats.gaussian_kde(data)
-                        umax = limits[i % 2]
-                        ind = np.linspace(-umax, umax, 1000)
-                        ax.plot(ind, gkde.evaluate(ind), **diag_kws)
-                    elif diag_kind == 'hist':
-                        ax.hist(data, **diag_kws)
-                else:
-                    if kind == 'scatter':
-                        ax.scatter(X_samp[:, j], X_samp[:, i], **plt_kws)
-                    elif kind == 'scatter_density':
-                        scatter_density(ax, X_samp[:, j], X_samp[:, i],**plt_kws)
-                    if env_params is not None:
-                        ax.plot(X_env[:, j], X_env[:, i], **env_kws)
-
-        # Change height of histograms
+        
+    # Diagonal plots
+    if plt_diag:
+        scatter_axes = axes[1:, :-1]
+        for ax, data, lim in zip(axes.diagonal(), X.T, limits):
+            if diag_kind == 'kde':
+                gkde = scipy.stats.gaussian_kde(data)
+                ind = np.linspace(-lim, lim, 1000)
+                ax.plot(ind, gkde.evaluate(ind), **diag_kws)
+            elif diag_kind == 'hist':
+                ax.hist(data, **diag_kws)
+        # Change height
         top_left_ax = axes[0, 0]
         new_ylim = (1.0 / hist_height) * top_left_ax.get_ylim()[1]
         top_left_ax.set_ylim(0, new_ylim)
-
-    if text is not None:
+    else:
+        scatter_axes = axes
+        
+    # Scatter plots
+    for i in range(3):
+        for j in range(i + 1):
+            ax = scatter_axes[i, j]
+            x, y = X_samp[:, j], X_samp[:, i+1]
+            if kind == 'scatter':
+                ax.scatter(x, y, **plt_kws)
+            elif kind == 'scatter_density':
+                scatter_density(ax, x, y, **plt_kws)
+            if X_env is not None:
+                ax.plot(x, y, **env_kws)
+                
+    if text:
         text_pos = (0.35, 0) if plt_diag else (0.35, 0.5)
         axes[1, 2].annotate(text, xy=text_pos, xycoords='axes fraction',
                             **text_kws)
