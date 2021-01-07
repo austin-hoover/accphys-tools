@@ -4,7 +4,8 @@ particles in phase space.
 
 To do:
     * Add option to save animation.
-    * Add more plotting options to `corner`, such as kde.
+    * Add more plotting options to `corner`, such as kde. It throws an error
+      right now.
 """
 
 # Standard
@@ -35,7 +36,7 @@ plt.rcParams['animation.ffmpeg_path'] = '/usr/local/bin/ffmpeg'
 
 # Module level variables
 artists_list = []
-                  
+
 
 def corner(
     coords, env_params=None, dims='all', samples=2000, skip=0, pad=0.5,
@@ -44,7 +45,7 @@ def corner(
     diag_kws={}, env_kws={}, text_kws={}, **plt_kws
 ):
     """Frame-by-frame phase space projections of the beam.
-    
+
     Parameters
     ----------
     coords : list or ndarray, shape (nframes, nparts, 4)
@@ -102,14 +103,14 @@ def corner(
                      options will be added in the future like kde.
         * env_kws  : `plt.plot`. For plotting the envelope ellipses.
         * text_kws : `plt.annotate`. For any text displayed on the figure.
-        
+
     Returns
     -------
     anim : output from matplotlib.animation.FuncAnimation
     """
     plt_env = env_params is not None
-    plt_diag = diag_kind != 'none'
-    
+    plt_diag = diag_kind not in ['none', None]
+
     # Set default key word arguments
     if 's' in plt_kws:
         ms = plt_kws['s']
@@ -131,7 +132,7 @@ def corner(
     env_kws.setdefault('color', 'k')
     env_kws.setdefault('lw', 1)
     env_kws.setdefault('zorder', 6)
-            
+
     # Process particle coordinates
     if type(coords) is list:
         coords = np.array(coords)
@@ -139,14 +140,14 @@ def corner(
     if len(coords.shape) == 2: # single particle bunch
         coords = coords[:, np.newaxis, :]
     coords_env = get_ellipse_coords(env_params) if plt_env else None
-        
+
     # Configure text updates
     if text_vals is None:
         text_vals = list(range(nframes))
     if text_fmt is None: # display empty text
         text_fmt = ''
     texts = [text_fmt.format(val) for val in text_vals]
-        
+
     # Skip frames
     plot_every = skip + 1
     coords = coords[::plot_every]
@@ -154,138 +155,89 @@ def corner(
         coords_env = coords_env[::plot_every]
     texts = texts[::plot_every]
     nframes = coords.shape[0]
-    
+
     # Take random sample of particles for scatter plots
     coords_samp, (nframes, nparts, ndim) = coords, coords.shape
     if nparts > samples:
         idx = np.random.choice(nparts, samples, replace=False)
         coords_samp = coords[:, idx, :]
     limits = (1 + pad) * get_u_up_max_global(coords)
-    
+
     # Create figure
-    if figsize is None:
-        if dims != 'all':
-            figsize = 3
-        else:
-            figsize = 6 if plt_diag else 5
     fig, axes = setup_corner(limits, figsize, norm_labels, units, space,
                              plt_diag, dims=dims, fontsize='medium')
     plt.close()
-
     if dims != 'all':
         return _corner_2D(fig, axes, coords_samp, coords_env, dims, texts, fps,
                           env_kws, text_kws, **plt_kws)
-    if not plt_diag:
-        return _corner_nodiag(fig, axes, coords_samp, coords_env, texts, fps,
-                              env_kws, text_kws, **plt_kws)
-
-    # Compute the maximum histogram height among frames to keep the ylimit fixed
-    max_heights = np.zeros((nframes, 4))
-    for i, X in enumerate(coords):
-        for j in range(4):
-            max_heights[i, j] = np.max(np.histogram(X[:, j], bins='auto')[0])
-    axes[0, 0].set_ylim(0, np.max(max_heights) / hist_height)
 
     # Create array of Line2D objects
-    lines = [[], [], [], []]
-    lines_env = [[], [], [], []]
-    for i in range(4):
-        for j in range(i):
-            line, = axes[i, j].plot([], [], **plt_kws)
+    lines = [[], [], []]
+    lines_env = [[], [], []]
+    scatter_axes = axes[1:, :-1] if plt_diag else axes
+    for i in range(3):
+        for j in range(i + 1):
+            line, = scatter_axes[i, j].plot([], [], **plt_kws)
             lines[i].append(line)
             if plt_env:
-                line, = axes[i, j].plot([], [], **env_kws)
+                line, = scatter_axes[i, j].plot([], [], **env_kws)
                 lines_env[i].append(line)
+                
+    # Compute the maximum histogram height among frames to keep ylim fixed
+    if plt_diag:
+        max_heights = np.zeros((nframes, 4))
+        for i, X in enumerate(coords):
+            for j in range(4):
+                max_heights[i, j] = np.max(np.histogram(X[:, j], bins='auto')[0])
+        axes[0, 0].set_ylim(0, np.max(max_heights) / hist_height)
 
     def init():
         """Plot the background of each frame."""
-        for i in range(4):
+        for i in range(3):
             for j in range(i):
                 lines[i][j].set_data([], [])
                 if plt_env:
                     lines_env[i][j].set_data([], [])
-                    
+
     def update(t):
         """Animation function to be called sequentially."""
         remove_annotations(axes)
         X, X_samp = coords[t], coords_samp[t]
-        # Scatter plots
-        for i in range(4):
-            for j in range(i):
-                lines[i][j].set_data(X_samp[:, j], X_samp[:, i])
+        for i in range(3):
+            for j in range(i + 1):
+                lines[i][j].set_data(X_samp[:, j], X_samp[:, i+1])
                 if plt_env:
                     X_env = coords_env[t]
-                    lines_env[i][j].set_data(X_env[:, j], X_env[:, i])
-        # Diagonal plots
-        if diag_kind == 'hist':
-            global artists_list
-            for artists in artists_list:
-                for artist in artists:
-                    artist.remove()
-            artists_list = []
-            for i, ax in enumerate(axes.diagonal()):
-                heights, bin_edges, artists = ax.hist(X[:, i], **diag_kws)
-                artists_list.append(artists)
-        elif diag_kind == 'kde':
-            for i, ax in enumerate(axes.diagonal()):
-                for line in ax.lines:
-                    ax.remove()
-                gkde = scipy.stats.gaussian_kde(X[:, i])
-                umax = limits[i % 2]
-                ind = np.linspace(-umax, umax, 1000)
-                ax.plot(ind, gkde.evaluate(ind), **diag_kws)
-                
+                    lines_env[i][j].set_data(X_env[:, j], X_env[:, i+1])
+        if plt_diag:
+            if diag_kind == 'hist':
+                global artists_list
+                for artists in artists_list:
+                    for artist in artists:
+                        artist.remove()
+                artists_list = []
+                for i, ax in enumerate(axes.diagonal()):
+                    heights, bin_edges, artists = ax.hist(X[:, i], **diag_kws)
+                    artists_list.append(artists)
+            elif diag_kind == 'kde':
+                for i, ax in enumerate(axes.diagonal()):
+                    for line in ax.lines:
+                        ax.remove()
+                    gkde = scipy.stats.gaussian_kde(X[:, i])
+                    umax = limits[i % 2]
+                    ind = np.linspace(-umax, umax, 1000)
+                    ax.plot(ind, gkde.evaluate(ind), **diag_kws)
+
         # Display text
-        axes[1, 2].annotate(texts[t], xy=(0.35, 0), xycoords='axes fraction',
+        location = (0.35, 0) if plt_diag else (0.35, 0.5)
+        axes[1, 2].annotate(texts[t], xy=location, xycoords='axes fraction',
                             **text_kws)
 
     # Call animator and possibly save the animation
     anim = animation.FuncAnimation(fig, update, frames=nframes, blit=False,
                                    interval=1000/fps)
     return anim
-    
-    
-def _corner_nodiag(fig, axes, coords, coords_env, texts, fps, env_kws,
-                   text_kws, **plt_kws):
-    """Corner plot without diagonal. Helper function for `corner` method."""
-    plt_env = coords_env is not None
-    nframes = coords.shape[0]
-    lines = [[], [], []]
-    lines_env = [[], [], []]
-    for i in range(3):
-        for j in range(i + 1):
-            line, = axes[i, j].plot([], [], **plt_kws)
-            lines[i].append(line)
-            if plt_env:
-                line, = axes[i, j].plot([], [], **env_kws)
-                lines_env[i].append(line)
-                
-    def init():
-        """Plot the background of each frame."""
-        for i in range(3):
-            for j in range(i):
-                lines[i][j].set_data([], [])
-                if plt_env:
-                    lines_env[i][j].set_data([], [])
-
-    def update(t):
-        """Animation function to be called sequentially."""
-        remove_annotations(axes)
-        X = coords[t]
-        if plt_env:
-            X_env = coords_env[t]
-        for i in range(3):
-            for j in range(i + 1):
-                ax = axes[i, j]
-                lines[i][j].set_data(X[:, j], X[:, i + 1])
-                if plt_env:
-                    lines_env[i][j].set_data(X_env[:, j], X_env[:, i + 1])
-        axes[1, 2].annotate(texts[t], xy=(0.35, 0.5), xycoords='axes fraction',
-                            **text_kws)
-                            
-    return animation.FuncAnimation(fig, update, init_func=init, frames=nframes,
-                                   interval=1000/fps)
-    
+           
 
 def _corner_2D(fig, ax, coords, coords_env, dims, texts, fps, env_kws,
                text_kws, **plt_kws):
