@@ -688,7 +688,6 @@ def eigvals_complex_plane(ax, eigvals, colors=('r','b'), legend=True, **kws):
     """Plot the eigenvalues in the complex plane."""
     unit_circle(ax)
     c1, c2 = colors
-    print(eigvals)
     ax.scatter(eigvals.real, eigvals.imag, c=[c1, c1, c2, c2], **kws)
     xmax = 1.75
     ax.set_xlim((-xmax, xmax))
