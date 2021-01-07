@@ -124,7 +124,7 @@ def cov2corr(cov_mat):
     
     
 def rotation_matrix(phi):
-    """2D rotation matrix (cw)""".
+    """2D rotation matrix (cw)."""
     C, S = np.cos(phi), np.sin(phi)
     return np.array([[C, S], [-S, C]])
 
