@@ -90,8 +90,10 @@ class MatrixLattice:
             
     def analyze(self):
         """Compute the lattice parameters."""
-        self.eigvals, self.eigvecs = la.eig(self.M)
+        self.eigvals, self.eigvecs_raw = la.eig(self.M)
+        self.eigvecs = BL.normalize(self.eigvecs_raw)
         self.eig1, self.eig2 = self.eigvals[[0, 2]]
+        self.v1_raw, self.v2_raw = self.eigvecs_raw[[0, 2]]
         self.v1, self.v2 = self.eigvecs[[0, 2]]
         self.V = BL.construct_V(self.eigvecs)
         self.Vinv = la.inv(self.V)
