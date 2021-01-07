@@ -675,6 +675,7 @@ def eigvec_trajectory(ax, M, i='x', j='y', colors=('r','b'), s=None, lw=2,
 
 
 def unit_circle(ax, **kws):
+    """Plot the unit circle in the background on the axis."""
     kws.setdefault('zorder', 0)
     kws.setdefault('color', 'k')
     kws.setdefault('ls', '--')
@@ -684,6 +685,7 @@ def unit_circle(ax, **kws):
 
 
 def eigvals_complex_plane(ax, eigvals, colors=('r','b'), legend=True, **kws):
+    """Plot the eigenvalues in the complex plane."""
     unit_circle(ax)
     c1, c2 = colors
     print(eigvals)
