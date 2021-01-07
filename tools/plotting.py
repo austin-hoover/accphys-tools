@@ -295,7 +295,7 @@ def setup_corner(
         for ax in col:
             ax.xaxis.set_major_locator(loc)
             ax.xaxis.set_minor_locator(mloc)
-    _set_ticks_props(axes, xlabelsize='small', ylabelsize='small')
+    _set_ticks_props(axes, xlabelsize=None, ylabelsize=None)
     if space is None:
         plt.tight_layout(rect=[0, 0, 1.025, 0.975])
     return fig, axes
@@ -678,4 +678,13 @@ def eigvec_trajectory(ax, M, i='x', j='y', colors=('r','b'), s=None, lw=2,
         X = track(v.real, M, nturns=20)
         ax.scatter(X[:, i], X[:, j], s=s, c=color, alpha=alpha, marker='o')
         vector(ax, v[[i, j]].real, c=color, lw=lw)
+    return ax
+
+
+def unit_circle(ax, **kws):
+    kws.setdefault('zorder', 0)
+    kws.setdefault('color', 'k')
+    kws.setdefault('ls', '--')
+    psi = np.linspace(0, 2*np.pi, 50)
+    ax.plot(np.cos(psi), np.sin(psi), **kws)
     return ax
