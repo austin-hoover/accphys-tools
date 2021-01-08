@@ -166,9 +166,15 @@ class MatrixLattice:
                 X.append(np.real(self.v2 * np.exp(1j*phase)))
         return np.array(X)
     
-    def matched_dist(self, nparts=1000, kind='KV', eps1=0.5, eps2=0.5):
-        """Generate matched distribution."""
-        X_n = normalize(np.random.normal(size=(nparts, 4)))
+    def matched_dist(self, nparts=1000, kind='gaussian', eps1=0.5, eps2=0.5):
+        """Generate matched distribution.
+        
+        Right now it can only do gaussian or KV, and the gaussian is not cut
+        off.
+        """
+        X_n = np.random.normal(size=(nparts, 4))
+        if kind == 'KV':
+            X_n = normalize(X_n)
         A = np.sqrt(np.diag([eps1, eps1, eps2, eps2]))
         X = apply(np.matmul(self.V, A), X_n)
         return X
