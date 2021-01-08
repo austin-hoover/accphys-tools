@@ -435,7 +435,7 @@ def _corner_env_2D(fig, ax, coords_list, dims, clear_history,
         
 
 def corner_onepart(
-    X, dims='all', vecs=None, show_history=False, skip=0, pad=0.25,
+    X, dims='all', vecs=None, show_history=False, skip=0, pad=0.35,
     space=0.15, figsize=None, grid=True, units='mm-mrad', norm_labels=False,
     text_fmt='', text_vals=None, fps=1, figname=None, dpi=600, text_kws={},
     grid_kws={}, **plt_kws
@@ -524,6 +524,6 @@ def corner_onepart(
                                    interval=1000/fps)
                                    
     if figname:
-        writer = animation.writers['ffmpeg']()
+        writer = animation.writers['ffmpeg'](fps=fps)
         anim.save(figname, writer=writer, dpi=dpi)
     return anim
