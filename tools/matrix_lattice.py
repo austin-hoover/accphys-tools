@@ -91,14 +91,15 @@ class MatrixLattice:
     def analyze(self):
         """Compute the lattice parameters."""
         self.eigvals, self.eigvecs_raw = la.eig(self.M)
-        self.eigvecs = BL.normalize(self.eigvecs_raw)
         self.eig1, self.eig2 = self.eigvals[[0, 2]]
-        self.v1_raw, self.v2_raw = self.eigvecs_raw[[0, 2]]
-        self.v1, self.v2 = self.eigvecs[[0, 2]]
-        self.V = BL.construct_V(self.eigvecs)
+        self.v1_raw, self.v2_raw = self.eigvecs_raw[:, [0, 2]].T
+        self.V = BL.construct_V(self.eigvecs_raw.copy())
+        self.eigvecs = BL.normalize(self.eigvecs_raw)
+        self.v1, self.v2 = self.eigvecs[:, [0, 2]].T
         self.Vinv = la.inv(self.V)
         self._get_twiss2D()
         self._get_twiss4D()
+        print(self.eigvecs_raw[:, 0])
         
     def _get_twiss2D(self):
         """Get the 2D Twiss parameters."""
