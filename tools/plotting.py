@@ -69,6 +69,8 @@ def colorcycle(cmap, nsamples=1, start_end=(0, 1)):
 def despine(ax_list, sides=('top', 'right')):
     """Remove the axis spines."""
     # Might want to look at this function in seaborn: https://github.com/mwaskom/seaborn/blob/master/seaborn/utils.py
+    if sides == 'all':
+        sides = ('top', 'left', 'bottom', 'right')
     if type(sides) is str:
         sides = (sides,)
     for ax in ax_list:
