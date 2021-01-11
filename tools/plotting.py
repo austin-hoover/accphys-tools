@@ -236,8 +236,6 @@ def setup_corner(
             figsize = 3
     if type(figsize) in [int, float]:
         figsize = (figsize, figsize)
-    if norm_labels:
-        units = None
     labels = get_labels(units, norm_labels)
     umax, upmax = limits
     limits = 2 * [(-umax, umax), (-upmax, upmax)]
