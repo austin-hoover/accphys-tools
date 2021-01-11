@@ -99,7 +99,6 @@ class MatrixLattice:
         self.Vinv = la.inv(self.V)
         self._get_twiss2D()
         self._get_twiss4D()
-        print(self.eigvecs_raw[:, 0])
         
     def _get_twiss2D(self):
         """Get the 2D Twiss parameters."""
