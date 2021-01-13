@@ -2,11 +2,14 @@
 This module contains functions related to the coupling parameterization of
 Bogacz and Lebedev.
 
+Currently it needs to be cleaned up a bit.
+
 Reference: https://iopscience.iop.org/article/10.1088/1748-0221/5/10/P10010
 """
 
 import numpy as np
 import numpy.linalg as la
+from numpy import sin, cos, sqrt
 
 U = np.array([[0, 1, 0, 0], [-1, 0, 0, 0], [0, 0, 0, 1], [0, 0, -1, 0]])
 
@@ -134,6 +137,17 @@ def Sigma(ax, ay, bx, by, u, nu, eps, mode=1):
                            [s14, s24, s34, s44]])
 
 
+def V_from_twiss(a1x, a1y, a2x, a2y, b1x, b1y, b2x, b2y, u, nu1, nu2):
+    V = np.zeros((4, 4))
+    V[:2, :2] = [[sqrt(b1x), 0],
+                 [-a1x/sqrt(b1x), (1-u)/sqrt(b1x)]]
+    V[2:, 2:] = [[sqrt(b2y), 0],
+                 [-a2y/sqrt(b2y), (1-u)/sqrt(b2y)]]
+    V[2:, :2] = [[sqrt(b1y)*cos(nu1), -sqrt(b1y)*sin(nu1)],
+                 [(u*sin(nu1)-a1y*cos(nu1))/sqrt(b1y), (u*cos(nu1) + a1y*sin(nu1))/sqrt(b1y)]]
+    V[:2, 2:] = [[sqrt(b2x)*cos(nu2), -sqrt(b2x)*sin(nu2)],
+                 [(u*sin(nu2)-a2x*cos(nu2))/sqrt(b2x), (u*cos(nu2) + a2x*sin(nu2))/sqrt(b2x)]]
+    return V
 
 
 
