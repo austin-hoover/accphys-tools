@@ -279,7 +279,7 @@ def corner_env(
     pad=0.25, space=0.15, ec='k', fc='lightsteelblue', lw=None, fill=True,
     plot_boundary=True, show_init=False, clear_history=True, text_fmt='',
     text_vals=None, units='mm-mrad', norm_labels=False, fps=1 , cmap=None,
-    figname=None, dpi=None, **plt_kws
+    cmap_range=(0, 1), figname=None, dpi=None, **plt_kws
 ):
     """Corner plot with beam envelope (ellipse) only.
 
@@ -379,7 +379,8 @@ def corner_env(
         for ax in axes.flat:
             ax.grid(False)
     if cmap is not None:
-        colors = [cmap(i) for i in np.linspace(0, 1, len(coords_list))]
+        values = np.linspace(cmap_range[0], cmap_range[1], len(coords_list))
+        colors = [cmap(i) for i in values]
         for ax in axes.flat:
             ax.set_prop_cycle(cycler('color', colors))
     plt.close()
