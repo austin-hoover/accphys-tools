@@ -279,7 +279,7 @@ def corner_env(
     pad=0.25, space=0.15, ec='k', fc='lightsteelblue', lw=None, fill=True,
     plot_boundary=True, show_init=False, clear_history=True, text_fmt='',
     text_vals=None, units='mm-mrad', norm_labels=False, fps=1 , cmap=None,
-    cmap_range=(0, 1), figname=None, dpi=None, **plt_kws
+    cmap_range=(0, 1), figname=None, dpi=None, bitrate=-1
 ):
     """Corner plot with beam envelope (ellipse) only.
 
@@ -337,8 +337,8 @@ def corner_env(
     cmap : str
         The colormap to use as a cycler if plotting multiple envelopes. If
         None, use matplotlib's default cycler.
-    **plt_kws
-        Additional key word arguments for passed to `pyplot.plot`.
+    figname, dpi, bitrate : str
+        Name of file name, dpi, and bitrate of the saved animation.
 
     Returns
     -------
@@ -430,7 +430,7 @@ def corner_env(
     anim = animation.FuncAnimation(fig, update, frames=nframes,
                                    interval=1000/fps)
     if figname:
-        writer = animation.writers['ffmpeg'](fps=fps, bitrate=30000)
+        writer = animation.writers['ffmpeg'](fps=fps, bitrate=bitrate)
         anim.save(figname, writer=writer, dpi=dpi)
     return anim
     
@@ -464,8 +464,8 @@ def _corner_env_2D(fig, ax, coords_list, dims, clear_history,
 def corner_onepart(
     X, dims='all', vecs=None, show_history=False, skip=0, pad=0.35,
     space=0.15, figsize=None, grid=True, units='mm-mrad', norm_labels=False,
-    text_fmt='', text_vals=None, fps=1, figname=None, dpi=600, text_kws={},
-    grid_kws={}, **plt_kws
+    text_fmt='', text_vals=None, fps=1, figname=None, dpi=None, bitrate=-1,
+    text_kws={}, grid_kws={}, **plt_kws
 ):
     # Set default key word arguments
     if 's' in plt_kws:
@@ -549,6 +549,6 @@ def corner_onepart(
     anim = animation.FuncAnimation(fig, update, init_func=init, frames=nframes,
                                    interval=1000/fps)
     if figname:
-        writer = animation.writers['ffmpeg'](fps=fps)
+        writer = animation.writers['ffmpeg'](fps=fps, bitrate=bitrate)
         anim.save(figname, writer=writer, dpi=dpi)
     return anim
