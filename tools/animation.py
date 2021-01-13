@@ -150,11 +150,10 @@ def corner(
     texts = [text_fmt.format(val) for val in text_vals]
 
     # Skip frames
-    plot_every = skip + 1
-    coords = coords[::plot_every]
+    coords = coords[::skip]
     if plt_env:
-        coords_env = coords_env[::plot_every]
-    texts = texts[::plot_every]
+        coords_env = coords_env[::skip]
+    texts = texts[::skip]
     nframes = coords.shape[0]
 
     # Take random sample of particles for scatter plots
@@ -333,18 +332,18 @@ def corner_env(
     if n_envelopes > 1:
         fill = False
         ec = None
-    
+            
     # Configure text updates
     if text_vals is None:
         text_vals = list(range(nframes))
     if text_fmt is None: # display empty text
         text_fmt = ''
     texts = [text_fmt.format(val) for val in text_vals]
-        
+    
     # Skip frames
     for i in range(n_envelopes):
-        coords_list[i] = coords_list[i][::skip+1]
-    texts = texts[::skip+1]
+        coords_list[i] = coords_list[i][::skip]
+    texts = texts[::skip]
     nframes = coords_list[0].shape[0]
         
     # Configure axis limits
@@ -377,7 +376,7 @@ def corner_env(
                 line, = ax.plot([], [], '-', lw=1, color=ec)
                 lines[i].append(line)
         lines_list.append(lines)
-
+    
     def update(t):
         """Animation function to be called sequentially."""
         if clear_history:
@@ -399,9 +398,8 @@ def corner_env(
                         ax.plot(X_init[:, k], X_init[:, j+1], 'k--',
                                 lw=0.5, alpha=0.25)
         # Display text
-        for old_text in axes[1, 2].texts:
-            old_text.set_visible(False)
-        axes[1, 2].annotate(texts[t], xy=(0.35, 0.5), xycoords='axes fraction')
+        remove_annotations(axes[0, 1])
+        axes[0, 1].annotate(texts[t], xy=(0.35, 0.5), xycoords='axes fraction')
                         
     # Call animator and (maybe) save the animation
     return animation.FuncAnimation(fig, update, frames=nframes,
@@ -462,12 +460,11 @@ def corner_onepart(
     texts = [text_fmt.format(val) for val in text_vals]
         
     # Skip frames
-    plot_every = skip + 1
-    X = X[::plot_every]
+    X = X[::skip]
     if vecs is not None:
         vecs = np.array(vecs)
-        vecs = vecs[:, ::plot_every]
-    texts = texts[::plot_every]
+        vecs = vecs[:, ::skip]
+    texts = texts[::skip]
     nframes = X.shape[0]
     
     # Create figure
