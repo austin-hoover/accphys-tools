@@ -540,10 +540,9 @@ def corner_env(
                 ax.set_prop_cycle(color_cycle)
             
     # Plot data
-    idx = [str_to_int[dim] for dim in dims]
     for X in coords:
         if dims != 'all':
-            j, i = idx
+            j, i = [str_to_int[dim] for dim in dims]
             if fill:
                 ax.fill(X[:, j], X[:, i], **fill_kws)
             else:
@@ -556,7 +555,7 @@ def corner_env(
                         ax.fill(X[:, j], X[:, i+1], **fill_kws)
                     else:
                         ax.plot(X[:, j], X[:, i+1], **plt_kws)
-    if legend_kws is not None and n > 2:
+    if legend_kws:
         axes[1, 1].legend(**legend_kws)
     return axes
     
