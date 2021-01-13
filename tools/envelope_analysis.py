@@ -20,6 +20,7 @@ from .utils import (
     vec2mat,
     cov2corr,
     phase_adv_matrix,
+    rotation_matrix,
     Vmat_2D
 )
 
@@ -79,16 +80,16 @@ def get_coord_array(params_list, nparts):
     
     
 def rms_ellipse_dims(Sigma, x1='x', x2='y'):
-    """Return the tilt angle and radii of the rms ellipse in the x1-x2 plane.
-    
-    Check this method... it is not agreeing with envelope calculations.
-    """
+    """Return the tilt angle and radii of the rms ellipse in the x1-x2 plane."""
     str_to_int = {'x':0, 'xp':1, 'y':2, 'yp':3}
     i, j = str_to_int[x1], str_to_int[x2]
-    sii, sjj, sij = Sigma[0, 0], Sigma[2, 2], Sigma[0, 2]
-    angle = 0.5 * np.arctan2(2 * sij, sii - sjj)
-    cx = np.sqrt(2) * np.sqrt(sii + sjj + np.sqrt((sii - sjj)**2 + 4*sij**2))
-    cy = np.sqrt(2) * np.sqrt(sii + sjj - np.sqrt((sii - sjj)**2 + 4*sij**2))
+    sii, sjj, sij = Sigma[i, i], Sigma[j, j], Sigma[i, j]
+    angle = 0.5 * np.arctan2(2*sij, sii-sjj)
+    sin2 = np.cos(angle)**2
+    cos2 = np.sin(angle)**2
+    sincos = np.sin(angle) * np.cos(angle)
+    cy = np.sqrt(cos2*sii + sin2*sjj + 2*sincos*sij)
+    cx = np.sqrt(cos2*sjj + sin2*sii - 2*sincos*sij)
     return angle, cx, cy
     
     
@@ -245,7 +246,6 @@ class Stats:
         """
         self._create_empty_arrays(env_params)
         self.env_params_arr = env_params
-        
         for i, params in enumerate(env_params):
             env = Envelope(params=params, mode=self.mode)
             self.moments_arr[i] = mat2vec(env.cov())
@@ -259,7 +259,6 @@ class Stats:
             angle = env.tilt_angle()
             cx, cy = env.radii()
             self.realspace_arr[i] = [np.degrees(angle), cx, cy, np.pi*cx*cy]
-            
         self._create_dfs()
 
     def read_moments(self, moments):
@@ -272,7 +271,6 @@ class Stats:
         """
         self._create_empty_arrays(moments)
         self.moments_arr = moments
-
         for i, moment_vec in enumerate(moments):
             cov_mat = vec2mat(moment_vec)
             env = Envelope()
@@ -282,8 +280,9 @@ class Stats:
             self.twiss2D_arr[i] = get_twiss2D(cov_mat)
             self.twiss4D_arr[i] = get_twiss4D(cov_mat, self.mode)
             angle, cx, cy = rms_ellipse_dims(cov_mat, 'x', 'y')
+            cx *= 2 # Get real radii instead of rms
+            cy *= 2
             self.realspace_arr[i] = [np.degrees(angle), cx, cy, np.pi*cx*cy]
-            
         self._create_dfs()
 
 
@@ -567,9 +566,10 @@ class Envelope:
         nparts : int
             The number of particles in the distribution.
         density : {'uniform', 'on_ellipse', 'gaussian'}
-            If 'uniform', uniformly fill the envelope interior. If
-            'on_ellipse', uniformly fill the envelope boundary. If 'gaussian',
-            fill the interior of the envelope with a gaussian density.
+            'uniform': uniformly fill the envelope interior.
+            'on_ellipse': uniformly fill the envelope boundary.
+            'gaussian': fill the interior of the envelope with a gaussian
+                        density.
 
         Returns: ndarray, shape (nparts, 4)
             The coordinate array for the distribution.
