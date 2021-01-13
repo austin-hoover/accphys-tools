@@ -152,7 +152,9 @@ def toggle_grid(axes_list, switch='off', **kws):
         
         
 def remove_annotations(axes):
-    """Deleta all text (as well as arrows) from the figure."""
+    """Delete all text (as well as arrows) from the figure."""
+    if type(axes) is not np.ndarray:
+        axes = np.array([axes])
     for ax in axes.flat:
         for annotation in ax.texts:
             annotation.set_visible(False)
