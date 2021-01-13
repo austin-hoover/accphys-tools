@@ -39,11 +39,19 @@ plt.rcParams['grid.color'] = '#b0b0b0'
 artists_list = []
 
 
+def skip_frames(X, skip, keep_last=False):
+    nframes = X.shape[0]
+    idx = np.arange(0, nframes, skip + 1)
+    if keep_last:
+        idx = np.append(idx, nframes - 1)
+    return X[idx]
+
+
 def corner(
-    coords, env_params=None, dims='all', samples=2000, skip=0, pad=0.5,
-    space=0.15, figsize=None, kind='scatter', diag_kind='hist', hist_height=0.7,
-    units='mm-mrad', norm_labels=False, text_fmt='', text_vals=None, fps=1,
-    diag_kws={}, env_kws={}, text_kws={}, **plt_kws
+    coords, env_params=None, dims='all', samples=2000, skip=0, keep_last=False,
+    pad=0.5, space=0.15, figsize=None, kind='scatter', diag_kind='hist',
+    hist_height=0.7, units='mm-mrad', norm_labels=False, text_fmt='',
+    text_vals=None, fps=1, diag_kws={}, env_kws={}, text_kws={}, **plt_kws
 ):
     """Frame-by-frame phase space projections of the beam.
 
@@ -63,6 +71,9 @@ def corner(
         subplots.
     skip : int
         The coordinates will be plotted every skip + 1 frames.
+    keep_last : bool
+        Whether to keep the last frame if skipping frames. Could probably
+        encompass this in the 'skip' parameter somehow.
     pad : float
         Padding for the axis ranges. The edge of the plots will be at
         umax * (1 + pad), where umax is maximum amplitude of any beam particle
@@ -147,15 +158,15 @@ def corner(
         text_vals = list(range(nframes))
     if text_fmt is None: # display empty text
         text_fmt = ''
-    texts = [text_fmt.format(val) for val in text_vals]
-
+    texts = np.array([text_fmt.format(val) for val in text_vals])
+    
     # Skip frames
-    coords = coords[::skip]
+    coords = skip_frames(coords, skip, keep_last)
     if plt_env:
-        coords_env = coords_env[::skip]
-    texts = texts[::skip]
+        coords_env = skip_frames(coords_env, skip, keep_last)
+    texts = skip_frames(texts, skip, keep_last)
     nframes = coords.shape[0]
-
+    
     # Take random sample of particles for scatter plots
     coords_samp, (nframes, nparts, ndim) = coords, coords.shape
     if nparts > samples:
@@ -182,7 +193,7 @@ def corner(
             if plt_env:
                 line, = scatter_axes[i, j].plot([], [], **env_kws)
                 lines_env[i].append(line)
-                
+
     # Compute the maximum histogram height among frames to keep ylim fixed
     if plt_diag:
         max_heights = np.zeros((nframes, 4))
@@ -237,7 +248,7 @@ def corner(
     anim = animation.FuncAnimation(fig, update, frames=nframes, blit=False,
                                    interval=1000/fps)
     return anim
-           
+
 
 def _corner_2D(fig, ax, coords, coords_env, dims, texts, fps, env_kws,
                text_kws, **plt_kws):
@@ -264,15 +275,16 @@ def _corner_2D(fig, ax, coords, coords_env, dims, texts, fps, env_kws,
     
 
 def corner_env(
-    params, dims='all', skip=0, figsize=None, pad=0.25, space=0.15, ec='k',
-    fc='lightsteelblue', fill=True, plot_boundary=True, show_init=False,
-    clear_history=True, text_fmt='', text_vals=None, units='mm-mrad',
-    norm_labels=False, fps=5, cmap=None
+    params, dims='all', skip=0, keep_last=False, figsize=None, grid=True,
+    pad=0.25, space=0.15, ec='k', fc='lightsteelblue', lw=None, fill=True,
+    plot_boundary=True, show_init=False, clear_history=True, text_fmt='',
+    text_vals=None, units='mm-mrad', norm_labels=False, fps=1 , cmap=None,
+    figname=None, dpi=None, **plt_kws
 ):
     """Corner plot with beam envelope (ellipse) only.
 
-    Inputs
-    ------
+    Parameters
+    ----------
     params : ndarray, shape (nframes, 8)
         If shape is (nframes, 8), gives the envelope parameters at each frame.
         If a list of these arrays is provided, each envelope in the list will
@@ -282,9 +294,14 @@ def corner_env(
         like ('x', 'yp') which plots x vs. y'.
     skip : int
         The coordinates will be plotted every skip + 1 frames.
+    keep_last : bool
+        Whether to keep the last frame if skipping frames. Could probably
+        encompass this in the 'skip' parameter somehow.
     figsize : tuple or int
         Size of the figure (x_size, y_size). If an int is provided, the number
         is used as the size for both dimensions.
+    grid : bool
+        Whether to plot grid lines.
     pad : float
         Padding for the axis ranges. The edge of the plots will be at
         umax * (1 + pad), where umax is maximum amplitude of any beam particle
@@ -295,6 +312,8 @@ def corner_env(
         Color of ellipse boundary.
     fc : str
         Color of the ellipse interior.
+    lw : float
+        Line weight of ellipse boundary.
     fill : bool
         Whether to fill the ellipse.
     plot_boundary : bool
@@ -318,6 +337,8 @@ def corner_env(
     cmap : str
         The colormap to use as a cycler if plotting multiple envelopes. If
         None, use matplotlib's default cycler.
+    **plt_kws
+        Additional key word arguments for passed to `pyplot.plot`.
 
     Returns
     -------
@@ -338,12 +359,12 @@ def corner_env(
         text_vals = list(range(nframes))
     if text_fmt is None: # display empty text
         text_fmt = ''
-    texts = [text_fmt.format(val) for val in text_vals]
+    texts = np.array([text_fmt.format(val) for val in text_vals])
     
     # Skip frames
     for i in range(n_envelopes):
-        coords_list[i] = coords_list[i][::skip]
-    texts = texts[::skip]
+        coords_list[i] = skip_frames(coords_list[i], skip, keep_last)
+    texts = skip_frames(texts, skip ,keep_last)
     nframes = coords_list[0].shape[0]
         
     # Configure axis limits
@@ -353,7 +374,10 @@ def corner_env(
 
     # Create figure
     fig, axes = setup_corner(limits, figsize, norm_labels, units, space,
-                             dims=dims, plt_diag=False, fontsize='medium')
+                             dims=dims, plt_diag=False, fontsize=None)
+    if not grid:
+        for ax in axes.flat:
+            ax.grid(False)
     if cmap is not None:
         colors = [cmap(i) for i in np.linspace(0, 1, len(coords_list))]
         for ax in axes.flat:
@@ -373,7 +397,7 @@ def corner_env(
         for i in range(3):
             for j in range(i + 1):
                 ax = axes[i, j]
-                line, = ax.plot([], [], '-', lw=1, color=ec)
+                line, = ax.plot([], [], '-', color=ec, lw=lw)
                 lines[i].append(line)
         lines_list.append(lines)
     
@@ -402,8 +426,12 @@ def corner_env(
         axes[0, 1].annotate(texts[t], xy=(0.35, 0.5), xycoords='axes fraction')
                         
     # Call animator and (maybe) save the animation
-    return animation.FuncAnimation(fig, update, frames=nframes,
+    anim = animation.FuncAnimation(fig, update, frames=nframes,
                                    interval=1000/fps)
+    if figname:
+        writer = animation.writers['ffmpeg'](fps=fps, bitrate=30000)
+        anim.save(figname, writer=writer, dpi=dpi)
+    return anim
     
     
 def _corner_env_2D(fig, ax, coords_list, dims, clear_history,
@@ -460,11 +488,11 @@ def corner_onepart(
     texts = [text_fmt.format(val) for val in text_vals]
         
     # Skip frames
-    X = X[::skip]
+    X = X[::skip+1]
     if vecs is not None:
         vecs = np.array(vecs)
-        vecs = vecs[:, ::skip]
-    texts = texts[::skip]
+        vecs = vecs[:, ::skip+1]
+    texts = texts[::skip+1]
     nframes = X.shape[0]
     
     # Create figure
@@ -519,7 +547,6 @@ def corner_onepart(
                             
     anim = animation.FuncAnimation(fig, update, init_func=init, frames=nframes,
                                    interval=1000/fps)
-                                   
     if figname:
         writer = animation.writers['ffmpeg'](fps=fps)
         anim.save(figname, writer=writer, dpi=dpi)
