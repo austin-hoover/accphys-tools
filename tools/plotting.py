@@ -441,7 +441,7 @@ def corner(
             elif kind == 'scatter_density':
                 scatter_density(ax, x, y, **plt_kws)
             if X_env is not None:
-                ax.plot(x, y, **env_kws)
+                ax.plot(X_env[:, j], X_env[:, i+1], **env_kws)
                 
     if text:
         text_pos = (0.35, 0) if plt_diag else (0.35, 0.5)
