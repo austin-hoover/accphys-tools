@@ -21,6 +21,7 @@ from .utils import (
     cov2corr,
     phase_adv_matrix,
     rotation_matrix,
+    rotation_matrix_4D,
     Vmat_2D
 )
 
@@ -80,16 +81,18 @@ def get_coord_array(params_list, nparts):
     
     
 def rms_ellipse_dims(Sigma, x1='x', x2='y'):
-    """Return the tilt angle and radii of the rms ellipse in the x1-x2 plane."""
+    """Return the tilt angle and radii of rms ellipse in x1-x2 plane.
+    
+    Tilt angle is clockwise defined.
+    """
     str_to_int = {'x':0, 'xp':1, 'y':2, 'yp':3}
     i, j = str_to_int[x1], str_to_int[x2]
     sii, sjj, sij = Sigma[i, i], Sigma[j, j], Sigma[i, j]
-    angle = 0.5 * np.arctan2(2*sij, sii-sjj)
-    sin2 = np.cos(angle)**2
-    cos2 = np.sin(angle)**2
-    sincos = np.sin(angle) * np.cos(angle)
-    cy = np.sqrt(cos2*sii + sin2*sjj + 2*sincos*sij)
-    cx = np.sqrt(cos2*sjj + sin2*sii - 2*sincos*sij)
+    angle = -0.5 * np.arctan2(2*sij, sii-sjj)
+    sin, cos = np.sin(angle), np.cos(angle)
+    sin2, cos2 = sin**2, cos**2
+    cx = np.sqrt(abs(sii*cos2 + sjj*sin2 - 2*sij*sin*cos))
+    cy = np.sqrt(abs(sii*sin2 + sjj*cos2 + 2*sij*sin*cos))
     return angle, cx, cy
     
     
@@ -258,7 +261,8 @@ class Stats:
             self.twiss4D_arr[i, 6:] = [e1, e2, env.eps]
             angle = env.tilt_angle()
             cx, cy = env.radii()
-            self.realspace_arr[i] = [np.degrees(angle), cx, cy, np.pi*cx*cy]
+            area = env.area()
+            self.realspace_arr[i] = [np.degrees(angle), cx, cy, area]
         self._create_dfs()
 
     def read_moments(self, moments):
@@ -465,22 +469,23 @@ class Envelope:
         return np.array([ax, ay, bx, by, u, nu])
         
     def tilt_angle(self, x1='x', x2='y'):
-        """Return the ccw tilt angle in the x1-x2 plane."""
+        """Return the clockwise tilt angle in the x1-x2 plane."""
         a, b = self.get_params_for_dim(x1)
         e, f = self.get_params_for_dim(x2)
-        return 0.5 * np.arctan2(2*(a*e + b*f), a**2 + b**2 - e**2 - f**2)
+        return -0.5 * np.arctan2(2*(a*e + b*f), a**2 + b**2 - e**2 - f**2)
 
     def radii(self, x1='x', x2='y'):
         """Return the semi-major and semi-minor axes in the x1-x2 plane."""
         a, b = self.get_params_for_dim(x1)
         e, f = self.get_params_for_dim(x2)
         phi = self.tilt_angle(x1, x2)
-        cos, sin = np.cos(phi), np.sin(phi)
-        cos2, sin2, sincos = cos**2, sin**2, sin*cos
-        x2, y2 = a**2 + b**2, e**2 + f**2
-        A = abs(a*f - b*e)
-        cx = np.sqrt(A**2 / (y2*cos2 + x2*sin2 + 2*(a*e + b*f)*sincos))
-        cy = np.sqrt(A**2 / (x2*cos2 + y2*sin2 - 2*(a*e + b*f)*sincos))
+        sin, cos = np.sin(phi), np.cos(phi)
+        sin2, cos2 = sin**2, cos**2
+        xx = a**2 + b**2
+        yy = e**2 + f**2
+        xy = a*e + b*f
+        cx = np.sqrt(abs(xx*cos2 + yy*sin2 - 2*xy*sin*cos))
+        cy = np.sqrt(abs(xx*sin2 + yy*cos2 + 2*xy*sin*cos))
         return np.array([cx, cy])
         
     def area(self, x1='x', x2='y'):
