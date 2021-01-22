@@ -81,9 +81,12 @@ def show(V, name=None, dec=3):
     pprint(Matrix(np.round(V, dec)))
     
     
-def play(anim):
-    """Display matplotlib animation. For use in Jupyter notebook."""
-    display(HTML(anim.to_jshtml()))
+def play(anim, center=True):
+    """Display matplotlib animation using HTML."""
+    html_string = anim.to_jshtml()
+    if center:
+        html_string = ''.join(['<center>', html_string, '<center>'])
+    display(HTML(html_string))
     
     
 # NumPy arrays

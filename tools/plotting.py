@@ -9,6 +9,7 @@ To do:
 """
 
 # Standard
+import pickle
 from cycler import cycler
 # Third party
 import numpy as np
@@ -193,7 +194,7 @@ def set_share_axes(axes, sharex=False, sharey=False, type_if_1D='row'):
         
 def setup_corner(
     limits=(1, 1), figsize=None, norm_labels=False, units=None, space=None,
-    plt_diag=False, dims='all', **text_kws
+    plt_diag=False, dims='all', tick_kws={}, label_kws={}
 ):
     """Set up lower left corner of scatter plot matrix. A 4D example:
 
@@ -223,8 +224,10 @@ def setup_corner(
     dims : str or tuple
         If 'all', plot all 6 phase space projections. Otherwise provide a tuple
         like ('x', 'yp') which plots x vs. y'.
-    **text_kws
-        Key word arguments for axis text.
+    tick_kws : dict
+        Key word arguments for `_set_ticks_props` method.
+    label_kws : dict
+        Key word arguments for axis labels.
 
     Returns
     -------
@@ -249,15 +252,17 @@ def setup_corner(
     # Only 2 variables plotted
     if dims != 'all':
         fig, ax = plt.subplots(figsize=figsize)
+        despine([ax])
         j, i = [str_to_int[dim] for dim in dims]
         ax.set_xlim(limits[j])
         ax.set_ylim(limits[i])
-        ax.set_xlabel(labels[j])
-        ax.set_ylabel(labels[i])
+        ax.set_xlabel(labels[j], **label_kws)
+        ax.set_ylabel(labels[i], **label_kws)
         ax.xaxis.set_major_locator(locators[j])
         ax.yaxis.set_major_locator(locators[i])
         ax.xaxis.set_minor_locator(mlocators[j])
         ax.yaxis.set_minor_locator(mlocators[i])
+        ax.tick_params(**tick_kws)
         return fig, ax
     
     nrows = ncols = 4 if plt_diag else 3
@@ -284,8 +289,8 @@ def setup_corner(
             set_share_axes(row, sharey=True)
 
     # Set axis limits, labels, and ticks
-    set_labels(b_row, labels, 'xlabel', **text_kws)
-    set_labels(l_col, labels[1:], 'ylabel', **text_kws)
+    set_labels(b_row, labels, 'xlabel', **label_kws)
+    set_labels(l_col, labels[1:], 'ylabel', **label_kws)
     fig.align_labels()
     set_limits(b_row, limits, 'x')
     set_limits(l_col, limits[1:], 'y')
@@ -298,7 +303,8 @@ def setup_corner(
         for ax in col:
             ax.xaxis.set_major_locator(loc)
             ax.xaxis.set_minor_locator(mloc)
-    _set_ticks_props(axes, xlabelsize=None, ylabelsize=None)
+    for ax in axes.flat:
+        ax.tick_params(**tick_kws)
     if space is None:
         plt.tight_layout(rect=[0, 0, 1.025, 0.975])
     return fig, axes
@@ -397,9 +403,10 @@ def corner(
     limits = (1 + pad) * get_u_up_max(X) # axis limits
     
     # Create figure
-    fig, axes = setup_corner(limits, figsize, norm_labels, units, dims=dims,
-                             plt_diag=plt_diag, fontsize='medium')
-
+    fig, axes = setup_corner(
+        limits, figsize, norm_labels, units, dims=dims, plt_diag=plt_diag,
+        label_kws={'fontsize':'medium'})
+        
     # Single particle
     if dims != 'all':
         j, i = [str_to_int[dim] for dim in dims]
@@ -524,7 +531,7 @@ def corner_env(
             
     # Create figure
     fig, axes = setup_corner(limits, figsize, norm_labels, units, space,
-                             dims=dims, fontsize='medium')
+                             dims=dims, label_kws={'fontsize':'medium'})
     if dims != 'all':
         ax = axes
         

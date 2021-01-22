@@ -3,9 +3,8 @@ This module contains functions to animate the evolution of a beam of
 particles in phase space.
 
 To do:
-    * Add option to save animation.
-    * Add more plotting options to `corner`, such as kde. It throws an error
-      right now.
+    * Add option to save option to all functions.
+    * Make sure all methods use label_kws and tick_kws when creating figure.
 """
 
 # Standard
@@ -29,11 +28,11 @@ from .plotting import (
     get_u_up_max_global,
     remove_annotations,
     vector as arrowplot,
-    str_to_int)
+    str_to_int
+)
 
 # Settings
 plt.rcParams['animation.ffmpeg_path'] = '/usr/local/bin/ffmpeg'
-plt.rcParams['grid.color'] = '#b0b0b0'
  
 # Module level variables
 artists_list = []
@@ -175,8 +174,10 @@ def corner(
     limits = (1 + pad) * get_u_up_max_global(coords)
 
     # Create figure
-    fig, axes = setup_corner(limits, figsize, norm_labels, units, space,
-                             plt_diag, dims=dims, fontsize='medium')
+    fig, axes = setup_corner(
+        limits, figsize, norm_labels, units, space, plt_diag, dims=dims,
+        label_kws={'fontsize':'medium'}
+    )
     plt.close()
     if dims != 'all':
         return _corner_2D(fig, axes, coords_samp, coords_env, dims, texts, fps,
@@ -374,7 +375,7 @@ def corner_env(
 
     # Create figure
     fig, axes = setup_corner(limits, figsize, norm_labels, units, space,
-                             dims=dims, plt_diag=False, fontsize=None)
+                             dims=dims, plt_diag=False)
     if not grid:
         for ax in axes.flat:
             ax.grid(False)
@@ -387,7 +388,7 @@ def corner_env(
     
     if dims != 'all':
         if cmap is not None:
-            ax.set_prop_cycle(cycler('color', colors))
+            axes.set_prop_cycle(cycler('color', colors))
         return _corner_env_2D(fig, axes, coords_list, dims, clear_history,
                               show_init, plot_boundary, fill, fc, ec, fps)
     
@@ -462,23 +463,29 @@ def _corner_env_2D(fig, ax, coords_list, dims, clear_history,
         
 
 def corner_onepart(
-    X, dims='all', vecs=None, show_history=False, skip=0, pad=0.35,
-    space=0.15, figsize=None, grid=True, units='mm-mrad', norm_labels=False,
-    text_fmt='', text_vals=None, fps=1, figname=None, dpi=None, bitrate=-1,
-    text_kws={}, grid_kws={}, **plt_kws
+    X, dims='all', vecs=None, show_history=False, skip=0, pad=0.35, space=0.15,
+    figsize=None, units='mm-mrad', norm_labels=False, text_fmt='',
+    text_vals=None, fps=1, figname=None, dpi=None, bitrate=-1, text_kws={},
+    label_kws={}, tick_kws={}, grid_kws={}, history_kws={}, **plt_kws
 ):
     # Set default key word arguments
-    if 's' in plt_kws:
-        ms = plt_kws['s']
-        plt_kws.pop('s', None)
-        plt_kws['ms'] = ms
-    plt_kws.setdefault('ms', 8)
-    plt_kws.setdefault('color', 'k')
-    plt_kws.setdefault('marker', '.')
-    plt_kws.setdefault('zorder', 5)
-    plt_kws.setdefault('lw', 0)
-    plt_kws.setdefault('markeredgewidth', 0)
-    plt_kws.setdefault('fillstyle', 'full')
+    for kws in (plt_kws, history_kws):
+        if 's' in kws:
+            ms = kws['s']
+            kws.pop('s', None)
+            kws['ms'] = ms
+        if 'c' in kws:
+            color = kws['c']
+            kws.pop('c', None)
+            kws['color'] = color
+        kws.setdefault('ms', 8)
+        kws.setdefault('color', 'k')
+        kws.setdefault('marker', '.')
+        kws.setdefault('zorder', 5)
+        kws.setdefault('lw', 0)
+        kws.setdefault('markeredgewidth', 0)
+        kws.setdefault('fillstyle', 'full')
+    history_kws.setdefault('zorder', 0)
     
     # Configure text updates
     nframes = X.shape[0]
@@ -498,45 +505,58 @@ def corner_onepart(
     
     # Create figure
     limits = (1 + pad) * get_u_up_max(X)
-    fig, axes = setup_corner(limits, figsize, norm_labels, units, space,
-                             plt_diag=False, dims=dims)
-    if not grid:
-        for ax in axes.flat:
-            ax.grid(False)
+    fig, axes = setup_corner(
+        limits, figsize, norm_labels, units, space, plt_diag=False, dims=dims,
+        tick_kws=tick_kws, label_kws=label_kws
+    )
+    ax_list = [axes] if dims != 'all' else axes.flat
+    if grid_kws:
+        for ax in ax_list:
+            ax.grid(**grid_kws)
     plt.close()
-            
+
     # Create Line2D objects
     if dims != 'all':
-        ax = axes
-        line, = ax.plot([], [], **plt_kws)
+        line, = axes.plot([], [], **plt_kws)
+        line_history, = axes.plot([], [], **history_kws)
     else:
+        lines_history = [[], [], []]
         lines = [[], [], []]
         for i in range(3):
             for j in range(i + 1):
                 line, = axes[i, j].plot([], [], **plt_kws)
                 lines[i].append(line)
-                
+                line, = axes[i, j].plot([], [], **history_kws)
+                lines_history[i].append(line)
+
     def init():
         """Plot the background of each frame."""
         if dims != 'all':
             line.set_data([], [])
+            line_history.set_data([], [])
         else:
             for i in range(3):
                 for j in range(i):
                     lines[i][j].set_data([], [])
+                    lines_history[i][j].set_data([], [])
 
     def update(t):
         """Animation function to be called sequentially."""
-        _X = X[:t+1] if show_history and t > 0 else X[[t]]
+        remove_annotations(axes)
+        _X, _Xold = X[[t]], X[:t]
         if dims != 'all':
             j, i = [str_to_int[dim] for dim in dims]
-            line.set_data(_X[:, j], _X[:, i+1])
+            line.set_data(_X[:, j], _X[:, i])
+            if show_history:
+                line_history.set_data(_Xold[:, j], _Xold[:, i])
+            axes.set_title(texts[t], **text_kws)
         else:
-            remove_annotations(axes)
             for i in range(3):
                 for j in range(i + 1):
                     ax = axes[i, j]
                     lines[i][j].set_data(_X[:, j], _X[:, i+1])
+                    if show_history:
+                        lines_history[i][j].set_data(_Xold[:, j], _Xold[:, i+1])
                     if vecs is not None:
                         v1, v2 = vecs[0][t], vecs[1][t]
                         arrowplot(ax, v1[[j, i+1]], origin=(0, 0), c='r',
@@ -545,7 +565,7 @@ def corner_onepart(
                                   c='b', head_width=0.2, head_length=0.4)
             axes[1, 2].annotate(texts[t], xy=(0.35, 0.5),
                                 xycoords='axes fraction', **text_kws)
-                            
+
     anim = animation.FuncAnimation(fig, update, init_func=init, frames=nframes,
                                    interval=1000/fps)
     if figname:
