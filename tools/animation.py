@@ -49,7 +49,7 @@ def skip_frames(X, skip, keep_last=False):
 def corner(
     coords, env_params=None, dims='all', samples=2000, skip=0, keep_last=False,
     pad=0.5, space=0.15, figsize=None, kind='scatter', diag_kind='hist',
-    hist_height=0.7, units='mm-mrad', norm_labels=False, text_fmt='',
+    hist_height=0.6, units='mm-mrad', norm_labels=False, text_fmt='',
     text_vals=None, fps=1, diag_kws={}, env_kws={}, text_kws={}, **plt_kws
 ):
     """Frame-by-frame phase space projections of the beam.
@@ -277,7 +277,7 @@ def _corner_2D(fig, ax, coords, coords_env, dims, texts, fps, env_kws,
 
 def corner_env(
     params, dims='all', skip=0, keep_last=False, figsize=None, grid=True,
-    pad=0.25, space=0.15, ec='k', fc='lightsteelblue', lw=None, fill=True,
+    pad=0.25, space=0.15, ec='k', fc='lightsteelblue', lw=1, fill=True,
     plot_boundary=True, show_init=False, clear_history=True, text_fmt='',
     text_vals=None, units='mm-mrad', norm_labels=False, fps=1 , cmap=None,
     cmap_range=(0, 1), figname=None, dpi=None, bitrate=-1
@@ -466,7 +466,8 @@ def corner_onepart(
     X, dims='all', vecs=None, show_history=False, skip=0, pad=0.35, space=0.15,
     figsize=None, units='mm-mrad', norm_labels=False, text_fmt='',
     text_vals=None, fps=1, figname=None, dpi=None, bitrate=-1, text_kws={},
-    label_kws={}, tick_kws={}, grid_kws={}, history_kws={}, **plt_kws
+    label_kws={}, tick_kws={}, tickm_kws={}, grid_kws={}, history_kws={},
+    **plt_kws
 ):
     # Set default key word arguments
     for kws in (plt_kws, history_kws):
@@ -507,7 +508,7 @@ def corner_onepart(
     limits = (1 + pad) * get_u_up_max(X)
     fig, axes = setup_corner(
         limits, figsize, norm_labels, units, space, plt_diag=False, dims=dims,
-        tick_kws=tick_kws, label_kws=label_kws
+        tick_kws=tick_kws, tickm_kws=tickm_kws, label_kws=label_kws
     )
     ax_list = [axes] if dims != 'all' else axes.flat
     if grid_kws:
