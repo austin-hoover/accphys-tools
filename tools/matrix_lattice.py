@@ -38,23 +38,35 @@ def M_quad(L, k, kind='qf', tilt=0):
     return M
 
 
-def fodo(k1, k2, L, fill_fac=0.5, quad_tilt=0, start='quad'):
+def fodo(k1, k2, L, fill_fac=0.5, quad_tilt=0, start='quad', nparts=1):
     """Create simple FODO lattice."""
     Lquad = fill_fac * L / 2
     Ldrift = (1 - fill_fac) * L / 2
+    ldrift = Ldrift / nparts
+    lquad = Lquad / nparts
     lattice = MatrixLattice()
     if start == 'quad':
-        lattice.add(M_quad(0.5*Lquad, k1, 'qf', quad_tilt))
-        lattice.add(M_drift(Ldrift))
-        lattice.add(M_quad(Lquad, k2, 'qd', -quad_tilt))
-        lattice.add(M_drift(Ldrift))
-        lattice.add(M_quad(0.5*Lquad, k1, 'qf', quad_tilt))
+        for _ in range(nparts):
+            lattice.add(M_quad(0.5 * lquad, k1, 'qf', quad_tilt))
+        for _ in range(nparts):
+            lattice.add(M_drift(ldrift))
+        for _ in range(nparts):
+            lattice.add(M_quad(lquad, k2, 'qd', -quad_tilt))
+        for _ in range(nparts):
+            lattice.add(M_drift(ldrift))
+        for _ in range(nparts):
+            lattice.add(M_quad(0.5 * lquad, k1, 'qf', quad_tilt))
     elif start == 'drift':
-        lattice.add(M_drift(0.5*Ldrift))
-        lattice.add(M_quad(Lquad, k1, 'qf', quad_tilt))
-        lattice.add(M_drift(Ldrift))
-        lattice.add(M_quad(Lquad, k2, 'qd', -quad_tilt))
-        lattice.add(M_drift(0.5*Ldrift))
+        for _ in range(nparts):
+            lattice.add(M_drift(0.5 * ldrift))
+        for _ in range(nparts):
+            lattice.add(M_quad(lquad, k1, 'qf', +quad_tilt))
+        for _ in range(nparts):
+            lattice.add(M_drift(ldrift))
+        for _ in range(nparts):
+            lattice.add(M_quad(lquad, k2, 'qd', -quad_tilt))
+        for _ in range(nparts):
+            lattice.add(M_drift(0.5 * ldrift))
     lattice.analyze()
     return lattice
 
@@ -179,16 +191,20 @@ class MatrixLattice:
         X = apply(np.matmul(self.V, A), X_n)
         return X
     
-    def track_part(self, x, nturns=1, norm_coords=False):
+    def track_part(self, x, nturns=1, norm_coords=False, piecewise=False):
         """Track a single particle."""
         if norm_coords:
             x = np.matmul(self.Vinv, x)
-            M = self.normal_form()
+            M_oneturn = self.normal_form()
         else:
-            M = self.M
+            M_oneturn = self.M
         X = [x]
         for _ in range(nturns):
-            X.append(np.matmul(M, X[-1]))
+            if piecewise:
+                for M in self.matrices:
+                    X.append(np.matmul(M, X[-1]))
+            else:
+                X.append(np.matmul(M_oneturn, X[-1]))
         return np.array(X)
 
     def track_bunch(self, X, nturns=1, norm_coords=False):
