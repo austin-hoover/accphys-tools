@@ -194,7 +194,7 @@ def set_share_axes(axes, sharex=False, sharey=False, type_if_1D='row'):
         
 def setup_corner(
     limits=(1, 1), figsize=None, norm_labels=False, units=None, space=None,
-    plt_diag=False, dims='all', tick_kws={}, label_kws={}
+    plt_diag=False, dims='all', tick_kws={}, tickm_kws={}, label_kws={}
 ):
     """Set up lower left corner of scatter plot matrix. A 4D example:
 
@@ -225,7 +225,9 @@ def setup_corner(
         If 'all', plot all 6 phase space projections. Otherwise provide a tuple
         like ('x', 'yp') which plots x vs. y'.
     tick_kws : dict
-        Key word arguments for `_set_ticks_props` method.
+        Key word arguments for ax.tick_params.
+    tickm_kws : dict
+        Key word arguments for ax.tick_params (minor ticks).
     label_kws : dict
         Key word arguments for axis labels.
 
@@ -263,6 +265,7 @@ def setup_corner(
         ax.xaxis.set_minor_locator(mlocators[j])
         ax.yaxis.set_minor_locator(mlocators[i])
         ax.tick_params(**tick_kws)
+        ax.tick_params(which='minor', **tick_kws)
         return fig, ax
     
     nrows = ncols = 4 if plt_diag else 3
@@ -567,7 +570,7 @@ def corner_env(
     return axes
     
     
-def fft(x, y, grid=True, legend=False, figname=None):
+def fft(ax, x, y, grid=True, figname=None):
     """Compute and plot the FFT of two signals x and y on the same figure.
     
     Uses scipy.fft package. Particularly useful for plotting the horizontal
@@ -578,8 +581,10 @@ def fft(x, y, grid=True, legend=False, figname=None):
     are positive frequency components, and w[M:N] are negative frequency 
     components.
     
-    Inputs
-    ------
+    Parameters
+    ----------
+    ax : Matplotlib Axes object
+        The axis on which to plot
     x{y} : ndarray, shape (n,):
         Contains the x{y} coordinate at n time steps.
     grid : bool
@@ -594,16 +599,12 @@ def fft(x, y, grid=True, legend=False, figname=None):
     f = (1/N) * np.arange(M)
     xf = (1/M) * abs(scipy.fft.fft(x)[:M])
     yf = (1/M) * abs(scipy.fft.fft(y)[:M])
-
-    fig, ax = plt.subplots()
     ax.set_xlabel('Tune')
     ax.set_ylabel('Amplitude')
     ax.plot(f[1:], xf[1:], label=r'$\nu_x$')
     ax.plot(f[1:], yf[1:], label=r'$\nu_y$')
     ax.set_xticks(np.arange(0, 0.55, 0.05))
     ax.grid(grid)
-    if legend:
-        ax.legend(loc='upper right', framealpha=1)
     return ax
 
 
