@@ -89,6 +89,10 @@ for latname, latfile in zip(latnames, latfiles):
             solver_nodes = set_env_solver_nodes(lattice, env.perveance, max_solver_spacing)
             if match and intensity > 0:
                 env.match(lattice, solver_nodes, verbose=0)
+                
+            # For intensity == 0 in the skew quad lattice, we can end up with 
+            # a beam with zero area. It leads to 
+            
 
             transfer_mats.append(env.transfer_matrix(lattice))
             env_monitor_nodes = add_analysis_nodes(lattice, kind='env_monitor')

@@ -39,7 +39,7 @@ energy = 1.0 # GeV
 intensities = np.linspace(0, 10e14, 8)
 
 # Lattice
-latfile = '_latfiles/fodo_quadstart.lat'
+latfile = '_latfiles/fodo_skew_quadstart.lat'
 latseq = 'fodo'
 fringe = False
 

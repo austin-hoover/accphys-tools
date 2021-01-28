@@ -41,11 +41,11 @@ from tools.utils import delete_files_not_folders
 # General
 mass = 0.93827231 # GeV/c^2
 energy = 1.0 # GeV/c^2
-intensity = 2e14
+intensity = 1e14
 nparts = int(1e5)
-ntestparts = 100
-track_bunch = False
-store_bunch_coords = False
+ntestparts = 1000
+track_bunch = True
+store_bunch_coords = True
 
 # Lattice
 latfile = '_latfiles/fodo_quadstart.lat'
@@ -53,7 +53,7 @@ latseq = 'fodo'
 fringe = False
 
 # Initial beam
-mode = 1
+mode = 2
 eps = 50e-6 # intrinsic emitance
 ex_frac = 0.5 # ex/eps
 nu = np.radians(90) # x-y phase difference
@@ -67,8 +67,8 @@ gridpts = (128, 128, 1) # (x, y, z)
 match = True 
 tol = 1e-4 # absolute tolerance for cost function
 verbose = 2 # {0 (silent), 1 (report once at end), 2 (report at each step)}
-perturb_radius = 0. # if nonzero, perturb the matched envelope
-method = None
+perturb_radius = 0 # if nonzero, perturb the matched envelope
+method = 'auto' # 'lsq' or 'replace_by_avg'
 
 # Output data locations
 files = {
@@ -89,19 +89,25 @@ delete_files_not_folders('_output/')
 # Create envelope matched to bare lattice
 lattice = hf.lattice_from_file(latfile, latseq, fringe)
 env = Envelope(eps, mode, ex_frac, mass, energy, length=lattice.getLength())
-env.match_bare(lattice)
+env.match_bare(lattice, '4D')
+
+# Get 2D Twiss parameters within bare lattice
+bunch, params_dict = hf.initialize_bunch(mass, energy)
+twiss = hf.twiss_throughout(lattice, bunch)
+np.save('_output/data/twiss.npy', twiss)
     
 # Match with space charge
 env.set_spacecharge(intensity)
 solver_nodes = set_env_solver_nodes(lattice, env.perveance, max_solver_spacing)
-if match:
+
+if match and intensity > 0:
     print 'Matching.'
     env.match(lattice, solver_nodes, tol=tol, verbose=verbose, method=method)
 if perturb_radius > 0:
     print 'Perturbing envelope (radius = {:.2f}).'.format(perturb_radius)
     env.perturb(perturb_radius)
-init_params = env.params.copy()
-    
+init_params = np.copy(env.params)
+
 # Get linear transfer matrix
 M = env.transfer_matrix(lattice)
 mux, muy = 360 * env.tunes(lattice)
@@ -119,6 +125,7 @@ for key in ('position', 'env_params', 'testbunch_coords'):
     np.save(files[key], data)
 np.save(files['transfer_matrix'], M)
 np.savetxt('_output/data/mode.txt', [mode])
+np.savetxt('_output/data/perveance.txt', [env.perveance])
 
 
 # Bunch
@@ -131,8 +138,7 @@ if track_bunch:
     if intensity > 0:
         calc2p5d = SpaceChargeCalc2p5D(*gridpts)
         sc_nodes = setSC2p5DAccNodes(lattice, min_solver_spacing, calc2p5d)
-
-    # Create bunch
+    
     env.params = init_params
     bunch, params_dict = env.to_bunch(nparts, no_env=True)
 

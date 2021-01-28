@@ -38,7 +38,7 @@ from tools.utils import delete_files_not_folders
 #------------------------------------------------------------------------------
 
 # Simulation type (see options in comments at top of script)
-sim_type = 2
+sim_type = 0
 
 # General
 mass = 0.93827231 # GeV/c^2
@@ -53,7 +53,7 @@ fringe = False
 # Initial beam
 mode = 1
 eps = 50e-6 # intrinsic emitance
-ex_frac = 0.3 # ex/eps
+ex_frac = 0.5 # ex/eps
 nu = np.radians(90) # x-y phase difference
 
 # Space charge solver

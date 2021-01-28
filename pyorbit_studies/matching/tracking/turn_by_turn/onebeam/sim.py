@@ -34,15 +34,15 @@ from tools.utils import delete_files_not_folders
 # General
 mass = 0.93827231 # GeV/c^2
 energy = 1.0 # GeV/c^2
-intensity = 0.5e14
-nturns_track = 50
+intensity = 1e14
+nturns_track = 30
 nparts = int(1e5)
 ntestparts = 100
-track_bunch = False
-store_bunch_coords = False
+track_bunch = True
+store_bunch_coords = True
 
 # Lattice
-latfile = '_latfiles/fodo_skew_quadstart.lat'
+latfile = '_latfiles/fodo_quadstart.lat'
 latseq = 'fodo'
 fringe = False
 
@@ -61,9 +61,8 @@ gridpts = (128, 128, 1) # (x, y, z)
 match = True 
 tol = 1e-4 # absolute tolerance for cost function
 verbose = 2 # {0 (silent), 1 (report once at end), 2 (report at each step)}
-perturb_radius = 0.0 # If nonzero, perturb the matched envelope. 
-method = 'replace_by_avg'
-# method = 'replace_by_avg'
+perturb_radius = 0.2 # If nonzero, perturb the matched envelope
+method = 'auto' # 'lsq' or 'replace_by_avg'
 
 # Output data locations
 files = {
@@ -75,6 +74,7 @@ files = {
 }
 
 delete_files_not_folders('_output/')
+
         
 # Envelope
 #------------------------------------------------------------------------------
@@ -82,10 +82,11 @@ delete_files_not_folders('_output/')
 # Create envelope matched to bare lattice
 lattice = hf.lattice_from_file(latfile, latseq, fringe)
 env = Envelope(eps, mode, ex_frac, mass, energy, length=lattice.getLength())
-env.match_bare(lattice, '4D')
+env.match_bare(lattice, '4D') # if '4D', beam will be flat for uncoupled lattice
     
 # Match with space charge
 env.set_spacecharge(intensity)
+print env.perveance
 solver_nodes = set_env_solver_nodes(lattice, env.perveance, max_solver_spacing)
 if match:
     print 'Matching.'
