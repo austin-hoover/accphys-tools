@@ -69,8 +69,8 @@ def fodo(k1, k2, L, fill_fac=0.5, quad_tilt=0, start='quad', nparts=1):
             lattice.add(M_drift(0.5 * ldrift))
     lattice.analyze()
     return lattice
-
-
+    
+    
 class MatrixLattice:
     """Lattice representation using transfer matrices."""
     

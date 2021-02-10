@@ -15,14 +15,8 @@ from scipy.integrate import trapz
 # Local
 from . import coupling as BL
 from .utils import (
-    tprint,
-    mat2vec,
-    vec2mat,
-    cov2corr,
-    phase_adv_matrix,
-    rotation_matrix,
-    rotation_matrix_4D,
-    Vmat_2D
+    tprint, mat2vec, vec2mat, cov2corr, params_from_transfer_matrix,
+    phase_adv_matrix, rotation_matrix, rotation_matrix_4D, Vmat_2D
 )
 
 # Module level variables
