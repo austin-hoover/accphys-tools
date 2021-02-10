@@ -1,38 +1,38 @@
 """
 This module defines functions to integrate envelope equations.
+
+Note: this is old and needs to be updated.
 """
 import numpy as np
 from scipy.integrate import odeint
 import envelope_analysis as ea
 
 
-def chernin_derivs(s, v, Q, focusing_strength, deriv_calc='matrix'):
+def chernin_derivs(s, v, perveance, focusing_strength, deriv_calc='matrix'):
     """Compute derivative of 10 element moment vector.
     
-    Originally derived in [1]. Here the notation of [2] is followed since they
-    explicitly write out the equations. I haven't found any issues from using 
-    matrix multiplication thought. 
+    Originally derived in [1]. Equations are written explicitly in  [2].
     
     Inputs
     ------
-    s (float)
+    s : float
         Longitudinal position in lattice [m].
-    v (array-like)
+    v : array, shape (10,)
         10 element moment vector:
         [s11, s12, s13, s14, s22, s23, s24, s33, s34, s44], where sij is the
         i,j element of the covariance matrix.
-    perveance (float)
+    perveance : float
         Space charge perveance.
-    focusing_strength (function)
+    focusing_strength : callable
         Function which returns the horizontal focusing strength at position s.
-        Call signature is: k0x = focusing_strength(s).
+        Call signature is: `k0x = focusing_strength(s)`.
     deriv_calc (str)
-        Method to compute derivatives. 'matrix' uses matrix multiplication to 
-        compute derivatives. 'vector' uses the 10 hard-coded equations. 
+        Method to compute derivatives. 'matrix' uses matrix multiplication,
+        'vector' uses the 10 hard-coded equations. 
         
     Returns
     -------
-    w : NumPy array
+    w : ndarray, shape (10,)
         Derivative of v with respect to s.
         
     References
@@ -41,7 +41,7 @@ def chernin_derivs(s, v, Q, focusing_strength, deriv_calc='matrix'):
     [2] A. Goswami, P. Sing Babu, V.S. Panditc, Eur. Phys. J. Plus 131, 393 
         (2016).
     """
-    # Focusing strength in lattice (assume no skew elements)
+    # Focusing strength in lattice (assume no skew elements for now)
     k0x = focusing_strength(s)
     k0y = -k0x
     k0xy = 0.0
@@ -147,12 +147,7 @@ def get_perveance(energy, mass, density):
     r0 = 1.53469e-18 # classical proton radius [m]
     return (2 * r0 * density) / (beta**2 * gamma**3)
 
-def k_fodo(s):
+def k_fodo(s, k0=0.5, L=5.0):
     """Return focusing strength in FODO lattice of length 5.0 m (tune=0.136)."""
-    k0 = 0.7122835574
-    if s < 0.25 or s >= 4.75:
-        return +k0
-    elif 2.25 <= s < 2.75:
-        return -k0
-    else:
-        return 0.0
+    s %= L
+    return
