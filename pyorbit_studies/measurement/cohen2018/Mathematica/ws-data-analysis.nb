@@ -1,0 +1,420 @@
+(* Content-type: application/vnd.wolfram.mathematica *)
+
+(*** Wolfram Notebook File ***)
+(* http://www.wolfram.com/nb *)
+
+(* CreatedBy='Mathematica 11.2' *)
+
+(*CacheID: 234*)
+(* Internal cache information:
+NotebookFileLineBreakTest
+NotebookFileLineBreakTest
+NotebookDataPosition[       158,          7]
+NotebookDataLength[     15131,        412]
+NotebookOptionsPosition[     14496,        393]
+NotebookOutlinePosition[     14855,        409]
+CellTagsIndexPosition[     14812,        406]
+WindowFrame->Normal*)
+
+(* Beginning of Notebook Content *)
+Notebook[{
+Cell[BoxData[{
+ RowBox[{
+  RowBox[{"dataWSX", "=", 
+   RowBox[{"FileNames", "[", 
+    RowBox[{"{", 
+     RowBox[{
+     "\"\<~/Dropbox/suli 2018 project/optics_*/ws_02_x.dat\>\"", ",", 
+      "\"\<~/Dropbox/suli 2018 project/optics_*/ws_20_x.dat\>\""}], "}"}], 
+    "]"}]}], ";"}], "\[IndentingNewLine]", 
+ RowBox[{
+  RowBox[{"dataWSY", "=", 
+   RowBox[{"FileNames", "[", 
+    RowBox[{"{", 
+     RowBox[{
+     "\"\<~/Dropbox/suli 2018 project/optics_*/ws_02_y.dat\>\"", ",", 
+      "\"\<~/Dropbox/suli 2018 project/optics_*/ws_20_y.dat\>\""}], "}"}], 
+    "]"}]}], ";"}], "\[IndentingNewLine]", 
+ RowBox[{
+  RowBox[{
+   RowBox[{"dataWSD", "=", 
+    RowBox[{"FileNames", "[", 
+     RowBox[{"{", 
+      RowBox[{
+      "\"\<~/Dropbox/suli 2018 project/optics_*/ws_02_d.dat\>\"", ",", 
+       "\"\<~/Dropbox/suli 2018 project/optics_*/ws_20_d.dat\>\""}], "}"}], 
+     "]"}]}], ";"}], "\[IndentingNewLine]", "\[IndentingNewLine]", 
+  RowBox[{"(*", 
+   RowBox[{
+    RowBox[{"graphsWSX", "=", 
+     RowBox[{
+      RowBox[{
+       RowBox[{"ListPlot", "[", "\[IndentingNewLine]", 
+        RowBox[{
+         RowBox[{
+          RowBox[{"Import", "[", 
+           RowBox[{"#", ",", "\"\<Table\>\""}], "]"}], "[", 
+          RowBox[{"[", 
+           RowBox[{";;", ",", 
+            RowBox[{"{", 
+             RowBox[{"2", ",", "3"}], "}"}]}], "]"}], "]"}], 
+         "\[IndentingNewLine]", ",", 
+         RowBox[{"Joined", "\[Rule]", "True"}], "\[IndentingNewLine]", ",", 
+         RowBox[{"PlotRange", "\[Rule]", 
+          RowBox[{"{", 
+           RowBox[{
+            RowBox[{"{", 
+             RowBox[{
+              RowBox[{"-", "40"}], ",", "40"}], "}"}], ",", 
+            RowBox[{"{", 
+             RowBox[{"0", ",", "0.08"}], "}"}]}], "}"}]}]}], 
+        "\[IndentingNewLine]", "]"}], "&"}], "/@", "dataWSX"}]}], ";", 
+    "\[IndentingNewLine]", 
+    RowBox[{"graphsWSY", "=", 
+     RowBox[{
+      RowBox[{
+       RowBox[{"ListPlot", "[", "\[IndentingNewLine]", 
+        RowBox[{
+         RowBox[{
+          RowBox[{"Import", "[", 
+           RowBox[{"#", ",", "\"\<Table\>\""}], "]"}], "[", 
+          RowBox[{"[", 
+           RowBox[{";;", ",", 
+            RowBox[{"{", 
+             RowBox[{"2", ",", "3"}], "}"}]}], "]"}], "]"}], 
+         "\[IndentingNewLine]", ",", 
+         RowBox[{"Joined", "\[Rule]", "True"}], "\[IndentingNewLine]", ",", 
+         RowBox[{"PlotRange", "\[Rule]", 
+          RowBox[{"{", 
+           RowBox[{
+            RowBox[{"{", 
+             RowBox[{
+              RowBox[{"-", "40"}], ",", "40"}], "}"}], ",", 
+            RowBox[{"{", 
+             RowBox[{"0", ",", "0.08"}], "}"}]}], "}"}]}]}], 
+        "\[IndentingNewLine]", "]"}], "&"}], "/@", "dataWSY"}]}], ";", 
+    "\[IndentingNewLine]", 
+    RowBox[{"graphsWSD", "=", 
+     RowBox[{
+      RowBox[{
+       RowBox[{"ListPlot", "[", "\[IndentingNewLine]", 
+        RowBox[{
+         RowBox[{
+          RowBox[{"Import", "[", 
+           RowBox[{"#", ",", "\"\<Table\>\""}], "]"}], "[", 
+          RowBox[{"[", 
+           RowBox[{";;", ",", 
+            RowBox[{"{", 
+             RowBox[{"2", ",", "3"}], "}"}]}], "]"}], "]"}], 
+         "\[IndentingNewLine]", ",", 
+         RowBox[{"Joined", "\[Rule]", "True"}], "\[IndentingNewLine]", ",", 
+         RowBox[{"PlotRange", "\[Rule]", 
+          RowBox[{"{", 
+           RowBox[{
+            RowBox[{"{", 
+             RowBox[{
+              RowBox[{"-", "40"}], ",", "40"}], "}"}], ",", 
+            RowBox[{"{", 
+             RowBox[{"0", ",", "0.08"}], "}"}]}], "}"}]}]}], 
+        "\[IndentingNewLine]", "]"}], "&"}], "/@", "dataWSD"}]}], ";"}], 
+   "*)"}], "\[IndentingNewLine]", "\[IndentingNewLine]", 
+  RowBox[{"(*", 
+   RowBox[{
+    RowBox[{"variances", "[", 
+     RowBox[{"num_", ",", "xData_", ",", "yData_", ",", "dData_"}], "]"}], ":=", 
+    RowBox[{"Module", "[", 
+     RowBox[{
+      RowBox[{"{", "numb", "}"}], ",", "\[IndentingNewLine]", 
+      RowBox[{
+       RowBox[{"numb", "=", "num"}], ";", "\[IndentingNewLine]", 
+       RowBox[{"tabX", "=", 
+        RowBox[{"Import", "[", 
+         RowBox[{
+          RowBox[{"xData", "[", 
+           RowBox[{"[", "numb", "]"}], "]"}], ",", "\"\<Table\>\""}], "]"}]}], 
+       RowBox[{"(*", 
+        RowBox[{"&", "/@", "dataWSX"}], "*)"}], ";", "\[IndentingNewLine]", 
+       RowBox[{
+        RowBox[{"{", 
+         RowBox[{"x", ",", "wx"}], "}"}], "=", 
+        RowBox[{"Drop", "[", 
+         RowBox[{
+          RowBox[{"Transpose", "[", "tabX", "]"}], ",", "1"}], "]"}]}], ";", 
+       "\[IndentingNewLine]", 
+       RowBox[{"sigx", "=", 
+        RowBox[{"Variance", " ", "@", " ", 
+         RowBox[{"WeightedData", "[", 
+          RowBox[{"x", ",", "wx"}], "]"}]}]}], 
+       RowBox[{"(*", 
+        RowBox[{"sig", " ", "squared"}], "*)"}], ";", "\[IndentingNewLine]", 
+       RowBox[{"tabY", "=", 
+        RowBox[{"Import", "[", 
+         RowBox[{
+          RowBox[{"yData", "[", 
+           RowBox[{"[", "numb", "]"}], "]"}], ",", "\"\<Table\>\""}], "]"}]}], 
+       RowBox[{"(*", 
+        RowBox[{"&", "/@", "dataWSX"}], "*)"}], ";", "\[IndentingNewLine]", 
+       RowBox[{
+        RowBox[{"{", 
+         RowBox[{"y", ",", "wy"}], "}"}], "=", 
+        RowBox[{"Drop", "[", 
+         RowBox[{
+          RowBox[{"Transpose", "[", "tabY", "]"}], ",", "1"}], "]"}]}], ";", 
+       "\[IndentingNewLine]", 
+       RowBox[{"sigy", "=", 
+        RowBox[{"Variance", " ", "@", " ", 
+         RowBox[{"WeightedData", "[", 
+          RowBox[{"y", ",", "wy"}], "]"}]}]}], 
+       RowBox[{"(*", 
+        RowBox[{"sig", " ", "squared"}], "*)"}], ";", "\[IndentingNewLine]", 
+       RowBox[{"tabD", "=", 
+        RowBox[{"Import", "[", 
+         RowBox[{
+          RowBox[{"dData", "[", 
+           RowBox[{"[", "numb", "]"}], "]"}], ",", "\"\<Table\>\""}], "]"}]}], 
+       RowBox[{"(*", "*)"}], ";", "\[IndentingNewLine]", 
+       RowBox[{
+        RowBox[{"{", 
+         RowBox[{"d", ",", "wd"}], "}"}], "=", 
+        RowBox[{"Drop", "[", 
+         RowBox[{
+          RowBox[{"Transpose", "[", "tabD", "]"}], ",", "1"}], "]"}]}], ";", 
+       "\[IndentingNewLine]", 
+       RowBox[{"sigd", "=", 
+        RowBox[{"Variance", " ", "@", " ", 
+         RowBox[{"WeightedData", "[", 
+          RowBox[{"d", ",", "wd"}], "]"}]}]}], 
+       RowBox[{"(*", 
+        RowBox[{"sig", " ", "squared"}], "*)"}], ";", "\[IndentingNewLine]", 
+       RowBox[{"vars", "=", 
+        RowBox[{"{", 
+         RowBox[{"sigx", ",", "sigy", ",", "sigd"}], "}"}]}]}]}], 
+     "\[IndentingNewLine]", "]"}]}], "*)"}]}], "\[IndentingNewLine]", 
+ RowBox[{
+  RowBox[{"variances", "[", 
+   RowBox[{
+   "num_Integer", ",", "xData_List", ",", "yData_List", ",", "dData_List"}], 
+   "]"}], ":=", 
+  RowBox[{"Module", "[", "\[IndentingNewLine]", 
+   RowBox[{
+    RowBox[{"{", 
+     RowBox[{
+     "numb", ",", "tabX", ",", "tabY", ",", "tabD", ",", "sigx", ",", "sigy", 
+      ",", "sigd", ",", "x", ",", "wx", ",", "y", ",", "wy", ",", "d", ",", 
+      "wd", ",", "vars"}], "}"}], ",", "\[IndentingNewLine]", 
+    RowBox[{
+     RowBox[{"numb", "=", "num"}], ";", "\[IndentingNewLine]", 
+     RowBox[{"tabX", "=", 
+      RowBox[{"Import", "[", 
+       RowBox[{
+        RowBox[{"xData", "[", 
+         RowBox[{"[", "numb", "]"}], "]"}], ",", "\"\<Table\>\""}], "]"}]}], 
+     ";", "\[IndentingNewLine]", 
+     RowBox[{
+      RowBox[{"{", 
+       RowBox[{"x", ",", "wx"}], "}"}], "=", 
+      RowBox[{"Drop", "[", 
+       RowBox[{
+        RowBox[{"Transpose", "[", "tabX", "]"}], ",", "1"}], "]"}]}], ";", 
+     "\[IndentingNewLine]", 
+     RowBox[{"sigx", "=", 
+      RowBox[{"Variance", " ", "@", " ", 
+       RowBox[{"WeightedData", "[", 
+        RowBox[{"x", ",", "wx"}], "]"}]}]}], 
+     RowBox[{"(*", 
+      RowBox[{"sig", " ", "squared"}], "*)"}], ";", "\[IndentingNewLine]", 
+     RowBox[{"tabY", "=", 
+      RowBox[{"Import", "[", 
+       RowBox[{
+        RowBox[{"yData", "[", 
+         RowBox[{"[", "numb", "]"}], "]"}], ",", "\"\<Table\>\""}], "]"}]}], 
+     ";", "\[IndentingNewLine]", 
+     RowBox[{
+      RowBox[{"{", 
+       RowBox[{"y", ",", "wy"}], "}"}], "=", 
+      RowBox[{"Drop", "[", 
+       RowBox[{
+        RowBox[{"Transpose", "[", "tabY", "]"}], ",", "1"}], "]"}]}], ";", 
+     "\[IndentingNewLine]", 
+     RowBox[{"sigy", "=", 
+      RowBox[{"Variance", " ", "@", " ", 
+       RowBox[{"WeightedData", "[", 
+        RowBox[{"y", ",", "wy"}], "]"}]}]}], 
+     RowBox[{"(*", 
+      RowBox[{"sig", " ", "squared"}], "*)"}], ";", "\[IndentingNewLine]", 
+     RowBox[{"tabD", "=", 
+      RowBox[{"Import", "[", 
+       RowBox[{
+        RowBox[{"dData", "[", 
+         RowBox[{"[", "numb", "]"}], "]"}], ",", "\"\<Table\>\""}], "]"}]}], 
+     ";", "\[IndentingNewLine]", 
+     RowBox[{
+      RowBox[{"{", 
+       RowBox[{"d", ",", "wd"}], "}"}], "=", 
+      RowBox[{"Drop", "[", 
+       RowBox[{
+        RowBox[{"Transpose", "[", "tabD", "]"}], ",", "1"}], "]"}]}], ";", 
+     "\[IndentingNewLine]", 
+     RowBox[{"sigd", "=", 
+      RowBox[{"Variance", " ", "@", " ", 
+       RowBox[{"WeightedData", "[", 
+        RowBox[{"d", ",", "wd"}], "]"}]}]}], 
+     RowBox[{"(*", 
+      RowBox[{"sig", " ", "squared"}], "*)"}], ";", "\[IndentingNewLine]", 
+     RowBox[{"vars", "=", 
+      RowBox[{"{", 
+       RowBox[{"sigx", ",", "sigy", ",", "sigd"}], "}"}]}]}]}], 
+   "\[IndentingNewLine]", "]"}]}]}], "Input",
+ CellChangeTimes->{{3.7391090314199953`*^9, 3.739109236185215*^9}, {
+   3.739180318175693*^9, 3.739180344675623*^9}, {3.7391818056999474`*^9, 
+   3.739181805856757*^9}, {3.7391818594854193`*^9, 3.739181884550806*^9}, {
+   3.7392666037276917`*^9, 3.739266691970416*^9}, {3.7392678894685917`*^9, 
+   3.739267975962632*^9}, {3.739268273062093*^9, 3.739268283505479*^9}, {
+   3.739268424013567*^9, 3.739268446277461*^9}, 3.7392745080566387`*^9, {
+   3.739275332418923*^9, 3.739275375465516*^9}, {3.7392754108785973`*^9, 
+   3.7392754940832853`*^9}, {3.7392755515941477`*^9, 
+   3.7392755840500097`*^9}, {3.739275630835472*^9, 3.739275717915169*^9}, {
+   3.739283992040188*^9, 3.7392840118661633`*^9}, 3.739284510300743*^9, 
+   3.739284910494667*^9, {3.73928582261243*^9, 3.7392858639056187`*^9}, {
+   3.7392937876897497`*^9, 3.739293860454715*^9}, {3.739294145661628*^9, 
+   3.7392941547154016`*^9}},ExpressionUUID->"66226a57-d8ee-4692-a42e-\
+f9b1ff69f139"],
+
+Cell[CellGroupData[{
+
+Cell[BoxData[
+ RowBox[{
+  RowBox[{
+   RowBox[{"variances", "[", 
+    RowBox[{"#", ",", " ", "dataWSX", ",", "dataWSY", ",", "dataWSD"}], "]"}],
+    "&"}], "/@", 
+  RowBox[{"Range", "[", 
+   RowBox[{"Length", "@", "dataWSX"}], "]"}]}]], "Input",
+ CellChangeTimes->{{3.73928487624227*^9, 3.7392848946807737`*^9}, {
+  3.73928520152719*^9, 3.739285225637595*^9}, {3.739293882487729*^9, 
+  3.739293897413945*^9}, {3.739294184877685*^9, 
+  3.739294200350268*^9}},ExpressionUUID->"20e3ce4f-b747-4c8d-b33b-\
+cb64d3c1bad3"],
+
+Cell[BoxData[
+ RowBox[{"{", 
+  RowBox[{
+   RowBox[{"{", 
+    RowBox[{
+    "111.05230045960114`", ",", "123.2614892260727`", ",", 
+     "117.0455856968389`"}], "}"}], ",", 
+   RowBox[{"{", 
+    RowBox[{
+    "44.14257619124457`", ",", "205.97913757230987`", ",", 
+     "125.43673969993175`"}], "}"}], ",", 
+   RowBox[{"{", 
+    RowBox[{
+    "111.35850816255895`", ",", "122.63110899326325`", ",", 
+     "116.98785308458643`"}], "}"}], ",", 
+   RowBox[{"{", 
+    RowBox[{
+    "30.581426188052212`", ",", "298.04752282849387`", ",", 
+     "164.36858169697027`"}], "}"}], ",", 
+   RowBox[{"{", 
+    RowBox[{
+    "110.90508061190988`", ",", "122.89787461957576`", ",", 
+     "116.72291462333583`"}], "}"}], ",", 
+   RowBox[{"{", 
+    RowBox[{
+    "44.10286773586335`", ",", "144.69352972866184`", ",", 
+     "94.45413391158277`"}], "}"}], ",", 
+   RowBox[{"{", 
+    RowBox[{
+    "110.69629628133137`", ",", "121.64624783289018`", ",", 
+     "116.15217983876488`"}], "}"}], ",", 
+   RowBox[{"{", 
+    RowBox[{
+    "38.13938283752185`", ",", "127.98131364691052`", ",", 
+     "82.6261086885933`"}], "}"}], ",", 
+   RowBox[{"{", 
+    RowBox[{
+    "110.44432017666824`", ",", "122.71318681972569`", ",", 
+     "116.9538892603367`"}], "}"}], ",", 
+   RowBox[{"{", 
+    RowBox[{
+    "27.129268319966453`", ",", "296.2042349347612`", ",", 
+     "161.71202707481865`"}], "}"}], ",", 
+   RowBox[{"{", 
+    RowBox[{
+    "111.23447378271916`", ",", "122.23783985061044`", ",", 
+     "116.2520881946144`"}], "}"}], ",", 
+   RowBox[{"{", 
+    RowBox[{
+    "30.89882840434464`", ",", "172.24897114029443`", ",", 
+     "101.36746920434754`"}], "}"}], ",", 
+   RowBox[{"{", 
+    RowBox[{
+    "111.36136199551152`", ",", "120.95109421948953`", ",", 
+     "117.2328922732279`"}], "}"}], ",", 
+   RowBox[{"{", 
+    RowBox[{
+    "26.857091119006494`", ",", "263.0488373225188`", ",", 
+     "145.26331547763633`"}], "}"}], ",", 
+   RowBox[{"{", 
+    RowBox[{
+    "111.77086972113017`", ",", "122.22077379714595`", ",", 
+     "117.38486858896368`"}], "}"}], ",", 
+   RowBox[{"{", 
+    RowBox[{
+    "27.814685755506005`", ",", "296.66587834609095`", ",", 
+     "162.22440286540137`"}], "}"}], ",", 
+   RowBox[{"{", 
+    RowBox[{
+    "110.44114010144311`", ",", "121.41540531107115`", ",", 
+     "116.14763573835035`"}], "}"}], ",", 
+   RowBox[{"{", 
+    RowBox[{
+    "28.044762073241603`", ",", "293.5491670601258`", ",", 
+     "161.12641678121915`"}], "}"}], ",", 
+   RowBox[{"{", 
+    RowBox[{
+    "110.15688260478831`", ",", "122.33382159195048`", ",", 
+     "116.5024025365707`"}], "}"}], ",", 
+   RowBox[{"{", 
+    RowBox[{
+    "41.45229664131747`", ",", "242.04445704701757`", ",", 
+     "142.1015623029458`"}], "}"}]}], "}"}]], "Output",
+ CellChangeTimes->{
+  3.7392850519740143`*^9, {3.739285094421998*^9, 3.7392851146461477`*^9}, 
+   3.739285227173415*^9, 3.739293901629116*^9, {3.739294185937337*^9, 
+   3.7392942017961483`*^9}},ExpressionUUID->"cd6f47e9-0c4d-4a4b-9794-\
+04f447aee298"]
+}, Open  ]],
+
+Cell[BoxData[""], "Input",
+ CellChangeTimes->{{3.739268592965948*^9, 3.7392685984881897`*^9}, 
+   3.7392742019061527`*^9},ExpressionUUID->"0bf2d32f-9856-4e0f-bafb-\
+bbd41828dd78"]
+},
+WindowSize->{634, 706},
+WindowMargins->{{Automatic, 17}, {Automatic, 47}},
+FrontEndVersion->"11.2 for Mac OS X x86 (32-bit, 64-bit Kernel) (September \
+10, 2017)",
+StyleDefinitions->"Default.nb"
+]
+(* End of Notebook Content *)
+
+(* Internal cache information *)
+(*CellTagsOutline
+CellTagsIndex->{}
+*)
+(*CellTagsIndex
+CellTagsIndex->{}
+*)
+(*NotebookFileOutline
+Notebook[{
+Cell[558, 20, 10231, 260, 1165, "Input",ExpressionUUID->"66226a57-d8ee-4692-a42e-f9b1ff69f139"],
+Cell[CellGroupData[{
+Cell[10814, 284, 514, 12, 30, "Input",ExpressionUUID->"20e3ce4f-b747-4c8d-b33b-cb64d3c1bad3"],
+Cell[11331, 298, 2967, 87, 224, "Output",ExpressionUUID->"cd6f47e9-0c4d-4a4b-9794-04f447aee298"]
+}, Open  ]],
+Cell[14313, 388, 179, 3, 30, "Input",ExpressionUUID->"0bf2d32f-9856-4e0f-bafb-bbd41828dd78"]
+}
+]
+*)
+

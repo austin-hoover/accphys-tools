@@ -1,0 +1,641 @@
+!  MAD INPUT FROM TRANSPORT
+!     
+! Updated to agree with M. Plum Transport deck dated 19/Jul/04. 
+!     Changed quad fields, dipole lengths, Q26-30 positions. MAP 19/Jul/04
+!     Also added E2 and TILT parameters to septum magnet. MAP 20/Jul/04
+! Updated to correct pole face rotation angle on the extraction septum, 
+!     and all the quad strengths affected by that change. MAP 30/Jul/04.
+! Updated with correctors after the DH3 bend. Also added drop in elevation with
+!     misalignments and orbit correction. MAP 20/Sep/04.
+! Split the steering magnets to get their global coords. MAP 28/Oct/04.
+! Removed DCH18, since it doesn't exist. MAP 11/Nov/04.
+! Added rad-hard steerers at end of RTBT. MAP 1/Dec/04.
+! Got rid of split quads since now have a better way to get coords. Also
+!     updated RTBT quad and st. mag. positions dnstream of and including QV28 based
+!     on latest info from Mike Holding. MAP 27/Jan/05. 
+! Global coords checked for RTBT Q2 thru Q30 OK (except for elevations). MAP 18/Aug/05.
+!
+! Note: Need to add BPM upstream of Q22. MAP 18/Mar/05. 
+!
+! General update MAP 11/Jul/05.
+!
+! Translation to MADX. 01/March/13
+!
+! Added another survey output (survey_tgt1_simple.txt) to make plotting easier. MAP 31/Jan/2014
+! 
+
+TITLE,"SNS RING TO TARGET TRANSFER LINE (27/Jan/05)";
+
+C     := 2.99792458e8;  !speed of light [m/sec]  
+PI    := 3.141592654;  
+DTR   := PI/180;  
+E0    := 0.938272310;   !proton mass [GeV]  
+EK    := 1.00;          ![GeV] injection kinetic Energy  
+
+PC    := sqrt(EK*(EK+2*E0));       !  Value PC  
+BRHO  := 1e9*(PC/C);                !  Value BRHO  
+GAMMA := 1+EK/E0;                  !  Value GAMMA      
+BETA  := sqrt(1-1/(GAMMA*GAMMA));  !  Value BETA  
+
+!
+! Start beam at immediate exit of QTV_C09
+!
+
+BEAM,PARTICLE=PROTON,ENERGY=EK+E0; ! Units of energy are GeV
+INITIAL: BETA0,BETX=2.2991,ALFX=-0.25897,BETY=14.2583,ALFY=0.9749;
+value, BRHO;
+
+!PBEAM   := 1.696037918;  ! MOMENTUM, GEV/C
+!KBEAM   := 1.0;          ! KINETIC ENERGY
+!BRHO    := 33.35640952*PBEAM; ! RIGIDITY, KG-M
+
+!
+! Extraction kickers
+!------------------------------------------------------------
+!   Extraction Kickers and drifts:
+!   Steve Tepikian and Nick Tsoupas, 12/2003
+!   Kick angles from Tsoupas tech note 2005
+!------------------------------------------------------------
+!
+! The following values of EkickAng give 13.3 mrad, 167 mm at entrance to ExSptm in this particular MAD input file. 
+!
+EkickAng1 = -0.001744;
+EkickAng2 = -0.001367;
+EkickAng3 = -0.001305;
+EkickAng4 = -0.001159;
+EkickAng5 = -0.001297;
+EkickAng6 = -0.001266;
+
+EKick01: VKicker, L = 0.4000, KICK=EkickAng1;  ! KICK = -0.001745 From Tsoupas' tech note
+EKick02: VKicker, L = 0.4000, KICK=EkickAng2;  ! KICK = -0.001445 From Tsoupas' tech note
+EKick03: VKicker, L = 0.4000, KICK=EkickAng2;  ! KICK = -0.001445 From Tsoupas' tech note
+EKick04: VKicker, L = 0.5050, KICK=EkickAng3;  ! KICK = -0.001490 From Tsoupas' tech note
+EKick05: VKicker, L = 0.5050, KICK=EkickAng3;  ! KICK = -0.001490 From Tsoupas' tech note
+EKick06: VKicker, L = 0.5050, KICK=EkickAng4;  ! KICK = -0.001250 From Tsoupas' tech note
+EKick07: VKicker, L = 0.5050, KICK=EkickAng4;  ! KICK = -0.001250 From Tsoupas' tech note
+
+EKick08: VKicker, L = 0.4275, KICK=EkickAng5;  ! KICK = -0.001295 From Tsoupas' tech note
+EKick09: VKicker, L = 0.4275, KICK=EkickAng5;  ! KICK = -0.001295 From Tsoupas' tech note
+EKick10: VKicker, L = 0.4275, KICK=EkickAng5;  ! KICK = -0.001295 From Tsoupas' tech note
+EKick11: VKicker, L = 0.4275, KICK=EkickAng5;  ! KICK = -0.001295 From Tsoupas' tech note
+EKick12: VKicker, L = 0.3900, KICK=EkickAng6;  ! KICK = -0.001290 From Tsoupas' tech note
+EKick13: VKicker, L = 0.3900, KICK=EkickAng6;  ! KICK = -0.001290 From Tsoupas' tech note
+EKick14: VKicker, L = 0.3900, KICK=EkickAng6;  ! KICK = -0.001290 From Tsoupas' tech note
+
+SEKLbeg1: Drift, L = 1.814288+0.585+0.010712; ! Exit of quad C09 to start of 1st kicker. In SNSring.v.1.2.14Dec04.lat, QTV_C09 length is 0.5 m. 
+VALUE, SEKLbeg1->L;
+  SEK02: Drift, L = 0.080000;
+  SEK03: Drift, L = 0.080000;
+  SEK04: Drift, L = 0.080500;
+  SEK05: Drift, L = 0.080000;
+  SEK06: Drift, L = 0.080000;
+  SEK07: Drift, L = 0.080000;
+SEKLend1: Drift, L = 0.119204;
+
+SEKLbeg2: Drift, L = 0.458750;
+  SEK09: Drift, L = 0.079500;
+  SEK10: Drift, L = 0.080500;
+  SEK11: Drift, L = 0.079500;
+  SEK12: Drift, L = 0.080250;
+  SEK13: Drift, L = 0.080000;
+  SEK14: Drift, L = 0.080000;
+SEKLend2: Drift, L = 6.130021;
+Mark1: Marker;
+EKLine1: Line=(SEKLbeg1, Mark1, EKick01, SEK02, EKick02, SEK03, EKick03, SEK04, 
+               EKick04, SEK05, EKick05, SEK06, EKick06, SEK07, EKick07, 
+               SEKLend1);
+EKLine2: Line=(SEKLbeg2, EKick08, SEK09, EKick09, SEK10, EKick10, SEK11, 
+               EKick11, SEK12, EKick12, SEK13, EKick13, SEK14, EKick14, 
+               SEKLend2);
+
+SEKA: DRIFT, L = 0.633796;
+!
+! In Tsoupas Ekick tech note he used L=0.7, K1=3.561087/5.6575 for QTH_C10, and 
+! L=0.55, K1=-3.838722/5.6575. 
+! For QTH_C10 L=0.673 in the official ring MAD input file. 
+! For QTV_C11 L=0.533 in the official ring MAD input file. 
+!  
+QTH_C10: QUADRUPOLE,  L=0.673000,  K1=0.431636/0.673;
+QTV_C11: QUADRUPOLE,  L=0.533000,  K1=-0.361054/0.533;
+SEKB: DRIFT, L = 0.422;
+
+SSCL: Line = (EKLine1,SEKA,QTH_C10,SEKB,QTV_C11,EKLine2);
+!
+! Cntr of QVC12 to IP of Lambertson = 1.853 m
+! If angle of bend is 16.817 deg (0.293512 rad) and path length is 2.48 m, then R = 2.48/0.293512 = 8.449398 m.
+! And dx from start of bend to IP is R*tan(16.817/2) = 1.248979 m.
+! Therefore exit of EKick14 to start of bend is 6.130021 m.
+! Will add pitch to Lambertson magnet using EALIGN statement.
+! Center of first RTBT quad to Lambertson IP = 4.849256 m (in horizontal plane only)from above logic.
+! Therefore end of bend to center of first RTBT quad is 3.600277 m (in horizontal plane only).
+! Note that position and angle of beam exiting SPTM depends on vertical alignment.
+!
+
+! SPTM:  SBEND,   L=2.48, ANGLE=-16.818*PI/180., E1=0.,    
+! E2=-16.818*PI/180., TILT=0.045120 ! TILT is same as roll angle.
+
+SPTM:  SBEND,   L=2.48, ANGLE=-16.818*PI/180., E1=0.,    !  L=2.48 from J. Rank's ExSptm FDR.
+E2=-16.818*PI/180.; ! Move tilt (roll) to EALIGN statement later. 
+
+! Split version of septum magnet to get coordinates. 
+SPTMS1:  SBEND,   L=2.48/2, ANGLE=-16.818*PI/180./2., E1=0., E2=-16.818*PI/180./2.;
+SPTMS2:  SBEND,   L=2.48/2, ANGLE=-16.818*PI/180./2., E1=0., E2=-16.818*PI/180./2.;
+
+D1A : DRIFT, L=3.600277;
+Q01:   QUADRUPOLE, L=0.55,K1=-3.30556/BRHO; ! Round R=0.12489
+Q01S1:   QUADRUPOLE, L=0.55/2,K1=-3.30556/BRHO; ! Round R=0.12489
+Q01S2:   QUADRUPOLE, L=0.55/2,K1=-3.30556/BRHO; 
+
+Value, Q01->K1;
+Value, Q01S1->K1;
+Value, Q01S2->K1;
+
+CELL1: LINE = (SPTM,D1A,Q01S1,Q01S2);
+!!!!
+! Self-consistent beams RTBT model should start here!
+!!!!
+D2A : DRIFT, L=0.3350;
+Q02:   QUADRUPOLE, L=0.700,K1=3.26397/BRHO; ! Round R=0.12489;
+Value,Q02->K1;
+
+CELL2: LINE = (D2A,Q02);
+
+D3A : DRIFT, L=4.90;
+Q03 : QUADRUPOLE, L=0.50, K1=-3.08888/BRHO; ! Round R=0.0995
+
+CELL3: LINE = (D3A,Q03);
+ 
+D4A : DRIFT, L=3.3608;
+Q04 : QUADRUPOLE, L=0.50, K1=3.39086/BRHO; ! Round R=0.0995
+
+CELL4: LINE = (D4A,Q04);
+
+D5A : DRIFT, L=3.36080;
+Q05 : QUADRUPOLE, L=0.50, K1=-4.68768/BRHO; ! Round R=0.0995
+
+CELL5: LINE = (D5A,Q05);
+
+D6A: DRIFT, L = 0.556514-0.25;
+CDV05K := 0.00;
+CDV05: VKICKER, KICK=CDV05K;
+D6B: DRIFT, L = 3.3608-0.556514+0.25;
+Q06 : QUADRUPOLE, L=0.50, K1=4.90686/BRHO; ! Round R=0.0995
+
+CELL6: LINE = (D6A,CDV05,D6B,Q06);
+
+D7A: DRIFT, L = 0.556514-0.500/2.;
+CDH06K := 0.00;
+CDH06: HKICKER, KICK=CDH06K;
+D7B: DRIFT, L = 3.3608-0.556514+0.500/2.;
+Q07 : QUADRUPOLE, L=0.500, K1=-4.68768/BRHO; ! Round R=0.0995 
+
+CELL7: LINE = (D7A,CDH06,D7B,Q07);
+
+
+D8A: DRIFT, L = 0.556514-0.500/2.;
+CDV07K := 0.00;
+CDV07: VKICKER, KICK=CDV07K;
+D8B: DRIFT, L=3.36080-0.556514+0.500/2.;
+Q08 : QUADRUPOLE, L=0.50, K1=4.90686/BRHO; ! Round R=0.0995;
+
+CELL8: LINE = (D8A,CDV07,D8B,Q08);
+
+D9A: DRIFT, L=0.556514-0.50/2.;
+CDH08K := 0.00;
+CDH08: HKICKER, KICK=CDH08K;
+D9B: DRIFT, L=3.36080-0.556514+0.50/2.;
+Q09 : QUADRUPOLE, L=0.50, K1=-4.68768/BRHO; ! Round R=0.0995;
+
+CELL9: LINE = (D9A,CDH08,D9B,Q09);
+
+D10A: DRIFT, L = 3.36080;
+Q10 : QUADRUPOLE, L=0.50, K1=4.90686/BRHO; ! Round R=0.0995;
+
+CELL10: LINE = (D10A,Q10);
+
+D11A: DRIFT, L = 3.36080;
+Q11 : QUADRUPOLE, L=0.50, K1=-4.68768/BRHO; ! Round R=0.0995
+
+CELL11: LINE = (D11A,Q11);
+
+D12A: DRIFT, L = 0.556514-0.500/2.;
+CDV11K := 0.00;
+CDV11: VKICKER, KICK=CDV11K;
+D12B: DRIFT, L=3.3608-0.556514+0.50/2.;
+Q12 : QUADRUPOLE, L=0.50, K1=3.56487/BRHO; ! Round R=0.0995;
+
+CELL12: LINE = (D12A,CDV11,D12B,Q12);
+
+D13A: DRIFT, L=4.7 - (0.556514-0.50/2.);
+CDV13K:= 0.00;
+CDV13: VKICKER, KICK=CDV13K;
+D13B: DRIFT, L = 0.5565140 - 0.50/2.;
+Q13 : QUADRUPOLE, L=0.50, K1=-3.12750/BRHO; ! Round R=0.0995;
+
+CELL13: LINE = (D13A,CDV13,D13B,Q13);
+
+D14A: DRIFT, L = 0.998800;    ! was 1.000 (MAP/24/Aug/04)  
+DH13A:  SBEND, L=2.48/2., ANGLE=-16.80163*PI/180./2.;
+DH13B:  SBEND, L=2.48/2., ANGLE=-16.80163*PI/180./2.;
+D14B: DRIFT, L= .8988; ! was 0.9 (MAP/24/Aug/04) 
+Q14 : QUADRUPOLE, L=0.50, K1=2.30265/BRHO; ! Round R=0.0995
+
+CELL14: LINE = (D14A,DH13A,DH13B,D14B,Q14);
+
+D15A: DRIFT, L=0.556514-(0.50/2.);
+CDH14K := 0.00;
+CDH14: HKICKER, KICK=CDH14K;
+D15B: DRIFT, L= 3.9 - 0.556514 + (0.50/2.);
+Q15 : QUADRUPOLE, L=0.50, K1=-2.35759/BRHO; ! Round R=0.0995;
+
+CELL15: LINE = (D15A,CDH14,D15B,Q15);
+
+D16A: DRIFT, L=0.556514-(0.50/2.);
+CDV15K := 0.00;
+CDV15: VKICKER, KICK=CDV15K;
+D16B: DRIFT, L=5.29120-0.556514+(0.50/2.);
+Q16 : QUADRUPOLE, L=0.50, K1=2.07035/BRHO; ! Round R=0.0995
+
+CELL16: LINE = (D16A,CDV15,D16B,Q16);
+
+D17A: DRIFT, L=0.556514-(0.50/2.);
+CDH16K := 0.0;
+CDH16: HKICKER, KICK=CDH16K;
+D17B: DRIFT, L=3.2912+2.0-0.556514+(0.50/2.);
+Q17 : QUADRUPOLE, L=0.50, K1:=-2.45937/BRHO; ! Round R=0.0995
+
+CELL17: LINE = (D17A,CDH16,D17B,Q17);
+
+D18A: DRIFT, L=0.556514-0.50/2.;
+CDV17K := 0.0;
+CDV17: VKICKER, KICK=CDV17K;
+D18B: DRIFT, L=5.29120-(0.556514-0.50/2.)-(0.556514-0.50/2.);
+BPM18: MONITOR;
+D18C: DRIFT, L=0.556514-0.50/2.;
+Q18 : QUADRUPOLE, L=0.50, K1=2.255/BRHO; ! Round R=0.0995
+
+CELL18: LINE = (D18A,CDV17,D18B,BPM18,D18C,Q18);
+
+D19A: DRIFT, L=5.2912;
+Q19 : QUADRUPOLE, L=0.50, K1=-2.255/BRHO; ! Round R=0.0995
+
+CELL19: LINE = (D19A,Q19);
+
+D20A: DRIFT, L=0.556514-(0.50/2.);
+CDV19K := 0.0;
+CDV19: VKICKER, KICK=CDV19K;
+D20B: DRIFT, L=2.25-0.556514+(0.50/2.);
+D20C: DRIFT, L=0.6912;
+COLL1: DRIFT, L=1.2; ! Collimator Round R=0.0660
+D20D: DRIFT, L=1.15;
+Q20 : QUADRUPOLE, L=0.50, K1=2.255/BRHO; ! Round R=0.0995
+
+CELL20: LINE = (D20A,CDV19,D20B,D20C,COLL1,D20D,Q20);
+
+D21A: DRIFT, L=0.556514-0.50/2.;
+CDH20K := 0.0;
+CDH20: HKICKER, KICK=CDH20K;
+D21B: DRIFT, L=5.29120-0.556514+0.500/2.;
+Q21 : QUADRUPOLE, L=0.500, K1=-2.255/BRHO; ! Round R=0.0995
+
+CELL21: LINE = (D21A,CDH20,D21B,Q21);
+
+D22A: DRIFT, L=0.556514-0.50/2.;
+CDV21K := 0.0;
+CDV21: VKICKER, KICK=CDV21K;
+D22B: DRIFT, L=5.29120-0.556514+0.50/2.-0.556514+0.50/2;
+CDH22K := 0.0;
+CDH22: HKICKER, KICK=CDH22K;
+D22C: DRIFT, L=0.556514-0.50/2.;
+Q22 : QUADRUPOLE, L=0.50, K1=2.255/BRHO; ! Round R=0.0995
+ 
+! Note: Need to add BPM upstream of Q22. MAP 18/Mar/05.
+
+CELL22: LINE = (D22A,CDV21,D22B,CDH22,D22C,Q22);
+
+D23A: DRIFT, L=1.15000;
+COLL2: DRIFT, L=1.2; ! Collimator Round R=0.0660;
+D23B: DRIFT, L=0.8 ;
+D23C: DRIFT, L=2.1412;
+Q23 : QUADRUPOLE, L=0.50, K1=-2.255/BRHO; ! Round R=0.0995
+
+CELL23: LINE = (D23A,COLL2,D23B,D23C,Q23);
+
+D24A: DRIFT, L=0.556514-0.50/2.;
+CDV23K := 0.0;
+CDV23: VKICKER, KICK=CDV23K;
+D24B: DRIFT, L=5.29120-0.556514+0.50/2.;
+Q24 : QUADRUPOLE, L=0.50, K1=2.255/BRHO; ! Round R=0.0995
+
+CELL24: LINE = (D24A,CDV23,D24B,Q24);
+
+D25A: DRIFT, L=5.1412;
+Q25 : QUADRUPOLE, L=0.50, K1=-2.255/BRHO; ! Round R=0.0995
+
+CELL25: LINE = (D25A,Q25);
+
+D26A: DRIFT, L=5.1912;
+Q26 : QUADRUPOLE, L=0.700, K1=3.00287/BRHO; ! Round R=0.1429
+
+CELL26: LINE = (D26A,Q26);
+
+D27A: DRIFT, L = 5.291;
+Q27 : QUADRUPOLE, L=1.00, K1=-1.64479/BRHO; ! Round R=0.17145
+
+CELL27: LINE = (D27A,Q27);
+
+D28A: DRIFT, L = 0.987444; ! updated 27/Jan/05
+Q28 : QUADRUPOLE, L=1.00, K1=1.85695/BRHO; ! Round R=0.17145
+
+CELL28: LINE = (D28A,Q28);
+
+D29A: DRIFT, L = 1.006475 - 1.00/2.;
+CDV28K := 0.0;
+CDV28: VKICKER, KICK=CDV28K;
+CDH28K := 0.0;
+CDH28: HKICKER, KICK=CDH28K;
+D29B: DRIFT, L = 3.521545 - (1.006475 - 1.00/2.); ! updated 27/Jan/05
+Q29 : QUADRUPOLE, L=1.00, K1=-1.46287/BRHO; ! Round R=0.17145
+
+CELL29: LINE = (D29A,CDV28,CDH28,D29B,Q29);
+
+D30: DRIFT, L = 0.987444; ! updated 27/Jan/05
+Q30 : QUADRUPOLE, L=1.00, K1=1.06402/BRHO; ! Round R=0.17145
+
+CELL30: LINE = (D30,Q30);
+
+D31A: DRIFT, L= 1.006475 - 1.00/2.;
+CDV30K := 0.0;
+CDV30: VKICKER, KICK=CDV30K;
+CDH30K := 0.0;
+CDH30: HKICKER, KICK=CDH30K;
+D31B: DRIFT, L= 11.306967 - (1.006475 - 1.00/2.); ! updated 27/Jan/05. Drift is to target center. 
+MARK: MARKER;
+
+CELL31: LINE = (D31A,CDV30,CDH30,D31B,MARK);
+
+
+
+! Following is for extraction dump, starting after CELL13. Treat DH13 as a drift.
+
+DE1 : DRIFT, L=6.35;
+QED1: QUADRUPOLE, L=.55, K1=2.59640/BRHO;
+DE2: DRIFT, L=2.0000;
+QED2: QUADRUPOLE, L=.55, K1=-2.19550/BRHO;
+DE3: DRIFT, L=1.294-0.55/2.; ! Drift to wire scanner.
+WSE1: MONITOR;
+DE4: DRIFT, L= 20.176617 - (1.294-0.55/2.) - 0.55/2.; ! 20.176617 m from QED2 center to dump center, according to global coords. 
+MARK2: MARKER;
+
+CELLE1: LINE = (DE1,QED1,DE2,QED2,DE3,WSE1,DE4,MARK2); 
+
+!
+! WHOLE1 for RTBT starting at exit of QTV_C09 in the ring extraction straight 
+! 
+WHOLE1: LINE=(SSCL, CELL1, CELL2,
+CELL3,CELL4, CELL5, CELL6,CELL7, CELL8, CELL9, CELL10, CELL11, CELL12, 
+CELL13,CELL14,CELL15,CELL16,CELL17,CELL18,CELL19,CELL20,CELL21, 
+CELL22,CELL23,CELL24,CELL25,CELL26,CELL27,CELL28,CELL29,
+CELL30,CELL31);
+
+
+! WHOLE1: LINE=(SSCL, CELL1, CELL2, CELL3, CELL4, CELL5, CELL6,CELL7, CELL8, CELL9, CELL10, CELL11, CELL12); 
+! CELL13,CELL14,CELL15,CELL16,CELL17,CELL18,CELL19,CELL20,CELL21, 
+! CELL22,CELL23,CELL24,CELL25,CELL26,CELL27,CELL28,CELL29,
+! CELL30,CELL31);
+
+!
+! SURV for RTBT starting at entrance to RTBT_Q02
+! 
+SURV: LINE=( Q02, CELL3, CELL4, CELL5, CELL6, 
+CELL7, CELL8, CELL9, CELL10, CELL11, CELL12, 
+CELL13,CELL14,CELL15,CELL16,CELL17,CELL18,CELL19,CELL20,CELL21, 
+CELL22,CELL23,CELL24,CELL25,CELL26,CELL27,CELL28,CELL29,
+CELL30,CELL31);
+
+!
+! SURV2 for coords for whole line and with split septum to get coords half way thru.
+! 
+SURV2: LINE=(SSCL,SPTMS1,SPTMS2,D1A,Q01, CELL2, CELL3, CELL4, CELL5, CELL6,
+CELL7, CELL8, CELL9, CELL10, CELL11, CELL12,
+CELL13,CELL14,CELL15,CELL16,CELL17,CELL18,CELL19,CELL20,CELL21,
+CELL22,CELL23,CELL24,CELL25,CELL26,CELL27,CELL28,CELL29,
+CELL30,CELL31);
+!
+! WDUMP for whole beam line up to EDmp
+!
+WDUMP: LINE=(SSCL, CELL1, CELL2, CELL3, CELL4, CELL5, CELL6,
+CELL7, CELL8, CELL9, CELL10, CELL11, CELL12,
+CELL13,CELLE1);
+ 
+!
+! SURVD for EDmp survey starting at entrance to RTBT_Q02
+!
+SURVD: LINE=( Q02, CELL3, CELL4, CELL5, CELL6,
+CELL7, CELL8, CELL9, CELL10, CELL11, CELL12,
+CELL13, CELLE1);
+
+
+
+!
+! Use the following to get the optics functions
+! 
+USE,period=WHOLE1;  ! Note: optics functions not checked after 27/Jan/05 modifications..
+SELECT,FLAG=TWISS,COLUMN = NAME, KEYWORD,S, L, BETX, ALFX,X,PX, DX, MUX, BETY, ALFY, MUY, Y, PY,DY;
+TWISS, FILE="optics1", BETA0=INITIAL, deltap=0;
+
+PLOT, HAXIS=S, VAXIS1=BETX,BETY, RANGE=#S/#E, STYLE=100;
+PLOT, HAXIS=S, VAXIS1=MUX,MUY, RANGE=#S/#E, STYLE=100;
+PLOT, HAXIS=S, VAXIS1=ALFX,ALFY, RANGE=#S/#E, STYLE=100;
+PLOT, HAXIS=S, VAXIS1=DX,DY,   RANGE=#S/#E, STYLE=100;
+PLOT, HAXIS=S, VAXIS1=DPX,DPY,   RANGE=#S/#E, STYLE=100;
+PLOT, HAXIS=S, VAXIS1=X,Y,   RANGE=#S/#E, STYLE=100;
+
+
+! Each new EALIGN statement replaces the misalignment errors for all elements in its range, unless EOPT,ADD=TRUE has been entered. 
+! If EOPT,ADD=TRUE, then alignment errors are added. If Q17EY = 0.003 and DY = -0.005, then Q17 thru CDV17 is 2 mm low. MAP 15/Jan/05.
+! Only use "SELECT, FLAG=ERROR, CLEAR" for the first misalignment statement. MAP 15/Aug/05
+! Each select statement apparently adds to the previous selections, and the error for the newly added selection either replaces the
+! misalignment on the previous selections or adds to the previous misalignments (EOPT, ADD=TRUE). It does not appear to be possible
+! to separately mislalign elements. MAP 16/Aug/05
+!
+! The following is for the elevation change in the RTBT
+!
+EOPT,ADD=TRUE;
+!
+! Beam entering ExSptm is about 169 mm below circulating beam. Therefore need to lower mag fld. This magnet also
+! has a pitch of 0.011498 rad. Roll angle is 0.045120 rad, CW about the s axis. 
+!
+! Work around for the misalignments requires variables to be specified first:
+! Want height of beam = -0.1826 m, angle = 0 in center of quad Q01. Adjust SPTM roll angle and Quad offset to achieve this.  
+!
+SPTMY=-0.167;      ! Septum entrance is approx centered on *extracted* beam, which nominally enters septum 167 mm below the circ. beam.
+SPTMPSI=0.0445;    ! DPSI = 0.04451 in Deepak presentation, DPSI = 0.04512 in J. Rank's FDR. =0.04490 in Deepak's 030109 Transport file. 
+SPTMPHI=-0.011498; ! Pitch angle. I think negative is pitched down. DPHI = -0.011498 in J. Rank's FDR. 
+Q01Y=-0.0008;      ! Need elevation change to get beam to exit Q01 with zero angle. -0.0008 works.
+RTBT1Y=-0.1826;    ! First part of RTBT is low by -0.1826 m
+RTBT2Y=-0.005;     ! The end of the RTBT must be 5 mm lower to line up with the target elevation. 
+Q15Y = -0.001;     ! Q15 is 1 mm low w.r.t. the upstream part of RTBT to kick the beam to the elevation of the downstream part of the RTBT.
+Q17Y = -0.002;     ! Q17 is 2 mm low w.r.t. the upstream part of RTBT to kick the beam to the elevation of the downstream part of the RTBT.
+
+SELECT, FLAG=ERROR, CLEAR;
+SELECT, FLAG=ERROR, SPTM;
+EALIGN, DY=SPTMY - Q01Y - RTBT1Y, DPSI=SPTMPSI, DPHI=SPTMPHI;
+!
+! First quad in RTBT has elevation lower than the downstream quads to counter the vertical angle entering the RTBT 
+!
+SELECT, FLAG=ERROR, RANGE=Q01S1/Q01S2;
+EALIGN, DY=Q01Y-Q15Y;
+
+SELECT, FLAG=ERROR, Q15;
+EALIGN, DY=Q15Y-Q17Y;
+
+SELECT, FLAG=ERROR, Q17;
+EALIGN, DY=Q17Y-RTBT2Y;
+
+SELECT, FLAG=ERROR, CLASS=QUADRUPOLE, RANGE=Q18/Q30;
+EALIGN, DY=RTBT2Y;
+
+! 
+! The whole RTBT beam line is nominally 0.1826 m below the ring elevation 
+!  
+SELECT, FLAG=ERROR, CLASS=QUADRUPOLE, RANGE=Q01S1/Q30;  ! Note: cannot misalign drifts.
+EALIGN, DY=RTBT1Y;
+
+EPRINT;
+ESAVE, FILENAME="errors.txt";
+
+SELECT,FLAG=TWISS,COLUMNS = NAME, KEYWORD, S, L, X, Y, PX, PY, BETX, ALFX, BETY, ALFY, DX, DY;
+TWISS, FILE="optics2", BETA0=INITIAL, deltap=0;
+
+! Vary quad Ekick angles to get desired position and angle at entrance to ExSptm
+!
+! MATCH, BETX=2.2991,BETY=14.2583;
+! VARY, EkickAng1, STEP=0.0001, LOWER=-0.003, UPPER=0.;
+! VARY, EkickAng2, STEP=0.0001, LOWER=-0.003, UPPER=0.;
+! VARY, EkickAng3, STEP=0.0001, LOWER=-0.003, UPPER=0.;
+! VARY, EkickAng4, STEP=0.0001, LOWER=-0.003, UPPER=0.;
+! VARY, EkickAng5, STEP=0.0001, LOWER=-0.003, UPPER=0.;
+! VARY, EkickAng6, STEP=0.0001, LOWER=-0.003, UPPER=0.;
+! CONSTRAINT, RANGE=SEKLend2/SEKLend2, PY=-0.0133, Y=-0.167 ; 
+! Simplex, calls=20000, Tolerance=1.0E-10;
+! ENDMATCH;
+
+
+! Vary quad Q01 height to get zero exit angle. -- Doesn't seem to work...
+!
+! MATCH, BETX=2.2991,BETY=14.2583;
+! VARY, Q01Y, STEP=0.001, LOWER=-0.10, UPPER=0.10;
+! CONSTRAINT, RANGE=Q01S2/Q01S2, PY=0.0 ;
+! Simplex, calls=2000, Tolerance=1.0E-11;
+! ENDMATCH;
+
+! Vary SPTM pitch and roll angles to get correct exit coords. -- Doesn't seem to work...
+
+! MATCH, BETX=2.2991,BETY=14.2583;
+! VARY, SPTMPSI, STEP=0.0001, LOWER=-0.10, UPPER=0.10;
+! VARY, SPTMPHI, STEP=0.0001, LOWER=-0.10, UPPER=0.10;
+! CONSTRAINT, RANGE=SPTM, PY=0.00017;
+! Simplex, calls=2000, Tolerance=1.0E-12;
+! ENDMATCH;
+
+SELECT,FLAG=TWISS,COLUMNS = NAME, KEYWORD, S, L, X, Y, PX, PY, BETX, ALFX, BETY, ALFY, DX, DY;
+OPTICS, FILENAME="optics3", BETA0=INITIAL, deltap=0, 
+
+! Make a table of magnet settings.
+!
+
+SELECT, FLAG=TWISS, RANGE=#S/#E,COLUMNS = NAME, KEYWORD, L, K0L, K1L, K1;
+TWISS, FILE="Mag_set.txt", BETA0=INITIAL, deltap=0; 
+
+SELECT, FLAG=TWISS, RANGE=#S/#E,COLUMNS = NAME, KEYWORD, L, K0L, K1L, K2;
+TWISS, FILE="Mag_set2.txt", BETA0=INITIAL, deltap=0; 
+
+PLOT, HAXIS=S, VAXIS1=BETX,BETY, RANGE=#S/#E, STYLE=100;
+PLOT, HAXIS=S, VAXIS1=MUX,MUY, RANGE=#S/#E, STYLE=100;
+PLOT, HAXIS=S, VAXIS1=ALFX,ALFY, RANGE=#S/#E, STYLE=100;
+PLOT, HAXIS=S, VAXIS1=DX,DY,   RANGE=#S/#E, STYLE=100;
+PLOT, HAXIS=S, VAXIS1=DPX,DPY,   RANGE=#S/#E, STYLE=100;
+PLOT, HAXIS=S, VAXIS1=X,Y,   RANGE=#S/#E, STYLE=100;
+
+!CORRECT,ERROR=1.E-4,NCORR=100, PLANE=Y;
+!PUTORBIT, FILENAME="orbit.txt";
+!PUTKICK, FILENAME="kickers.txt";
+
+! Vary some corrector magnets to account for magnet misalignment.;
+! MATCH, BETX=27.692, BETY=6.983;
+! VARY, CDH14K, STEP=0.0001, LOWER=-0.001, UPPER=0.001;
+! VARY, CDV15K, STEP=0.0001, LOWER=-0.001, UPPER=0.001;
+! VARY, CDH16K, STEP=0.0001, LOWER=-0.001, UPPER=0.001;
+! VARY, CDV17K, STEP=0.0001, LOWER=-0.001, UPPER=0.001;
+! VARY, Q15EY, STEP=0.0001, LOWER=-0.01, UPPER=0.01;
+! VARY, Q17EY, STEP=0.0001, LOWER=-0.01, UPPER=0.01;
+! VARY, CDV19K, STEP=0.0001, LOWER=-0.001, UPPER=0.001;
+! CONSTRAINT, RANGE=Q18/#E, X=0., Y=-0.005 ;
+! Simplex, calls=2000, Tolerance=1.0E-10;
+! ENDMATCH;
+
+! Make a new plot. 
+! TWISS, BETA0=INITIAL, DELTAP=0.00 ;
+! PLOT, HAXIS=S, VAXIS1=X,Y,   RANGE=#S/#E, STYLE=100;
+! PLOT, HAXIS=S, VAXIS1=BETX,BETY,DX   RANGE=#S/#E, STYLE=100;
+
+! 
+! Use the following lines to get the global coordinates
+! 
+
+! USE,  sequence=SURV;       ! Survey starting at entrance to Q02. 
+! SURVEY, TAPE, X0=10100.50945, Y0=1999.817400, Z0=20036.966291, 
+! THETA0=-73.201399*PI/180., PHI0=0.0;
+! SAVE;
+! Above commented out was in original, but madx doesn't like keyword 'TAPE' ???
+USE,  sequence=SURV;       ! Survey starting at entrance to Q02. 
+SURVEY, X0=10100.50945, Y0=1999.817400, Z0=20036.966291, 
+THETA0=-73.201399*PI/180., PHI0=0.0;
+SAVE;
+
+! USE, WHOLE1;
+! SURVEY, TAPE, X0=(10125.611220-.25), Y0=2000.00, Z0=20035.330900, 
+! THETA0=-90.00*PI/180., PHI0=0.0;
+
+USE, sequence=SURV2;
+SURVEY, X0=(10125.611220-.25), Y0=2000.00, Z0=20035.330900,
+THETA0=-90.00*PI/180., PHI0=0.0;
+WRITE,table=survey;
+
+
+! Create a survey file with just X and Z columns to make plotting it easier. 
+SELECT, FLAG=SURVEY, RANGE=#S/#E, COLUMN = X, Z, ; ! Write just these two columns for easier plotting.
+SURVEY, file='survey_tgt1_simple.txt' ;
+
+!
+! Following for EDmp 
+
+! USE, WDUMP;
+
+! Use same EALIGN statements for the EDmp line.
+
+! SELECT, FLAG=ERROR, CLEAR;
+! SELECT, FLAG=ERROR, SPTM;
+! EALIGN, DY=SPTMY - Q01Y - RTBT1Y,
+! DPSI=SPTMPSI, DPHI=SPTMPHI; 
+
+! SELECT, FLAG=ERROR, RANGE=Q01S1/Q01S2;
+! EALIGN, DY=Q01Y-Q15Y;
+
+! SELECT, FLAG=ERROR, CLASS=QUADRUPOLE, RANGE=Q01S1/QED2;  ! Note: cannot misalign drifts.
+! EALIGN, DY=RTBT1Y;
+
+! USE, SURVD ! With the SURVEY command down here seem to get a "QUADINITIAL" at the beginning of the survey file, instead of "INITIAL". Need to edit file before running cnvrtMAD_nosplit.py.
+! SURVEY, TAPE, X0=10100.50945, Y0=1999.817400, Z0=20036.966291, 
+! THETA0=-73.201399*PI/180., PHI0=0.0;
+
+!
+! Generate Twiss output for G4BL 
+!
+! SELECT, FLAG=TWISS   , CLEAR;  ! Get rid of old select to start new one.
+! SELECT, FLAG=TWISS   , RANGE=#S/#E, COLUMN=NAME,KEYWORD,S,L,K1L,K0L,ANGLE,HKICK,VKICK,TILT;
+! TWISS , BETA0=INITIAL, deltap=0, FILE="optics_for_G4BL";
+
+stop;
+
