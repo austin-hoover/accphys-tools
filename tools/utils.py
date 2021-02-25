@@ -113,8 +113,9 @@ def rand_rows(X, n):
     nrows = X.shape[0]
     if n >= nrows:
         return X
-    idx = np.random.choice(X.shape[0], n, replace=False)
-    return X[idx, :]
+    Xsamp = np.copy(X)
+    idx = np.random.choice(Xsamp.shape[0], n, replace=False)
+    return Xsamp[idx, :]
     
     
 # General math
