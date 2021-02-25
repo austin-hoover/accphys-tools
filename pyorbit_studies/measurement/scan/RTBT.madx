@@ -528,7 +528,7 @@ TWISS, FILE="optics2", BETA0=INITIAL, deltap=0;
 betax_max = 40;
 betay_max = 40;
 delta_mux = 0;
-delta_muy = 0.15;
+delta_muy = -0.102631578947;
 
 ! Get phase advance at wire-scanner 
 mux_ws = TABLE(TWISS, WS24, MUX);

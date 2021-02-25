@@ -44,10 +44,12 @@ from utils import (
 # General
 mass = 0.93827231 # GeV/c^2
 kin_energy = 1.0 # GeV/c^2
-intensity = 0.0e14
+intensity = 1.5e15
 bunch_length = 250.0 # [m]
 nparts = int(1e4)
 max_solver_spacing = 0.01
+min_solver_spacing = 0.00001
+gridpts = (128, 128, 1)
 
 # Initial beam
 eps = 20e-6 # nonzero intrinsice emittance ex + ey [m*rad]
@@ -117,6 +119,7 @@ env_params = init_dict()
 def reset_bunch():
     bunch, params_dict = hf.initialize_bunch(mass, kin_energy)
     hf.dist_to_bunch(X0, bunch, bunch_length)
+    bunch.macroSize(intensity / nparts)
     return bunch, params_dict
 
 print 'Scanning.'
@@ -130,6 +133,10 @@ for lattice, env_lattice in tqdm(zip(lattices, env_lattices)):
         
     # Track bunch and take measurements [to do: add space charge nodes]
     bunch, params_dict = reset_bunch()
+    lattice.split(max_solver_spacing)    
+    if intensity > 0:
+        calc2p5d = SpaceChargeCalc2p5D(*gridpts)
+        sc_nodes = setSC2p5DAccNodes(lattice, min_solver_spacing, calc2p5d)
     ws_nodes = {ws_name: add_ws_node(lattice, ws_name) for ws_name in ws_names}
     lattice.trackBunch(bunch, params_dict)
     for ws_name, ws_node in ws_nodes.items():
