@@ -127,6 +127,10 @@ def corner(
         ms = plt_kws['s']
         plt_kws.pop('s', None)
         plt_kws['ms'] = ms
+    if 'c' in plt_kws:
+        color = plt_kws['c']
+        plt_kws.pop('c', None)
+        plt_kws['color'] = color
     plt_kws.setdefault('ms', 2)
     plt_kws.setdefault('color', 'steelblue')
     plt_kws.setdefault('marker', '.')
@@ -270,6 +274,7 @@ def _corner_2D(fig, ax, coords, coords_env, dims, texts, fps, env_kws,
         if coords_env is not None:
             X_env = coords_env[t]
             line_env.set_data(X_env[:, j], X_env[:, i])
+        ax.set_title(texts[t], **text_kws)
         
     return animation.FuncAnimation(fig, update, init_func=init, frames=nframes,
                                    interval=1000/fps)
