@@ -7,5 +7,3 @@ This repository is for my PhD research in accelerator physics. The structure is:
 **./tools** - data analysis and visualization modules 
 
 **./jupter_notebooks** - miscellaneous studies using Jupyter notebooks
-
-Some of the routines may be able to be written in a nicer or more efficient way, so any suggestions are welcome.
