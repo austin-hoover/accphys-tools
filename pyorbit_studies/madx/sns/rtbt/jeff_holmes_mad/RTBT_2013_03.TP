@@ -1,0 +1,217 @@
+drift l  0.010712  sub  10  end
+drift l  0.0974206  sub  10  end
+monitor sub  10  end
+drift l  0.1950794  sub  10  end
+vkicker l  0.0  kick  0.0  sub  10  end
+multipole t1  0.785398163397  k1l  0.0  sub  10  end
+multipole t2  0.523598775598  k2l  0.0  sub  10  end
+drift l  0.2925  sub  10  end
+drift l  1.6035  sub  10  end
+drift l  0.197788  sub  10  end
+vkicker l  0.4  kick  -0.001719  sub  10  end
+drift l  0.08  sub  10  end
+vkicker l  0.4  kick  -0.001424  sub  10  end
+drift l  0.08  sub  10  end
+vkicker l  0.4  kick  -0.001424  sub  10  end
+drift l  0.0805  sub  10  end
+vkicker l  0.505  kick  -0.001468  sub  10  end
+drift l  0.08  sub  10  end
+vkicker l  0.505  kick  -0.001468  sub  10  end
+drift l  0.08  sub  10  end
+vkicker l  0.505  kick  -0.001231  sub  10  end
+drift l  0.08  sub  10  end
+vkicker l  0.505  kick  -0.001231  sub  10  end
+drift l  0.132204  sub  10  end
+drift l  0.3165  sub  10  end
+kicker vkick  0.0  l  0.0  hkick  0.0  sub  10  end
+drift l  0.1364235  sub  10  end
+monitor sub  10  end
+drift l  0.1800765  sub  10  end
+drift l  0.000796  sub  10  end
+quadrupole k1  0.641361069837  l  0.673  sub  10  end
+drift l  0.422  sub  10  end
+quadrupole k1  -0.677399624765  l  0.533  sub  10  end
+drift l  0.46775  sub  10  end
+vkicker l  0.4275  kick  -0.001276  sub  10  end
+drift l  0.0815  sub  10  end
+vkicker l  0.4275  kick  -0.001276  sub  10  end
+drift l  0.0825  sub  10  end
+vkicker l  0.4275  kick  -0.001276  sub  10  end
+drift l  0.0785  sub  10  end
+vkicker l  0.4275  kick  -0.001276  sub  10  end
+drift l  0.08055  sub  10  end
+vkicker l  0.39  kick  -0.001365  sub  10  end
+drift l  0.0793  sub  10  end
+vkicker l  0.39  kick  -0.001365  sub  10  end
+drift l  0.0811  sub  10  end
+vkicker l  0.39  kick  -0.001365  sub  10  end
+drift l  2.4273  sub  10  end
+drift l  3.12925  sub  10  end
+drift l  0.560771  sub  10  end
+sbend e1  0.0  angle  -0.2935294736  l  2.48  e2  -0.2935294736  sub  10  end
+drift l  3.608777  sub  10  end
+quadrupole k1  -0.602928301937  l  0.2665  sub  10  end
+quadrupole k1  -0.602928301937  l  0.2665  sub  10  end
+drift l  0.357  sub  10  end
+quadrupole k1  0.600087084445  l  0.673  sub  10  end
+drift l  3.4445  sub  10  end
+monitor sub  10  end
+drift l  1.469  sub  10  end
+quadrupole k1  -0.545991877796  l  0.5  sub  10  end
+drift l  3.3608  sub  10  end
+quadrupole k1  0.599370004255  l  0.5  sub  10  end
+drift l  3.3608  sub  10  end
+quadrupole k1  -0.828596515794  l  0.5  sub  10  end
+drift l  0.306514  sub  10  end
+vkicker kick  0.0  sub  10  end
+drift l  3.054286  sub  10  end
+quadrupole k1  0.867338875412  l  0.5  sub  10  end
+drift l  0.306514  sub  10  end
+hkicker kick  0.0  sub  10  end
+drift l  3.054286  sub  10  end
+quadrupole k1  -0.828596515794  l  0.5  sub  10  end
+drift l  0.1058  sub  10  end
+monitor sub  10  end
+drift l  0.200714  sub  10  end
+vkicker kick  0.0  sub  10  end
+drift l  3.054286  sub  10  end
+quadrupole k1  0.867338875412  l  0.5  sub  10  end
+drift l  0.1058  sub  10  end
+monitor sub  10  end
+drift l  0.200714  sub  10  end
+hkicker kick  0.0  sub  10  end
+drift l  3.054286  sub  10  end
+quadrupole k1  -0.828596515794  l  0.5  sub  10  end
+drift l  0.1058  sub  10  end
+monitor sub  10  end
+drift l  3.255  sub  10  end
+quadrupole k1  0.867338875412  l  0.5  sub  10  end
+drift l  0.1058  sub  10  end
+monitor sub  10  end
+drift l  3.255  sub  10  end
+quadrupole k1  -0.828596515794  l  0.5  sub  10  end
+drift l  0.306514  sub  10  end
+vkicker kick  0.0  sub  10  end
+drift l  3.054286  sub  10  end
+quadrupole k1  0.630128093483  l  0.5  sub  10  end
+drift l  4.393486  sub  10  end
+vkicker kick  0.0  sub  10  end
+drift l  0.200714  sub  10  end
+monitor sub  10  end
+drift l  0.1058  sub  10  end
+quadrupole k1  -0.552818367113  l  0.5  sub  10  end
+drift l  0.9988  sub  10  end
+sbend angle  -0.146621881601  l  1.24  sub  10  end
+sbend angle  -0.146621881601  l  1.24  sub  10  end
+drift l  0.8988  sub  10  end
+quadrupole k1  0.407017494175  l  0.5  sub  10  end
+drift l  0.306514  sub  10  end
+hkicker kick  0.0  sub  10  end
+drift l  3.593486  sub  10  end
+quadrupole k1  -0.416728714347  l  0.5  sub  10  end
+drift l  0.1058  sub  10  end
+monitor sub  10  end
+drift l  0.200714  sub  10  end
+vkicker kick  0.0  sub  10  end
+drift l  4.984686  sub  10  end
+quadrupole k1  0.365956037203  l  0.5  sub  10  end
+drift l  0.1058  sub  10  end
+monitor sub  10  end
+drift l  0.200714  sub  10  end
+hkicker kick  0.0  sub  10  end
+drift l  4.984686  sub  10  end
+quadrupole k1  -0.434719394892  l  0.5  sub  10  end
+drift l  0.1058  sub  10  end
+monitor sub  10  end
+drift l  0.200714  sub  10  end
+vkicker kick  0.0  sub  10  end
+drift l  4.878886  sub  10  end
+monitor sub  10  end
+drift l  0.1058  sub  10  end
+quadrupole k1  0.398594857822  l  0.5  sub  10  end
+drift l  5.2912  sub  10  end
+quadrupole k1  -0.398594857822  l  0.5  sub  10  end
+drift l  0.1058  sub  10  end
+monitor sub  10  end
+drift l  0.200714  sub  10  end
+vkicker kick  0.0  sub  10  end
+drift l  1.943486  sub  10  end
+drift l  0.6912  sub  10  end
+drift l  1.2  sub  10  end
+drift l  1.15  sub  10  end
+quadrupole k1  0.398594857822  l  0.5  sub  10  end
+drift l  0.306514  sub  10  end
+hkicker kick  0.0  sub  10  end
+drift l  4.254246  sub  10  end
+monitor sub  10  end
+drift l  0.73044  sub  10  end
+quadrupole k1  -0.398594857822  l  0.5  sub  10  end
+drift l  0.1058  sub  10  end
+monitor sub  10  end
+drift l  0.200714  sub  10  end
+vkicker kick  0.0  sub  10  end
+drift l  3.683686  sub  10  end
+monitor sub  10  end
+drift l  0.994486  sub  10  end
+hkicker kick  0.0  sub  10  end
+drift l  0.200714  sub  10  end
+monitor sub  10  end
+drift l  0.1058  sub  10  end
+quadrupole k1  0.398594857822  l  0.5  sub  10  end
+drift l  1.15  sub  10  end
+drift l  1.2  sub  10  end
+drift l  0.8  sub  10  end
+drift l  2.1412  sub  10  end
+quadrupole k1  -0.398594857822  l  0.5  sub  10  end
+drift l  0.1058  sub  10  end
+monitor sub  10  end
+drift l  0.200714  sub  10  end
+vkicker kick  0.0  sub  10  end
+drift l  4.175686  sub  10  end
+monitor sub  10  end
+drift l  0.809  sub  10  end
+quadrupole k1  0.398594857822  l  0.5  sub  10  end
+drift l  0.1058  sub  10  end
+monitor sub  10  end
+drift l  4.30496  sub  10  end
+monitor sub  10  end
+drift l  0.73044  sub  10  end
+quadrupole k1  -0.398594857822  l  0.5  sub  10  end
+drift l  0.1058  sub  10  end
+monitor sub  10  end
+drift l  5.0989  sub  10  end
+quadrupole k1  0.552083353483  l  0.673  sub  10  end
+drift l  5.2945  sub  10  end
+quadrupole k1  -0.231474  l  1.02  sub  10  end
+drift l  0.310801  sub  10  end
+monitor sub  10  end
+drift l  0.656643  sub  10  end
+quadrupole k1  0.350152  l  1.02  sub  10  end
+drift l  0.496475  sub  10  end
+vkicker kick  0.0  sub  10  end
+hkicker kick  0.0  sub  10  end
+drift l  3.00507  sub  10  end
+quadrupole k1  -0.24588144  l  1.02  sub  10  end
+drift l  0.310801  sub  10  end
+monitor sub  10  end
+drift l  0.656643  sub  10  end
+quadrupole k1  0.10164096  l  1.02  sub  10  end
+drift l  0.496475  sub  10  end
+vkicker kick  0.0  sub  10  end
+hkicker kick  0.0  sub  10  end
+drift l  1.071296  sub  10  end
+monitor sub  10  end
+drift l  0.264503  sub  10  end
+monitor sub  10  end
+drift l  0.685093  sub  10  end
+drift l  3.4916  sub  10  end
+drift l  2.263278  sub  10  end
+drift l  0.386722  sub  10  end
+drift l  0.2955  sub  10  end
+drift l  0.0045  sub  10  end
+drift l  0.2  sub  10  end
+drift l  1.4  sub  10  end
+drift l  0.45  sub  10  end
+drift l  0.288  sub  10  end
+marker sub  10  end
+final

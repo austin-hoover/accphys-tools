@@ -43,7 +43,7 @@ sim_type = 0
 # General
 mass = 0.93827231 # GeV/c^2
 energy = 1.0 # GeV/c^2
-intensity = 1e14
+intensity = 2e14
 
 # Lattice
 latfile = '_latfiles/fodo_quadstart.lat'
