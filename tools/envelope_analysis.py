@@ -76,7 +76,6 @@ def get_coord_array(params_list, nparts):
     
 def rms_ellipse_dims(Sigma, x1='x', x2='y'):
     """Return the tilt angle and radii of rms ellipse in x1-x2 plane.
-    
     Tilt angle is clockwise defined.
     """
     str_to_int = {'x':0, 'xp':1, 'y':2, 'yp':3}
@@ -99,7 +98,7 @@ def intrinsic_emittances(Sigma):
     # If one of the mode emittances is zero, both will be kept.
     # Remove the extra zero.
     if len(eigvals) > 2:
-        eigvals = eigvals[:-1]
+        eigvals = eigvals[:2]
     # Return the largest emittance first
     e1, e2 = np.sort(eigvals)
     return e1, e2
