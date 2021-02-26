@@ -91,13 +91,14 @@ def rms_ellipse_dims(Sigma, x1='x', x2='y'):
     
 def intrinsic_emittances(Sigma):
     """Return the intrinsic emittances from the covariance matrix."""
-    U = np.array([[0,1,0,0], [-1,0,0,0], [0,0,0,1], [0,0,-1,0]])
-    det = np.linalg.det(Sigma)
-    SU = np.matmul(Sigma, U)
-    trace = np.trace(np.matmul(SU, SU))
-    e1 = 0.5 * np.sqrt(-trace + np.sqrt((trace**2 - 16*det)))
-    e2 = 0.5 * np.sqrt(-trace - np.sqrt((trace**2 - 16*det)))
-    return e1, e2
+    U = np.array([[0, 1, 0, 0], [-1, 0, 0, 0], [0, 0, 0, 1], [0, 0, -1, 0]])
+    emittances = la.eigvals(np.matmul(Sigma, U)).imag
+    emittances = emittances[np.where(emittances >= 0.0)]
+    emittances = np.sort(emittances)
+    # Get rid of extra zero if it exists
+    if len(emittances) > 2:
+        emittances = emittances[1:3]
+    return emittances
     
     
 def get_twiss2D(Sigma):
