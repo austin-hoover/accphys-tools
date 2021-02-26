@@ -17,6 +17,7 @@ import pandas as pd
 import matplotlib
 from matplotlib import pyplot as plt, animation, ticker
 from matplotlib.lines import Line2D
+from matplotlib.patches import Ellipse
 import seaborn as sns
 import scipy
 from pandas.plotting._matplotlib.tools import _set_ticks_props
@@ -715,3 +716,26 @@ def eigvals_complex_plane(ax, eigvals, colors=('r','b'), legend=True, **kws):
         ax.legend(lines, labels, loc='upper right', handletextpad=0.1,
                   fontsize='small', framealpha=1)
     return ax
+
+
+def rms_ellipses(Sigmas, figsize=(5, 5), pad=0.5, axes=None, **plt_kws):
+    """Plot rms ellipse parameters directly from covariance matrix."""
+    plt_kws.setdefault('fill', False)
+    Sigmas = np.array(Sigmas)
+    if Sigmas.ndim == 2:
+        Sigmas = Sigmas[np.newaxis, :, :]
+    if axes is None:
+        x2_max, y2_max = np.max(Sigmas[:, 0, 0]), np.max(Sigmas[:, 2, 2])
+        xp2_max, yp2_max = np.max(Sigmas[:, 1, 1]), np.max(Sigmas[:, 3, 3])
+        umax = (1 + pad) * 2 * np.sqrt(max(x2_max, y2_max))
+        upmax = (1 + pad) * 2 * np.sqrt(max(xp2_max, yp2_max))
+        fig, axes = setup_corner((umax, upmax), figsize)
+    dims = {0:'x', 1:'xp', 2:'y', 3:'yp'}
+    for Sigma in Sigmas:
+        for i in range(3):
+            for j in range(i + 1):
+                angle, c1, c2 = ea.rms_ellipse_dims(Sigma, dims[j], dims[i + 1])
+                angle = -np.degrees(angle)
+                ellipse = Ellipse((0, 0), 4*c1, 4*c2, angle, **plt_kws)
+                axes[i, j].add_patch(ellipse)
+    return axes
