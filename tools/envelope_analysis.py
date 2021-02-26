@@ -75,8 +75,8 @@ def get_coord_array(params_list, nparts):
     
     
 def rms_ellipse_dims(Sigma, x1='x', x2='y'):
-    """Return the tilt angle and radii of rms ellipse in x1-x2 plane.
-    Tilt angle is clockwise defined.
+    """Return (angle, c1, c2) of rms ellipse in x1-x2 plane, where angle is the
+    clockwise tilt angle and c1/c2 are the semi-axes.
     """
     str_to_int = {'x':0, 'xp':1, 'y':2, 'yp':3}
     i, j = str_to_int[x1], str_to_int[x2]
@@ -84,23 +84,19 @@ def rms_ellipse_dims(Sigma, x1='x', x2='y'):
     angle = -0.5 * np.arctan2(2*sij, sii-sjj)
     sin, cos = np.sin(angle), np.cos(angle)
     sin2, cos2 = sin**2, cos**2
-    cx = np.sqrt(abs(sii*cos2 + sjj*sin2 - 2*sij*sin*cos))
-    cy = np.sqrt(abs(sii*sin2 + sjj*cos2 + 2*sij*sin*cos))
-    return angle, cx, cy
+    c1 = np.sqrt(abs(sii*cos2 + sjj*sin2 - 2*sij*sin*cos))
+    c2 = np.sqrt(abs(sii*sin2 + sjj*cos2 + 2*sij*sin*cos))
+    return angle, c1, c2
     
     
 def intrinsic_emittances(Sigma):
     """Return the intrinsic emittances from the covariance matrix."""
     U = np.array([[0,1,0,0], [-1,0,0,0], [0,0,0,1], [0,0,-1,0]])
-    eigvals = la.eigvals(np.matmul(Sigma, U)).imag
-    # Keep positive values
-    eigvals = eigvals[np.argwhere(eigvals >= 0).flat]
-    # If one of the mode emittances is zero, both will be kept.
-    # Remove the extra zero.
-    if len(eigvals) > 2:
-        eigvals = eigvals[:2]
-    # Return the largest emittance first
-    e1, e2 = np.sort(eigvals)
+    det = np.linalg.det(Sigma)
+    SU = np.matmul(Sigma, U)
+    trace = np.trace(np.matmul(SU, SU))
+    e1 = 0.5 * np.sqrt(-trace + np.sqrt((trace**2 - 16*det)))
+    e2 = 0.5 * np.sqrt(-trace - np.sqrt((trace**2 - 16*det)))
     return e1, e2
     
     
