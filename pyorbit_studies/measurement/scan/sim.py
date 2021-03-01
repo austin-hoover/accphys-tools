@@ -44,10 +44,10 @@ from utils import (
 # General
 mass = 0.93827231 # GeV/c^2
 kin_energy = 1.0 # GeV/c^2
-intensity = 1.5e15
+intensity = 0e14
 bunch_length = 250.0 # [m]
 nparts = int(1e4)
-max_solver_spacing = 0.01
+max_solver_spacing = 0.02
 min_solver_spacing = 0.00001
 gridpts = (128, 128, 1)
 
@@ -63,8 +63,7 @@ ws_names = ['ws02', 'ws20', 'ws21', 'ws23', 'ws24']
 beta_max = (40, 40) # (x, y)
 # Deviations from default phase advance at chosen WS (normalized by 2pi)
 ref_ws_name = 'ws24' 
-delta_mu_list = np.linspace(-0.15, 0.15, 20)
-# delta_mu_list = np.linspace(-0.05, 0.05, 2)
+delta_mu_list = np.linspace(-0.15, 0.15, 3)
     
     
 # Setup
@@ -84,6 +83,11 @@ twiss = scanner.track_twiss()
 twiss_df = pd.DataFrame(twiss, columns=['s','nux','nuy','ax','ay','bx','by'])
 twiss_df[['nux','nuy']] %= 1
 twiss_df.to_csv('_output/data/twiss.dat', index=False)
+ws_positions = []
+for ws_name in ws_names:
+    ws_node = lattice.getNodeForName(ws_name)
+    ws_positions.append(lattice.getNodePositionsDict()[ws_node][0])
+np.savetxt('_output/data/ws_positions.dat', ws_positions)
 
 # Create lattice for each pair of phase advances
 ## `env_lattice` is for envelope tracking
@@ -131,7 +135,7 @@ for lattice, env_lattice in tqdm(zip(lattices, env_lattices)):
         phase_advances[ws_name].append(scanner.get_ws_phase(ws_name))
         transfer_mats[ws_name].append(scanner.get_transfer_matrix(ws_name))
         
-    # Track bunch and take measurements [to do: add space charge nodes]
+    # Track bunch and take measurements
     bunch, params_dict = reset_bunch()
     lattice.split(max_solver_spacing)    
     if intensity > 0:

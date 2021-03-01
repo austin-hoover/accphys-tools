@@ -729,7 +729,7 @@ def rms_ellipses(Sigmas, figsize=(5, 5), pad=0.5, axes=None, **plt_kws):
         xp2_max, yp2_max = np.max(Sigmas[:, 1, 1]), np.max(Sigmas[:, 3, 3])
         umax = (1 + pad) * 2 * np.sqrt(max(x2_max, y2_max))
         upmax = (1 + pad) * 2 * np.sqrt(max(xp2_max, yp2_max))
-        fig, axes = setup_corner((umax, upmax), figsize)
+        fig, axes = setup_corner((umax, upmax), figsize, units='mm-mrad')
     dims = {0:'x', 1:'xp', 2:'y', 3:'yp'}
     for Sigma in Sigmas:
         for i in range(3):
