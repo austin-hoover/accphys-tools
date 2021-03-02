@@ -110,12 +110,11 @@ def symmetrize(M):
     
 def rand_rows(X, n):
     """Return n random elements of X."""
-    nrows = X.shape[0]
-    if n >= nrows:
-        return X
     Xsamp = np.copy(X)
-    idx = np.random.choice(Xsamp.shape[0], n, replace=False)
-    return Xsamp[idx, :]
+    if n < X.shape[0]:
+        idx = np.random.choice(Xsamp.shape[0], n, replace=False)
+        Xsamp = Xsamp[idx]
+    return Xsamp
     
     
 # General math

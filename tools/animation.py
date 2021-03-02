@@ -30,6 +30,7 @@ from .plotting import (
     vector as arrowplot,
     str_to_int
 )
+from .utils import rand_rows
 
 # Settings
 plt.rcParams['animation.ffmpeg_path'] = '/usr/local/bin/ffmpeg'
@@ -38,12 +39,15 @@ plt.rcParams['animation.ffmpeg_path'] = '/usr/local/bin/ffmpeg'
 artists_list = []
 
 
-def skip_frames(X, skip, keep_last=False):
-    nframes = X.shape[0]
-    idx = np.arange(0, nframes, skip + 1)
+def skip_frames(frames, skip=1, keep_last=False):
+    last = frames[-1]
+    frames = frames[::skip+1]
     if keep_last:
-        idx = np.append(idx, nframes - 1)
-    return X[idx]
+        if type(frames) is list:
+            frames.append(last)
+        elif type(frames) is np.ndarray:
+            frames = np.append(frames, last)
+    return frames
 
 
 def corner(
@@ -58,7 +62,7 @@ def corner(
     ----------
     coords : list or ndarray, shape (nframes, nparts, 4)
         Each element contains the transverse beam coordinate array at a
-        particular frame.
+        particular frame. Each frame can have a different number of particles.
     env_params : ndarray, shape (nframes, 8)
         The envelope parameters at each frame. They are not plotted if none
         are provided.
@@ -149,11 +153,10 @@ def corner(
     env_kws.setdefault('zorder', 6)
 
     # Process particle coordinates
-    if type(coords) is list:
-        coords = np.array(coords)
-    nframes = coords.shape[0]
-    if len(coords.shape) == 2: # single particle bunch
-        coords = coords[:, np.newaxis, :]
+    nparts_list = np.array([X.shape[0] for X in coords])
+    if type(coords) is np.ndarray:
+        coords = [X for X in coords]
+    nframes = len(coords)
     coords_env = get_ellipse_coords(env_params) if plt_env else None
 
     # Configure text updates
@@ -168,13 +171,20 @@ def corner(
     if plt_env:
         coords_env = skip_frames(coords_env, skip, keep_last)
     texts = skip_frames(texts, skip, keep_last)
-    nframes = coords.shape[0]
-    
+    nframes = len(coords)
+        
     # Take random sample of particles for scatter plots
-    coords_samp, (nframes, nparts, ndim) = coords, coords.shape
-    if nparts > samples:
-        idx = np.random.choice(nparts, samples, replace=False)
-        coords_samp = coords[:, idx, :]
+    nparts_is_static = all([n == nparts_list[0] for n in nparts_list])
+    if nparts_is_static:
+        idx = np.random.choice(nparts_list[0], samples, replace=False)
+        coords_samp = [X[idx] for X in coords]
+    else:
+        coords_samp = coords
+        for i, X in enumerate(coords_samp):
+            if X.shape[0] > samples:
+                coords_samp[i] = rand_rows(X, samples)
+                
+    # Axis limits
     limits = (1 + pad) * get_u_up_max_global(coords)
 
     # Create figure
