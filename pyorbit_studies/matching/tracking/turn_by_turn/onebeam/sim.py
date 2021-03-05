@@ -34,21 +34,21 @@ from tools.utils import delete_files_not_folders
 # General
 mass = 0.93827231 # GeV/c^2
 energy = 1.0 # GeV/c^2
-intensity = 1e14
-nturns_track = 30
-nparts = int(1e5)
+intensity = 1.5e15
+nturns_track = 50
+nparts = int(1.5e5)
 ntestparts = 100
-track_bunch = True
-store_bunch_coords = True
+track_bunch = False
+store_bunch_coords = False
 
 # Lattice
-latfile = '_latfiles/fodo_quadstart.lat'
-latseq = 'fodo'
+latfile = '_latfiles/SNSring_linear_noRF_nux6.18_nuy6.18.lat'
+latseq = 'rnginj'
 fringe = False
 
 # Initial beam
 mode = 1
-eps = 50e-6 # intrinsic emitance
+eps = 25e-6 # intrinsic emitance = ex + ey
 ex_frac = 0.5 # ex/eps
 nu = np.radians(90) # x-y phase difference
 
@@ -59,9 +59,9 @@ gridpts = (128, 128, 1) # (x, y, z)
 
 # Matching
 match = True 
-tol = 1e-4 # absolute tolerance for cost function
+tol = 1e-7 # absolute tolerance for cost function
 verbose = 2 # {0 (silent), 1 (report once at end), 2 (report at each step)}
-perturb_radius = 0.2 # If nonzero, perturb the matched envelope
+perturb_radius = 0.0 # If nonzero, perturb the matched envelope
 method = 'auto' # 'lsq' or 'replace_by_avg'
 
 # Output data locations
@@ -86,7 +86,6 @@ env.match_bare(lattice, '4D') # if '4D', beam will be flat for uncoupled lattice
     
 # Match with space charge
 env.set_spacecharge(intensity)
-print env.perveance
 solver_nodes = set_env_solver_nodes(lattice, env.perveance, max_solver_spacing)
 if match:
     print 'Matching.'
