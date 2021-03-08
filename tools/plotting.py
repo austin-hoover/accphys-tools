@@ -315,10 +315,10 @@ def setup_corner(
 
     
 def corner(
-    X, env_params=None, samples=2000, pad=0.5, figsize=None, dims='all',
-    kind='scatter', diag_kind='hist', hist_height=0.6, units='mm-mrad',
-    norm_labels=False, text=None, ax=None, diag_kws={}, env_kws={}, text_kws={},
-    **plt_kws
+    X, env_params=None, moments=False, samples=2000, pad=0.5, figsize=None,
+    dims='all', kind='scatter', diag_kind='hist', hist_height=0.6,
+    units='mm-mrad', norm_labels=False, text=None, ax=None, diag_kws={},
+    env_kws={}, text_kws={}, **plt_kws
 ):
     """Plot the pairwise relationships between the beam phase space coordinates.
     
@@ -333,6 +333,9 @@ def corner(
         The transverse beam coordinate array.
     env_params : array-like, shape (8,)
         The beam envelope parameters.
+    moments : bool
+        If True, plot the ellipse defined by the second-order moments of the
+        distribution.
     samples : int
         The number of randomly sampled points to use in the scatter plots.
     pad : float
@@ -453,6 +456,8 @@ def corner(
                 scatter_density(ax, x, y, **plt_kws)
             if X_env is not None:
                 ax.plot(X_env[:, j], X_env[:, i+1], **env_kws)
+    if moments:
+        rms_ellipses(np.cov(X.T), axes=scatter_axes, **env_kws)
                 
     if text:
         text_pos = (0.35, 0) if plt_diag else (0.35, 0.5)
