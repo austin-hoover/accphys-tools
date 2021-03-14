@@ -4,6 +4,7 @@
 
 import numpy as np
 import numpy.linalg as la
+import scipy.optimize as opt
 from . import coupling as BL
 from .utils import rotate_vec, rotate_mat, apply, normalize
 
@@ -70,6 +71,18 @@ def fodo(k1, k2, L, fill_fac=0.5, quad_tilt=0, start='quad', nparts=1):
     lattice.analyze()
     return lattice
     
+    
+def upright_fodo(mux, muy, length, fill_fac=0.5, start='quad', **kws):
+
+    def cost(kvals):
+        k1, k2 = kvals
+        lattice = fodo(k1, k2, length)
+        return [mux - lattice.params2D['mux'], muy - lattice.params2D['muy']]
+
+    result = opt.least_squares(cost, [0.5, 0.5], bounds=([0, 0], [np.inf, np.inf]), **kws)
+    k1, k2 = result.x
+    return fodo(k1, k2, length)
+  
     
 class MatrixLattice:
     """Lattice representation using transfer matrices."""
