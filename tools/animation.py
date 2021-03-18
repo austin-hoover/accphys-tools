@@ -176,7 +176,12 @@ def corner(
     # Take random sample of particles for scatter plots
     nparts_is_static = all([n == nparts_list[0] for n in nparts_list])
     if nparts_is_static:
-        idx = np.random.choice(nparts_list[0], samples, replace=False)
+        nparts = nparts_list[0]
+        coords_samp = np.array(coords)
+        if samples < nparts:
+            idx = np.random.choice(nparts, samples, replace=False)
+        else:
+            idx = np.arange(0, nparts)
         coords_samp = [X[idx] for X in coords]
     else:
         coords_samp = coords
