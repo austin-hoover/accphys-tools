@@ -2,10 +2,6 @@
 This script repeatedly tracks a beam through the RTBT, each time varying the 
 optics and computing the phase advance, transfer matrix, and beam moments at 
 the 5 wire-scanners.
-
-To do: it is very slow when the lattice is split when the space charge nodes
-are added. It is probably okay to not split the nodes, but maybe it could be 
-sped up anyway.
 """
 
 # Standard 
