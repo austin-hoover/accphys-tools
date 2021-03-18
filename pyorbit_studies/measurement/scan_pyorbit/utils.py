@@ -1,5 +1,6 @@
 # Standard 
 import sys
+import time
 import fileinput
 import subprocess
 # Third party
@@ -10,7 +11,7 @@ from scipy.constants import speed_of_light
 from bunch import Bunch
 from orbit.analysis import AnalysisNode, WireScannerNode
 from orbit.envelope import Envelope
-from orbit.matrix_lattice import BaseMATRIX
+from orbit.matrix_lattice import BaseMATRIX, MATRIX_Lattice
 from orbit_utils import Matrix
 from orbit.teapot import TEAPOT_Lattice, TEAPOT_MATRIX_Lattice
 from orbit.utils import helper_funcs as hf
@@ -19,6 +20,10 @@ from orbit.utils import helper_funcs as hf
 madx_output_files = ['esave', 'madx.ps', 'optics1', 'optics2', 'rtbt.lat']
 rtbt_quad_names = ['q02', 'q03', 'q04', 'q05', 'q06', 'q12', 'q13',
                    'q14', 'q15', 'q16', 'q17', 'q18', 'q19']
+rtbt_quad_coeff_lb = np.array([0, -5.4775, 0, -7.96585, 0, 0, -7.0425,
+                               0, -5.4775, 0, -5.4775, 0, -7.0425])
+rtbt_quad_coeff_ub = np.array([5.4775, 0, 7.0425, 0, 7.96585, 7.0425, 
+                               0, 5.4775, 0, 5.4775, 0, 7.0425, 0])
 
 
 def run(command): 
@@ -115,6 +120,13 @@ class PhaseController:
         self.ref_ws_index = self.get_node_index(ref_ws_name)
         
     def get_matrix_lattice(self):
+        """Obtain linear matrix representation of lattice.
+        
+        This is very slow; the matrices are not stored, but are instead 
+        calculated at each step using the method in 
+        `/src/teapot/MatrixGenerator.cc`. This is unfortunate since this 
+        needs to be called many times when optimizing the quad strengths.
+        """
         bunch, params_dict = hf.initialize_bunch(self.mass, self.kin_energy)
         return TEAPOT_MATRIX_Lattice(self.lattice, bunch)
                 
@@ -141,7 +153,7 @@ class PhaseController:
         """Get current independent quad strengths."""
         return [node.getParam('kq') for node in self.quad_nodes]
     
-    def set_quad_strengths(self, quad_strengths, ext_lattice=None):
+    def set_quad_strengths(self, quad_strengths):
         """Set quad strengths and update the matrix lattice. 
         
         Only 13 are provided due to shared power supplies. 
@@ -186,12 +198,10 @@ class PhaseController:
         added.
         """
         Brho = hf.get_Brho(self.mass, self.kin_energy)
-        lb = (1 / Brho) * np.array([0, -5.4775, 0, -7.96585, 0, 0, -7.0425,
-                                    0, -5.4775, 0, -5.4775, 0, -7.0425])
-        ub = (1 / Brho) * np.array([5.4775, 0, 7.0425, 0, 7.96585, 7.0425, 
-                                    0, 5.4775, 0, 5.4775, 0, 7.0425, 0])
-
-        def cost(quad_strengths):
+        lb = rtbt_quad_coeff_lb / Brho
+        ub = rtbt_quad_coeff_ub / Brho
+        
+        def cost(quad_strengths):            
             self.set_quad_strengths(quad_strengths)
             self.track_twiss()
             nux_calc, nuy_calc = self.get_phases_at_ref_ws()

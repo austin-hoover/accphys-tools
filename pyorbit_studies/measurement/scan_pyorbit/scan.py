@@ -10,6 +10,7 @@ sped up anyway.
 
 # Standard 
 import sys
+import time
 import copy
 # Third party
 import numpy as np
@@ -23,10 +24,9 @@ from orbit_utils import Matrix
 from spacecharge import SpaceChargeCalc2p5D
 from orbit.analysis import AnalysisNode, WireScannerNode
 from orbit.envelope import Envelope
-from orbit.matrix_lattice import BaseMATRIX
 from orbit.space_charge.envelope import set_env_solver_nodes, set_perveance
 from orbit.space_charge.sc2p5d.scLatticeModifications import setSC2p5DAccNodes
-from orbit.teapot import TEAPOT_Lattice, TEAPOT_MATRIX_Lattice
+from orbit.teapot import TEAPOT_Lattice
 from orbit.utils import helper_funcs as hf
 # Local
 sys.path.append('/Users/46h/Research/code/accphys')
@@ -61,21 +61,20 @@ init_twiss = (-8.082, 4.380, 23.373, 13.455) # (ax, ay, bx, by)
 # Scan
 ws_names = ['ws02', 'ws20', 'ws21', 'ws23', 'ws24']
 ref_ws_name = 'ws24' 
-nsteps = 2
+nsteps = 15 # number of steps for each dimension
 wsbins = 50
 phase_coverage = 180 # [deg]
 max_betas = (40, 40) # (x, y)
 diag_wire_angle = np.radians(45.0)
-    
 
-# Create scanner
+
+# Initialization
 #------------------------------------------------------------------------------
 delete_files_not_folders('_output/')
 
 # Save default optics
-dummy_lattice = hf.lattice_from_file(latfile, latseq)
-controller = PhaseController(dummy_lattice, init_twiss, mass, kin_energy, 
-                             ref_ws_name)
+latt = hf.lattice_from_file(latfile, latseq)
+controller = PhaseController(latt, init_twiss, mass, kin_energy, ref_ws_name)
 twiss_df = pd.DataFrame(np.copy(controller.tracked_twiss),
                         columns=['s','nux','nuy','ax','ay','bx','by'])
 twiss_df[['nux','nuy']] %= 1
@@ -156,9 +155,10 @@ for direction in ('horizontal', 'vertical'):
             nux, nuy = nux0 + delta_nu, nuy0
         elif direction == 'vertical':
             nux, nuy = nux0, nuy0 + delta_nu
-        print '  delta_nu = {:.3f} deg'.format(360 * delta_nu)
         
         # Set phases at reference wire-scanner
+        print '  delta_nu = {:.3f} deg'.format(360 * delta_nu)
+        print '  Setting phases at {}'.format(ref_ws_name)
         controller.set_phases_at_ref_ws(nux, nuy, max_betas, verbose=2)
         controller.apply_settings(lattice)
         
@@ -192,11 +192,3 @@ for ws in ws_names:
     np.save('_output/data/transfer_mats_{}.npy'.format(ws), transfer_mats[ws])
     np.save('_output/data/moments_{}.npy'.format(ws), moments[ws])
     np.save('_output/data/env_params_{}.npy'.format(ws), env_params[ws])
-
-
-
-    
-    
-    
-# Try to speed things up.
-#------------------------------------------------------------------------------
