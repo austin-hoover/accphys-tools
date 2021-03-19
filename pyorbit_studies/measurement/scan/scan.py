@@ -18,7 +18,7 @@ from tqdm import tqdm
 from bunch import Bunch
 from orbit_utils import Matrix
 from spacecharge import SpaceChargeCalc2p5D
-from orbit.analysis import AnalysisNode, WireScannerNode
+from orbit.analysis import AnalysisNode, WireScannerNode, add_analysis_node, add_ws_node
 from orbit.envelope import Envelope
 from orbit.space_charge.envelope import set_env_solver_nodes, set_perveance
 from orbit.space_charge.sc2p5d.scLatticeModifications import setSC2p5DAccNodes
@@ -28,8 +28,8 @@ from orbit.utils import helper_funcs as hf
 sys.path.append('/Users/46h/Research/code/accphys')
 from tools.utils import delete_files_not_folders
 
-from utils import (PhaseController, add_ws_node, add_analysis_node, 
-                   set_rtbt_quad_strengths)
+sys.path.append('/Users/46h/Research/code/accphys/pyorbit_studies/measurement')
+from utils import (PhaseController, set_rtbt_quad_strengths)
 
 
 # Settings
@@ -89,7 +89,7 @@ env.fit_twiss2D(ax0, ay0, bx0, by0, ex_frac)
 env_params0 = np.copy(env.params)
 
 if beam_type == 'danilov':
-    X0 = env.generate_dist(nparts)
+    X0 = env.generate_dist(nparts, mm_mrad=False)
 elif beam_type == 'gaussian':
     cut_off = 3
     bunch, params_dict = hf.coasting_beam(
@@ -119,14 +119,18 @@ if intensity > 0:
     setSC2p5DAccNodes(lattice, min_solver_spacing, calc2p5d)
     
 # Add wire-scanner nodes
-ws_nodes = {ws: add_ws_node(lattice, wsbins, diag_wire_angle, ws)
-            for ws in ws_names}
+ws_nodes = {ws_name: add_ws_node(lattice, ws_name, wsbins, diag_wire_angle)
+            for ws_name in ws_names}
 
-# Separate lattice for envelope tracking
+# Add bunch monitor nodes
+bunch_monitor_nodes = {ws_name: add_analysis_node(lattice, ws_name, 'bunch_monitor')
+                       for ws_name in ws_names}
+
+# Create separate lattice for envelope tracking
 env_lattice = hf.lattice_from_file(latfile, latseq)
 set_env_solver_nodes(env_lattice, env.perveance, max_solver_spacing)
-env_monitor_nodes = {ws: add_analysis_node(env_lattice, ws, 'env_monitor') 
-                     for ws in ws_names}
+env_monitor_nodes = {ws_name: add_analysis_node(env_lattice, ws_name, 'env_monitor')
+                     for ws_name in ws_names}
 
 
 # Perform scan
@@ -136,6 +140,7 @@ def init_dict():
 
 transfer_mats = init_dict()
 moments = init_dict()
+coords = init_dict()
 phases = init_dict()
 env_params = init_dict()
 
@@ -153,8 +158,8 @@ for direction in ('horizontal', 'vertical'):
             nux, nuy = nux0, nuy0 + delta_nu
         
         # Set phases at reference wire-scanner
-        print '  delta_nu = {:.3f} deg'.format(360 * delta_nu)
-        print '  Setting phases at {}'.format(ref_ws_name)
+        print ' delta_nu = {:.3f} deg'.format(360 * delta_nu)
+        print 'Setting phases at {}.'.format(ref_ws_name)
         controller.set_phases_at_ref_ws(nux, nuy, max_betas, verbose=2)
         controller.apply_settings(lattice)
         
@@ -165,11 +170,14 @@ for direction in ('horizontal', 'vertical'):
             transfer_mats[ws].append(controller.get_transfer_matrix(ws))
                     
         # Track bunch and compute moments at each wire-scanner
+        for node in bunch_monitor_nodes.values():
+            node.clear_data()
         print '  Tracking bunch.'
         bunch, params_dict = reset_bunch()
         lattice.trackBunch(bunch, params_dict)
         for ws in ws_names:
             moments[ws].append(ws_nodes[ws].get_moments())
+            coords[ws].append(bunch_monitor_nodes[ws].get_data('bunch_coords'))
             
         # Track envelope for comparison
         controller.apply_settings(env_lattice)
@@ -187,4 +195,6 @@ for ws in ws_names:
     np.save('_output/data/phases_{}.npy'.format(ws), phases[ws])
     np.save('_output/data/transfer_mats_{}.npy'.format(ws), transfer_mats[ws])
     np.save('_output/data/moments_{}.npy'.format(ws), moments[ws])
+    
     np.save('_output/data/env_params_{}.npy'.format(ws), env_params[ws])
+    np.save('_output/data/X_{}.npy'.format(ws), coords[ws])

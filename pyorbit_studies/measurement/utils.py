@@ -225,20 +225,3 @@ class PhaseController:
     
     def get_betas_at_target(self):
         return self.tracked_twiss[-1, 5:]
-    
-    
-def add_analysis_node(lattice, ws_name, kind='env_monitor', mm_mrad=False):
-    """Add analysis node as child of MonitorTEAPOT node."""
-    ws_node = lattice.getNodeForName(ws_name)
-    position = lattice.getNodePositionsDict()[ws_node][0]
-    analysis_node = AnalysisNode(position, kind, mm_mrad=mm_mrad)
-    ws_node.addChildNode(analysis_node, ws_node.ENTRANCE)
-    return analysis_node
-
-
-def add_ws_node(lattice, nbins, diag_wire_angle, name):
-    """Add WireScanner node as chid of MonitorTEAPOT node."""
-    ws_node = lattice.getNodeForName(name)
-    my_ws_node = WireScannerNode('my_' + name)
-    ws_node.addChildNode(my_ws_node, ws_node.ENTRANCE)
-    return my_ws_node
