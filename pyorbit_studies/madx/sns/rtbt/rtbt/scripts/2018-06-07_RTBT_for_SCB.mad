@@ -30,7 +30,7 @@ C     := 2.99792458e8;  !speed of light [m/sec]
 PI    := 3.141592654;  
 DTR   := PI/180;  
 E0    := 0.938272310;   !proton mass [GeV]  
-EK    := 1.00;          ![GeV] injection kinetic Energy  
+EK    := 1.00;          ![GeV] injection kinetic Energy
 
 PC    := sqrt(EK*(EK+2*E0));       !  Value PC  
 BRHO  := 1e9*(PC/C);                !  Value BRHO  
