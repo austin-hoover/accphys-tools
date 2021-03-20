@@ -29,7 +29,7 @@ sys.path.append('/Users/46h/Research/code/accphys')
 from tools.utils import delete_files_not_folders
 
 sys.path.append('/Users/46h/Research/code/accphys/pyorbit_studies/measurement')
-from utils import (PhaseController, set_rtbt_quad_strengths)
+from utils import (PhaseController, set_rtbt_quad_strengths, get_coord_array)
 
 
 # Settings
@@ -68,9 +68,11 @@ diag_wire_angle = np.radians(45.0)
 #------------------------------------------------------------------------------
 delete_files_not_folders('_output/')
 
-# Save default optics
+# Create phase controller
 latt = hf.lattice_from_file(latfile, latseq)
 controller = PhaseController(latt, init_twiss, mass, kin_energy, ref_ws_name)
+
+# Save default optics
 twiss_df = pd.DataFrame(np.copy(controller.tracked_twiss),
                         columns=['s','nux','nuy','ax','ay','bx','by'])
 twiss_df[['nux','nuy']] %= 1
@@ -81,31 +83,22 @@ ws_positions = [controller.get_node_position(ws) for ws in ws_names]
 np.savetxt('_output/data/ws_positions.dat', ws_positions)
 
     
-# Set up initial beam
+# Set up initial beam (to do: Danilov phase difference should be nonzero!)
 #------------------------------------------------------------------------------
+# Initial Danilov envelope
 ax0, ay0, bx0, by0 = init_twiss
 env = Envelope(eps, mode, ex_frac, mass, kin_energy, bunch_length, intensity)
 env.fit_twiss2D(ax0, ay0, bx0, by0, ex_frac)
 env_params0 = np.copy(env.params)
 
-if beam_type == 'danilov':
-    X0 = env.generate_dist(nparts, mm_mrad=False)
-elif beam_type == 'gaussian':
-    cut_off = 3
-    bunch, params_dict = hf.coasting_beam(
-        beam_type, nparts, init_twiss, (ex, ey), bunch_length, mass, 
-        kin_energy, intensity, cut_off=cut_off)
-    X0 = hf.dist_from_bunch(bunch)
+# Initial bunch coordinate array
+X0 = get_coord_array(beam_type, init_twiss, (ex, ey), nparts)
 
 def reset_bunch():
     bunch, params_dict = hf.initialize_bunch(mass, kin_energy)
     hf.dist_to_bunch(X0, bunch, bunch_length)
     bunch.macroSize(intensity / nparts)
     return bunch, params_dict
-
-np.save('_output/data/Sigma0_env.npy', env.cov())
-np.savetxt('_output/data/Sigma0.dat', np.cov(X0.T))
-np.savetxt('_output/data/X0.dat', X0)
 
 
 # Create lattice
@@ -141,60 +134,51 @@ def init_dict():
 transfer_mats = init_dict()
 moments = init_dict()
 coords = init_dict()
-phases = init_dict()
+ws_phases = init_dict()
 env_params = init_dict()
 
-window = 0.5 * phase_coverage
-delta_nu_list = np.linspace(-window, window, nsteps) / 360
-nux0, nuy0 = controller.get_phases_at_ref_ws()
+scan_phases = controller.get_phases_for_scan(phase_coverage, nsteps)
 
-for direction in ('horizontal', 'vertical'):
-    print 'Scanning {} phases.'.format(direction)
+for scan_index, (nux, nuy) in enumerate(scan_phases):
+    print 'Scan {} of {}.'.format(scan_index, 2 * nsteps)
+    print 'Setting phases: nux, nuy = {:.3f}, {:.3f}.'.format(nux, nuy)
+    controller.set_ref_ws_phases(nux, nuy, max_betas, verbose=2)
+    controller.track_twiss()
+    controller.apply_settings(lattice)
+
+    # Track bunch
+    for node in bunch_monitor_nodes.values():
+        node.clear_data()
+    print '  Tracking bunch.'
+    bunch, params_dict = reset_bunch()
+    lattice.trackBunch(bunch, params_dict)
     
-    for delta_nu in tqdm(delta_nu_list):
-        if direction == 'horizontal':
-            nux, nuy = nux0 + delta_nu, nuy0
-        elif direction == 'vertical':
-            nux, nuy = nux0, nuy0 + delta_nu
-        
-        # Set phases at reference wire-scanner
-        print ' delta_nu = {:.3f} deg'.format(360 * delta_nu)
-        print 'Setting phases at {}.'.format(ref_ws_name)
-        controller.set_phases_at_ref_ws(nux, nuy, max_betas, verbose=2)
-        controller.apply_settings(lattice)
-        
-        # Compute phases and transfer matrix at each wire-scanner
-        controller.track_twiss()
-        for ws in ws_names:
-            phases[ws].append(controller.get_phases(ws))
-            transfer_mats[ws].append(controller.get_transfer_matrix(ws))
-                    
-        # Track bunch and compute moments at each wire-scanner
-        for node in bunch_monitor_nodes.values():
-            node.clear_data()
-        print '  Tracking bunch.'
-        bunch, params_dict = reset_bunch()
-        lattice.trackBunch(bunch, params_dict)
-        for ws in ws_names:
-            moments[ws].append(ws_nodes[ws].get_moments())
-            coords[ws].append(bunch_monitor_nodes[ws].get_data('bunch_coords'))
-            
-        # Track envelope for comparison
-        controller.apply_settings(env_lattice)
-        for node in env_monitor_nodes.values():
-            node.clear_data()
-        env.params = env_params0
-        env.track(env_lattice)
-        for ws in ws_names:
-            env_params[ws].append(env_monitor_nodes[ws].get_data('env_params'))
-            
+    # Compute moments and transfer matrix at each wire-scanner
+    for ws in ws_names:
+        moments[ws].append(ws_nodes[ws].get_moments())
+        transfer_mats[ws].append(controller.get_transfer_matrix(ws))
+        coords[ws].append(bunch_monitor_nodes[ws].get_data('bunch_coords'))
+        ws_phases[ws].append(controller.get_phases(ws))
+
+    # Track envelope for comparison
+    controller.apply_settings(env_lattice)
+    for node in env_monitor_nodes.values():
+        node.clear_data()
+    env.params = env_params0
+    env.track(env_lattice)
+    for ws in ws_names:
+        env_params[ws].append(env_monitor_nodes[ws].get_data('env_params'))
+
             
 # Save data
 #------------------------------------------------------------------------------
 for ws in ws_names:
-    np.save('_output/data/phases_{}.npy'.format(ws), phases[ws])
+    np.save('_output/data/phases_{}.npy'.format(ws), ws_phases[ws])
     np.save('_output/data/transfer_mats_{}.npy'.format(ws), transfer_mats[ws])
     np.save('_output/data/moments_{}.npy'.format(ws), moments[ws])
-    
     np.save('_output/data/env_params_{}.npy'.format(ws), env_params[ws])
     np.save('_output/data/X_{}.npy'.format(ws), coords[ws])
+    
+np.save('_output/data/Sigma0_env.npy', env.cov())
+np.savetxt('_output/data/Sigma0.dat', np.cov(X0.T))
+np.savetxt('_output/data/X0.dat', X0)

@@ -10,6 +10,7 @@ from scipy.constants import speed_of_light
 # PyORBIT
 from bunch import Bunch
 from orbit.analysis import AnalysisNode, WireScannerNode
+from orbit.bunch_generators import TwissContainer, GaussDist2D, WaterBagDist2D, KVDist2D
 from orbit.envelope import Envelope
 from orbit.matrix_lattice import BaseMATRIX, MATRIX_Lattice
 from orbit_utils import Matrix
@@ -183,11 +184,11 @@ class PhaseController:
         index = self.get_node_index(node_name)
         return self.tracked_twiss[index, [1, 2]]    
         
-    def get_phases_at_ref_ws(self):
+    def get_ref_ws_phases(self):
         """Return phases (divided by 2pi) at reference wire-scanner."""
         return self.tracked_twiss[self.ref_ws_index, [1, 2]]    
         
-    def set_phases_at_ref_ws(self, nux, nuy, max_betas=(40., 40.), **kws):
+    def set_ref_ws_phases(self, nux, nuy, max_betas=(40., 40.), **kws):
         """Set phases (divided by 2pi) at reference wire-scanner.
         
         Here we use scipy.least_squares and sort of add the constraint by hand.
@@ -204,7 +205,7 @@ class PhaseController:
         def cost(quad_strengths):            
             self.set_quad_strengths(quad_strengths)
             self.track_twiss()
-            nux_calc, nuy_calc = self.get_phases_at_ref_ws()
+            nux_calc, nuy_calc = self.get_ref_ws_phases()
             residuals = np.array([nux_calc - nux, nuy_calc - nuy])
             max_betas_calc = self.get_max_betas() 
             penalty = 0
@@ -224,4 +225,42 @@ class PhaseController:
         return np.max(self.tracked_twiss[:self.ref_ws_index, 5:], axis=0)
     
     def get_betas_at_target(self):
+        """Return beta functions at end of RTBT."""
         return self.tracked_twiss[-1, 5:]
+    
+    def get_phases_for_scan(self, phase_coverage, nsteps):
+        """Return list of phases for scan. 
+        
+        First the horizontal phases are scanned, then the vertical.
+        """
+        nux0, nuy0 = self.get_ref_ws_phases()
+        window = 0.5 * phase_coverage
+        delta_nu_list = np.linspace(-window, window, nsteps) / 360
+        phases = []
+        for delta_nu in delta_nu_list:
+            phases.append([nux0 + delta_nu, nuy0])
+        for delta_nu in delta_nu_list:
+            phases.append([nux0, nuy0 + delta_nu]) 
+        return phases
+    
+
+def get_coord_array(kind, init_twiss, emittances, nparts, mode=1):
+    ax, ay, bx, by = init_twiss
+    ex, ey = emittances
+    if kind == 'danilov':
+        intrinsic_emittance = ex + ey
+        ex_frac = ex / intrinsic_emittance
+        env = Envelope(intrinsic_emittance, mode=mode)
+        env.fit_twiss2D(ax, ay, bx, by, ex_frac)
+        X = env.generate_dist(nparts)
+    else:
+        constructors = {'kv':KVDist2D, 
+                        'gaussian':GaussDist2D, 
+                        'waterbag':WaterBagDist2D}
+        (ax, ay, bx, by) = init_twiss
+        twissX = TwissContainer(ax, bx, ex)
+        twissY = TwissContainer(ay, by, ey)
+        kws = {'cut_off':3} if kind == 'gaussian' else {} 
+        dist_generator = constructors[kind](twissX, twissY, **kws)
+        X = np.array([dist_generator.getCoordinates() for _ in range(nparts)])
+    return X
