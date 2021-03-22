@@ -36,12 +36,12 @@ from utils import PhaseController, get_coord_array
 # Settings
 #------------------------------------------------------------------------------
 # General
-intensities = np.linspace(0, 5.0e14, 25)
+intensities = np.linspace(0, 5.0e14, 10)
 mass = 0.93827231 # GeV/c^2
 kin_energy = 0.811 # GeV
 bunch_length = 150.0 # [m]
 nparts = int(1e5)
-max_solver_spacing = 0.1
+max_solver_spacing = 0.2
 min_solver_spacing = 0.00001
 gridpts = (128, 128, 1)
 latfile = '_input/rtbt.lat'
@@ -58,7 +58,7 @@ init_twiss = (-8.082, 4.380, 23.373, 13.455) # (ax, ay, bx, by)
 # Scan
 ws_names = ['ws02', 'ws20', 'ws21', 'ws23', 'ws24']
 ref_ws_name = 'ws24' 
-nsteps = 15 # number of steps for each dimension
+nsteps = 5 # number of steps for each dimension
 wsbins = 50
 phase_coverage = 180 # [deg]
 max_betas = (40, 40) # (x, y)
@@ -108,31 +108,35 @@ ws_nodes = {ws_name: add_ws_node(lattice, ws_name, wsbins, diag_wire_angle)
 #------------------------------------------------------------------------------
 phases = controller.get_phases_for_scan(phase_coverage, nsteps)
 nscans = len(phases)
+measurements_per_scan = len(ws_names)
+total_measurements = nscans * measurements_per_scan
 
+I_scan_M, I_scan_moments = {}, {}
+for kind in bunch_kinds:
+    I_scan_M[kind] = np.zeros((len(intensities), total_measurements, 4, 4))
+    I_scan_moments[kind] = np.zeros((len(intensities), total_measurements, 3))
+    
 for scan_index, (nux, nuy) in enumerate(phases):
-    print 'Scan {} of {}.'.format(scan_index, 2 * nsteps)
+    print 'Scan {} of {}.'.format(scan_index + 1, nscans)
     print 'Setting phases: nux, nuy = {:.3f}, {:.3f}.'.format(nux, nuy)
     controller.set_ref_ws_phases(nux, nuy, max_betas, verbose=2)
     controller.track_twiss()
     controller.apply_settings(lattice)
     for kind in bunch_kinds:
         print '  Tracking {} bunch.'.format(kind)
-        transfer_mats, moments = {}, {}
-        for ws_name in ws_names:
-            transfer_mats[ws_name] = np.zeros((len(intensities), 16))
-            moments[ws_name] = np.zeros((len(intensities), 3))
         for i, intensity in enumerate(intensities):
             print '    Intensity = {:.2e}'.format(intensity)
             bunch, params_dict = reset_bunch(kind, intensity)
             lattice.trackBunch(bunch, params_dict)
-            for ws_name in ws_names:                
-                transfer_mats[ws_name][i] = controller.get_transfer_matrix(ws_name).ravel()
-                moments[ws_name][i] = ws_nodes[ws_name].get_moments()   
-            np.save('_output/data/{}/transfer_matrx_for_each_intensity-scan{}.npy'.format(kind, scan_index), transfer_mats[ws_name])
-            np.save('_output/data/{}/moments_for_each_intensity-scan{}.npy'.format(kind, scan_index), moments[ws_name])
-            
-        np.save('_output/data/{}/X0.npy'.format(kind), X0[kind])   
-        np.save('_output/data/{}/sigma0.npy'.format(kind), np.cov(X0[kind].T))    
-        
+            for ws_number, ws_name in enumerate(ws_names):    
+                j = scan_index * measurements_per_scan + ws_number
+                I_scan_M[kind][i, j] = controller.get_transfer_matrix(ws_name)
+                I_scan_moments[kind][i, j] = ws_nodes[ws_name].get_moments()
+                
+for kind in bunch_kinds:
+    np.save('_output/data/{}/I_scan_M.npy'.format(kind), I_scan_M[kind])
+    np.save('_output/data/{}/I_scan_moments.npy'.format(kind), I_scan_moments[kind])
+    np.save('_output/data/{}/X0.npy'.format(kind), X0[kind])   
+    np.save('_output/data/{}/Sigma0.npy'.format(kind), np.cov(X0[kind].T))         
 np.save('_output/data/phases.npy', phases)
 np.save('_output/data/intensities.npy', intensities)
