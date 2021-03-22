@@ -101,10 +101,16 @@ def intrinsic_emittances(Sigma):
     return emittances
     
     
-def get_twiss2D(Sigma):
-    """Return the 2D Twiss parameters from the covariance matrix."""
+def apparent_emittances(Sigma):
+    """Return the apparent emittances from the covariance matrix."""
     ex = np.sqrt(la.det(Sigma[:2, :2]))
     ey = np.sqrt(la.det(Sigma[2:, 2:]))
+    return ex, ey
+    
+    
+def get_twiss2D(Sigma):
+    """Return the 2D Twiss parameters from the covariance matrix."""
+    ex, ey = apparent_emittances(Sigma)
     bx = Sigma[0, 0] / ex
     by = Sigma[2, 2] / ey
     ax = -Sigma[0, 1] / ex
@@ -113,9 +119,9 @@ def get_twiss2D(Sigma):
     
     
 def get_twiss4D(Sigma, mode):
-    """Return the 4D Twiss parameters from the covariance matrix."""
-    ex = np.sqrt(la.det(Sigma[:2, :2]))
-    ey = np.sqrt(la.det(Sigma[2:, 2:]))
+    """Return the 4D Twiss parameters from the covariance matrix. This
+    assumes intrinsic emittances corresponding to the chosen mode is the
+    larger of the two calculated."""
     e1, e2 = intrinsic_emittances(Sigma)
     eps = max([e1, e2])
     bx = Sigma[0, 0] / eps
