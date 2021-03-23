@@ -194,9 +194,6 @@ class PhaseController:
         Here we use scipy.least_squares and sort of add the constraint by hand.
         We create a penalty function which starts at zero and scales with the
         severity of the constraint violation.
-        
-        To do: a constraint on the beta functions at the target may need to be
-        added.
         """
         Brho = hf.get_Brho(self.mass, self.kin_energy)
         lb = rtbt_quad_coeff_lb / Brho
@@ -223,10 +220,6 @@ class PhaseController:
     def get_max_betas(self):
         """Get maximum (beta_x, beta_y) from s=0 to reference wire-scanner."""
         return np.max(self.tracked_twiss[:self.ref_ws_index, 5:], axis=0)
-    
-    def get_betas_at_target(self):
-        """Return beta functions at end of RTBT."""
-        return self.tracked_twiss[-1, 5:]
     
     def get_phases_for_scan(self, phase_coverage, nsteps):
         """Return list of phases for scan. 
