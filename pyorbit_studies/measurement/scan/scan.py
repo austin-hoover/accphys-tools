@@ -173,11 +173,11 @@ for scan_index, (nux, nuy) in enumerate(scan_phases):
 # Save data
 #------------------------------------------------------------------------------
 for ws in ws_names:
-    np.save('_output/data/phases_{}.npy'.format(ws), ws_phases[ws])
-    np.save('_output/data/transfer_mats_{}.npy'.format(ws), transfer_mats[ws])
-    np.save('_output/data/moments_{}.npy'.format(ws), moments[ws])
-    np.save('_output/data/env_params_{}.npy'.format(ws), env_params[ws])
-    np.save('_output/data/X_{}.npy'.format(ws), coords[ws])
+    np.save('_output/data/{}/phases.npy'.format(ws), ws_phases[ws])
+    np.save('_output/data/{}/transfer_mats.npy'.format(ws), transfer_mats[ws])
+    np.save('_output/data/{}/moments.npy'.format(ws), moments[ws])
+    np.save('_output/data/{}/env_params.npy'.format(ws), env_params[ws])
+    np.save('_output/data/{}/coords.npy'.format(ws), coords[ws])
     
 np.save('_output/data/Sigma0_env.npy', env.cov())
 np.savetxt('_output/data/Sigma0.dat', np.cov(X0.T))
