@@ -132,6 +132,7 @@ class PhaseController:
         return TEAPOT_MATRIX_Lattice(self.lattice, bunch)
                 
     def track_twiss(self):
+        """Track twiss parameters through the lattice."""
         ax0, ay0, bx0, by0 = self.init_twiss
         tracked_twiss_x = self.matlat.trackTwissData(ax0, bx0, direction='x')
         tracked_twiss_y = self.matlat.trackTwissData(ay0, by0, direction='y')
@@ -163,10 +164,12 @@ class PhaseController:
         self.matlat = self.get_matrix_lattice()
         
     def apply_settings(self, lattice):
-        """Adjust quad strengths in `lattice` to match the scanner state."""
+        """Adjust quad strengths in `lattice` to reflect the current controller
+        state."""
         set_rtbt_quad_strengths(lattice, self.get_quad_strengths())
         
     def get_transfer_matrix(self, node_name):
+        """Calculate linear transfer matrix up to a certain node."""
         matrix = Matrix(7, 7)
         matrix.unit()
         for matrix_node in self.matlat.getNodes():
@@ -181,19 +184,30 @@ class PhaseController:
         return M  
     
     def get_phases(self, node_name):
+        """Return phases (divided by 2pi) at a certain node."""
         index = self.get_node_index(node_name)
         return self.tracked_twiss[index, [1, 2]]    
         
     def get_ref_ws_phases(self):
         """Return phases (divided by 2pi) at reference wire-scanner."""
         return self.tracked_twiss[self.ref_ws_index, [1, 2]]    
-        
+
     def set_ref_ws_phases(self, nux, nuy, max_betas=(40., 40.), **kws):
         """Set phases (divided by 2pi) at reference wire-scanner.
         
-        Here we use scipy.least_squares and sort of add the constraint by hand.
-        We create a penalty function which starts at zero and scales with the
-        severity of the constraint violation.
+        The constraint that the beta functions not be too large before the
+        reference wire-scanner is added "by hand". We add a penalty to the
+        cost function which scales with the severity of the constraint 
+        violation.
+        
+        Parameters
+        ----------
+        nux, nuy : float
+            Desired phases (divided by 2pi).
+        max_betas : (max_beta_x, max_beta_y)
+            Maximum beta functions allowed before reference wire-scanner.
+        **kws
+            Key word arguments for `scipy.optimize.least_squares`.
         """
         Brho = hf.get_Brho(self.mass, self.kin_energy)
         lb = rtbt_quad_coeff_lb / Brho
@@ -237,8 +251,23 @@ class PhaseController:
         return phases
     
 
-def get_coord_array(kind, init_twiss, emittances, nparts, mode=1):
-    ax, ay, bx, by = init_twiss
+def get_coord_array(kind, twiss, emittances, nparts, mode=1):
+    """Return transverse bunch coordinate array given 2D Twiss parameters.
+    
+    Parameters
+    ----------
+    kind : {'danilov', 'kv', 'gaussian', 'waterbag'}
+        The kind of distribution.
+    init_twiss : (alpha_x, alpha_y, beta_x, beta_y)
+        The 2D Twiss parameters.
+    emittances : (eps_x, eps_y)
+        The r.m.s. emittances.
+    nparts : int
+        Number of macroparticles.
+    mode : {1, 2}
+        The rotational mode if the Danilov distribution is chosen.
+    """
+    ax, ay, bx, by = twiss
     ex, ey = emittances
     if kind == 'danilov':
         intrinsic_emittance = ex + ey
