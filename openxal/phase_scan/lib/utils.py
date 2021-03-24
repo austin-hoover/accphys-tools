@@ -11,7 +11,7 @@ from mathfuncs import subtract, norm, step_func, dot, put_angle_in_range
 
 
 # Module level variables
-init_twiss = {'ax': -1.378, 'bx': 6.243, 'ay':0.645, 'by':10.354} # RTBT entrance
+init_twiss = {'ax': -1.378, 'ay':0.645, 'bx': 6.243, 'by':10.354} # RTBT entrance
 design_betas_at_target = (57.705, 7.909)
 
 

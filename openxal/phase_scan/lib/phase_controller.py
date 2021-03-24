@@ -13,12 +13,11 @@ from xal.extension.solver.SolveStopperFactory import maxEvaluationsStopper
 from xal.extension.solver.algorithm import SimplexSearchAlgorithm
 
 from mathfuncs import subtract, norm, step_func, put_angle_in_range
-from utils import get_trial_vals, minimize
+from utils import get_trial_vals, minimize, init_twiss
 
 #------------------------------------------------------------------------------
-
-
-# Quadrupoles with independent power supplies
+rtbt_ws_ids = ['RTBT_Diag:WS02', 'RTBT_Diag:WS20', 'RTBT_Diag:WS21', 
+               'RTBT_Diag:WS23', 'RTBT_Diag:WS24']
 rtbt_quad_ids = [
     'RTBT_Mag:QH02', 'RTBT_Mag:QV03', 'RTBT_Mag:QH04', 'RTBT_Mag:QV05', 
     'RTBT_Mag:QH06', 'RTBT_Mag:QV07', 'RTBT_Mag:QH08', 'RTBT_Mag:QV09', 
@@ -28,7 +27,7 @@ rtbt_quad_ids = [
     'RTBT_Mag:QH22', 'RTBT_Mag:QV23', 'RTBT_Mag:QH24', 'RTBT_Mag:QV25',    
     'RTBT_Mag:QH26', 'RTBT_Mag:QV27', 'RTBT_Mag:QH28', 'RTBT_Mag:QV29', 
     'RTBT_Mag:QH30']
-ind_quad_ids = [
+ind_quad_ids = [ # quads with independent power supplies
     'RTBT_Mag:QH02', 'RTBT_Mag:QV03', 'RTBT_Mag:QH04', 'RTBT_Mag:QV05', 
     'RTBT_Mag:QH06', 'RTBT_Mag:QH12', 'RTBT_Mag:QV13', 'RTBT_Mag:QH14', 
     'RTBT_Mag:QV15', 'RTBT_Mag:QH16', 'RTBT_Mag:QV17', 'RTBT_Mag:QH18', 
@@ -48,7 +47,18 @@ ind_quads_after_ws24_ub = [5.4775, 0, 5.4775, 0, 5.4775] # Don't know if these a
 
 class PhaseController:
     """Class to control phases at one wire-scanner in the RTBT."""
-    def __init__(self, sequence, ref_ws_id):
+    def __init__(self, sequence, ref_ws_id, init_twiss):
+        """Constructor.
+        
+        Parameters
+        ----------
+        sequence : AcceleratorSeq
+            Sequence representing the RTBT.
+        ref_ws_id : str
+            Node id of reference wire-scanner.
+        init_twiss : dict
+            Dictionary containing 'ax', 'ay', 'bx', 'by', 'ex', 'ey'.
+        """
         self.sequence = sequence
         self.scenario = Scenario.newScenarioFor(sequence)
         self.algorithm = AlgorithmFactory.createEnvelopeTracker(sequence)
@@ -56,26 +66,29 @@ class PhaseController:
         self.probe = ProbeFactory.getEnvelopeProbe(sequence, self.algorithm)
         self.probe.setBeamCurrent(0.0)
         self.scenario.setProbe(self.probe)
-        self.Sigma = CovarianceMatrix()
-        self.probe.setCovariance(self.Sigma)
+        self.init_twiss = init_twiss
+        self.initialize_envelope()
+        self.track()
+        self.channel_factory = ChannelFactory.defaultFactory()
         self.ref_ws_id = ref_ws_id
         self.ref_ws_node = sequence.getNodeWithId(ref_ws_id)
         self.default_field_strengths_before_ws24 = self.get_field_strengths(ind_quad_ids_before_ws24)
         self.default_field_strengths_after_ws24 = self.get_field_strengths(ind_quad_ids_after_ws24)
-        self.track()
-        self.channel_factory = ChannelFactory.defaultFactory()
 
-    def set_init_twiss(self, alpha_x, alpha_y, beta_x, beta_y, eps_x, eps_y):
-        """Set Twiss parameters at lattice entrance."""
-        twissX = Twiss(alpha_x, beta_x, eps_x)
-        twissY = Twiss(alpha_y, beta_y, eps_y)
-        twissZ = Twiss(0, 0, 0)
+    def initialize_envelope(self):
+        """Construct covariance matrix at s=0."""
+        self.scenario.resetProbe()
+        ax, bx, ex = [self.init_twiss[key] for key in ('ax', 'bx', 'ex')]
+        ay, by, ey = [self.init_twiss[key] for key in ('ay', 'by', 'ey')]
+        twissX = Twiss(ax, bx, ex)
+        twissY = Twiss(ay, by, ey)
+        twissZ = Twiss(0, 1, 0)
         Sigma = CovarianceMatrix().buildCovariance(twissX, twissY, twissZ)
         self.probe.setCovariance(Sigma)
         
     def track(self):
         """Return envelope trajectory through the lattice."""
-        self.scenario.resetProbe()
+        self.initialize_envelope()
         self.scenario.run()
         self.trajectory = self.probe.getTrajectory()
         self.adaptor = SimpleSimResultsAdaptor(self.trajectory) 
@@ -95,6 +108,31 @@ class PhaseController:
             twiss.append([nux, nuy, ax, ay, bx, by, ex, ey])
         return twiss
     
+    def get_moments_at(self, node_id):
+        """Return tracked [<xx>, <yy>, <xy>] covariances at a certain node."""
+        state = self.trajectory.statesForElement(node_id)[0]
+        Sigma = state.getCovarianceMatrix()
+        return [Sigma.getElem(0, 0), Sigma.getElem(2, 2), Sigma.getElem(0, 2)]
+    
+    def get_transfer_matrix_at(self, node_id):
+        """Return the transfer matrix from s=0 to a certain node."""
+        scenario = Scenario.newScenarioFor(self.sequence)
+        algorithm = AlgorithmFactory.createTransferMapTracker(self.sequence)
+        probe = ProbeFactory.getTransferMapProbe(self.sequence, algorithm)
+        scenario.setProbe(probe)
+        scenario.run()
+        trajectory = probe.getTrajectory()
+        states = trajectory.getStatesViaIndexer()
+        state = trajectory.statesForElement(node_id)[0]
+        transfer_matrix = state.getTransferMap().getFirstOrder()
+        M = []
+        for i in range(4):
+            row = []
+            for j in range(4):
+                row.append(transfer_matrix.getElem(i, j))
+            M.append(row)
+        return M
+        
     def get_max_betas(self, start_id='RTBT_Mag:QH02', stop_id='RTBT_Diag:WS24'):
         """Get maximum beta functions from `start_id to `stop_id`."""
         lo = self.trajectory.indicesForElement(start_id)[0]

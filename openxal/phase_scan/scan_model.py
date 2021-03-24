@@ -2,9 +2,7 @@
 This script scans the phases at one wire-scanner in the RTBT in the OpenXAL 
 linear model. 
 """
-from xal.smf import AcceleratorSeq 
-
-from lib.phase_controller import PhaseController
+from lib.phase_controller import PhaseController, rtbt_ws_ids
 from lib.utils import loadRTBT, write_traj_to_file
 from lib.utils import init_twiss, design_betas_at_target
 from lib.mathfuncs import radians
@@ -16,19 +14,23 @@ from lib.mathfuncs import radians
 sequence = loadRTBT()
 
 # Create phase controller
-ref_ws_id = 'RTBT_Diag:WS24'
-controller = PhaseController(sequence, ref_ws_id)
-
-# Twiss parameters at RTBT entrance
-epsx = epsy = 20e-6 # arbitrary [m*rad] 
-ax0, ay0, bx0, by0 = [init_twiss[key] for key in ('ax', 'ay', 'bx', 'by')]
-controller.set_init_twiss(ax0, ay0, bx0, by0, epsx, epsy)
+ref_ws_id = 'RTBT_Diag:WS24' # scan phases at this wire-scanner
+init_twiss['ex'] = init_twiss['ey'] = 20e-6 # arbitrary [m*rad] 
+controller = PhaseController(sequence, ref_ws_id, init_twiss)
 
 # Settings
 phase_coverage = radians(180)
 scans_per_dim = 10
 beta_lims = (40, 40)
 beta_lim_after_ws24 = 100
+
+# Save wire-scanner indices in trajectory (for plotting)
+file = open('_output/ws_index_in_trajectory.dat', 'w')
+for ws_id in rtbt_ws_ids:
+    index = controller.trajectory.indicesForElement(ws_id)[0]
+    file.write('name = {}, index = {}\n'.format(ws_id, index))
+file.close()
+
 
 # Scan
 #------------------------------------------------------------------------------
