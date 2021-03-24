@@ -6,3 +6,5 @@
 *.png
 *.txt
 *.mp4
+*$py.class
+.jython_cache/packages/*
