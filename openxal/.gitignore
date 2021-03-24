@@ -1,6 +1,0 @@
-.ipynb_checkpoints/*
-lib/.ipynb_checkpoints/*
-.jython_cache/*
-*.dat
-*.png
-/_data/*
