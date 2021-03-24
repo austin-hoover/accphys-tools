@@ -7,4 +7,4 @@
 *.txt
 *.mp4
 *$py.class
-.jython_cache/packages/*
+/openxal/.jython_cache/packages/*
