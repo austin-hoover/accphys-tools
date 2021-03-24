@@ -3,7 +3,6 @@ This script scans the phases at one wire-scanner in the RTBT in the OpenXAL
 linear model. 
 """
 from xal.smf import AcceleratorSeq 
-from xal.tools.beam import Twiss
 
 from lib.phase_controller import PhaseController
 from lib.utils import loadRTBT, write_traj_to_file
@@ -21,16 +20,15 @@ ref_ws_id = 'RTBT_Diag:WS24'
 controller = PhaseController(sequence, ref_ws_id)
 
 # Twiss parameters at RTBT entrance
-emittance = 20e-6 # arbitrary [m*rad] 
-twissX = Twiss(init_twiss['ax'], init_twiss['bx'], emittance)
-twissY = Twiss(init_twiss['ay'], init_twiss['by'], emittance)
-controller.set_init_twiss(twissX, twissY)
+epsx = epsy = 20e-6 # arbitrary [m*rad] 
+ax0, ay0, bx0, by0 = [init_twiss[key] for key in ('ax', 'ay', 'bx', 'by')]
+controller.set_init_twiss(ax0, ay0, bx0, by0, epsx, epsy)
 
 # Settings
 phase_coverage = radians(180)
 scans_per_dim = 10
 beta_lims = (40, 40)
-beta_lim_ws24_to_target = 100
+beta_lim_after_ws24 = 100
 
 # Scan
 #------------------------------------------------------------------------------
@@ -50,8 +48,7 @@ for i, (mux, muy) in enumerate(phases, start=1):
     print 'Setting phases at {}.'.format(ref_ws_id)
     controller.set_ref_ws_phases(mux, muy, beta_lims, verbose=1)
     print 'Setting betas at target.'
-    controller.set_betas_at_target(design_betas_at_target, 
-                                   beta_lim_ws24_to_target, 
+    controller.set_betas_at_target(design_betas_at_target, beta_lim_after_ws24, 
                                    verbose=1)
     
     # Save optics

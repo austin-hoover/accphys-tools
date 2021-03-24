@@ -19,6 +19,15 @@ from utils import get_trial_vals, minimize
 
 
 # Quadrupoles with independent power supplies
+rtbt_quad_ids = [
+    'RTBT_Mag:QH02', 'RTBT_Mag:QV03', 'RTBT_Mag:QH04', 'RTBT_Mag:QV05', 
+    'RTBT_Mag:QH06', 'RTBT_Mag:QV07', 'RTBT_Mag:QH08', 'RTBT_Mag:QV09', 
+    'RTBT_Mag:QH10', 'RTBT_Mag:QV11', 'RTBT_Mag:QH12', 'RTBT_Mag:QV13', 
+    'RTBT_Mag:QH14', 'RTBT_Mag:QV15', 'RTBT_Mag:QH16', 'RTBT_Mag:QV17', 
+    'RTBT_Mag:QH18', 'RTBT_Mag:QV19', 'RTBT_Mag:QH20', 'RTBT_Mag:QV21', 
+    'RTBT_Mag:QH22', 'RTBT_Mag:QV23', 'RTBT_Mag:QH24', 'RTBT_Mag:QV25',    
+    'RTBT_Mag:QH26', 'RTBT_Mag:QV27', 'RTBT_Mag:QH28', 'RTBT_Mag:QV29', 
+    'RTBT_Mag:QH30']
 ind_quad_ids = [
     'RTBT_Mag:QH02', 'RTBT_Mag:QV03', 'RTBT_Mag:QH04', 'RTBT_Mag:QV05', 
     'RTBT_Mag:QH06', 'RTBT_Mag:QH12', 'RTBT_Mag:QV13', 'RTBT_Mag:QH14', 
@@ -56,9 +65,12 @@ class PhaseController:
         self.track()
         self.channel_factory = ChannelFactory.defaultFactory()
 
-    def set_init_twiss(self, twissX, twissY):
+    def set_init_twiss(self, alpha_x, alpha_y, beta_x, beta_y, eps_x, eps_y):
         """Set Twiss parameters at lattice entrance."""
-        Sigma = CovarianceMatrix().buildCovariance(twissX, twissY, Twiss(0, 0, 0))
+        twissX = Twiss(alpha_x, beta_x, eps_x)
+        twissY = Twiss(alpha_y, beta_y, eps_y)
+        twissZ = Twiss(0, 0, 0)
+        Sigma = CovarianceMatrix().buildCovariance(twissX, twissY, twissZ)
         self.probe.setCovariance(Sigma)
         
     def track(self):
@@ -270,14 +282,11 @@ class PhaseController:
             Number of phases to scan for each dimension (x, y). The total 
             number of scans will be 2 * `scans_per_dim`.
         """
-        # Put phases in range [0, 2pi]
-        self.set_field_strengths(ind_quad_ids_before_ws24, self.default_field_strengths_before_ws24)
-        
-        # Get phase advances for default optics
+        self.restore_default_optics()
         mux0, muy0 = self.get_ref_ws_phases()
         
         def _get_phases_for_scan_1d(dim='x'):
-            phase = mux0 if dim == 'x' else muy0
+            phase = {'x': mux0, 'y': muy0}[dim]
             min_phase = put_angle_in_range(phase - 0.5 * phase_coverage)
             max_phase = put_angle_in_range(phase + 0.5 * phase_coverage)
             # Difference between and max phase is always <= 180 degrees
@@ -298,3 +307,8 @@ class PhaseController:
         for muy in _get_phases_for_scan_1d('y'):
             phases.append([mux0, muy])
         return phases
+
+    def restore_default_optics(self):
+        """Return quad strengths to their default settings."""
+        self.set_field_strengths(ind_quad_ids_before_ws24, self.default_field_strengths_before_ws24)
+        self.set_field_strengths(ind_quad_ids_after_ws24, self.default_field_strengths_after_ws24)
