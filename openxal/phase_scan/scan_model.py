@@ -1,7 +1,6 @@
 """
-This script scans the phases at WS24 in the RTBT in the OpenXAL linear model.
-Each phase (horizontal and vertical) is scanned through the range 
-[mu - 90 deg, mu + 90 deg]. 
+This script scans the phases at one wire-scanner in the RTBT in the OpenXAL 
+linear model. 
 """
 from xal.smf import AcceleratorSeq 
 from xal.tools.beam import Twiss
@@ -25,22 +24,13 @@ controller = PhaseController(sequence, ref_ws_id)
 emittance = 20e-6 # arbitrary [m*rad] 
 twissX = Twiss(init_twiss['ax'], init_twiss['bx'], emittance)
 twissY = Twiss(init_twiss['ay'], init_twiss['by'], emittance)
-controller.set_twiss(twissX, twissY)
+controller.set_init_twiss(twissX, twissY)
 
-# Scan settings
+# Settings
 phase_coverage = radians(180)
 scans_per_dim = 10
 beta_lims = (40, 40)
-
-# Save indices of wire-scanners in trajectory
-controller.track()
-file = open('_output/ws_index_in_trajectory.dat', 'w')
-for i in ['02', '20', '21', '23', '24']:
-    ws_id = 'RTBT_Diag:WS' + i
-    index = controller.trajectory.indicesForElement(ws_id)[0]
-    file.write('name={}, index={}\n'.format(ws_id, index))
-file.close()
-
+beta_lim_ws24_to_target = 100
 
 # Scan
 #------------------------------------------------------------------------------
@@ -60,7 +50,9 @@ for i, (mux, muy) in enumerate(phases, start=1):
     print 'Setting phases at {}.'.format(ref_ws_id)
     controller.set_ref_ws_phases(mux, muy, beta_lims, verbose=1)
     print 'Setting betas at target.'
-    controller.set_betas_at_target(design_betas_at_target, verbose=1)
+    controller.set_betas_at_target(design_betas_at_target, 
+                                   beta_lim_ws24_to_target, 
+                                   verbose=1)
     
     # Save optics
     filename = '_output/twiss{}.dat'.format(i)

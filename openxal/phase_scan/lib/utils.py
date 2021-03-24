@@ -62,6 +62,9 @@ def minimize(scorer, x0, var_names, bounds, maxiters=1000, tol=1e-8):
         the size of x0 or be a scalar; in the latter case the bound will be the 
         same for all variables.
     """ 
+    if len(x0) != len(var_names):
+        raise ValueError('Parameter list and variable name list have different length.')
+    
     lb, ub = bounds
     if type(lb) in [float, int]:
         lb = len(x0) * [lb]

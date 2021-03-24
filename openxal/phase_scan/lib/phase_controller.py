@@ -1,5 +1,6 @@
 import math
 
+from xal.ca import Channel, ChannelFactory
 from xal.smf import Accelerator, AcceleratorSeq 
 from xal.model.probe import Probe
 from xal.model.probe.traj import Trajectory
@@ -14,23 +15,26 @@ from xal.extension.solver.algorithm import SimplexSearchAlgorithm
 from mathfuncs import subtract, norm, step_func, put_angle_in_range
 from utils import get_trial_vals, minimize
 
+#------------------------------------------------------------------------------
 
-# Independent quadrupoles before Q25
-quad_ids = ['RTBT_Mag:QH02', 'RTBT_Mag:QV03', 'RTBT_Mag:QH04', 
-            'RTBT_Mag:QV05', 'RTBT_Mag:QH06', 'RTBT_Mag:QH12',
-            'RTBT_Mag:QV13', 'RTBT_Mag:QH14', 'RTBT_Mag:QV15', 
-            'RTBT_Mag:QH16', 'RTBT_Mag:QV17', 'RTBT_Mag:QH18', 
-            'RTBT_Mag:QV19']
-quad_coeff_lb = [0, -5.4775, 0, -7.96585, 0, 0, -7.0425, 
-                 0, -5.4775, 0, -5.4775, 0, -7.0425]
-quad_coeff_ub = [5.4775, 0, 7.0425, 0, 7.96585, 7.0425, 
-                 0, 5.4775, 0, 5.4775, 0, 7.0425, 0]
 
-# Last four quadrupoles
-last_four_quad_ids = ['RTBT_Mag:QV27', 'RTBT_Mag:QH28', 'RTBT_Mag:QV29', 
-                      'RTBT_Mag:QH30']
-last_four_quad_coeff_lb = [-5.4775, 0, -5.4775, 0] # Don't know if these are correct... using them for now.
-last_four_quad_coeff_ub = [0, 5.4775, 0, 5.4775]
+# Quadrupoles with independent power supplies
+ind_quad_ids = [
+    'RTBT_Mag:QH02', 'RTBT_Mag:QV03', 'RTBT_Mag:QH04', 'RTBT_Mag:QV05', 
+    'RTBT_Mag:QH06', 'RTBT_Mag:QH12', 'RTBT_Mag:QV13', 'RTBT_Mag:QH14', 
+    'RTBT_Mag:QV15', 'RTBT_Mag:QH16', 'RTBT_Mag:QV17', 'RTBT_Mag:QH18', 
+    'RTBT_Mag:QV19', 'RTBT_Mag:QH26', 'RTBT_Mag:QV27', 'RTBT_Mag:QH28',
+    'RTBT_Mag:QV29', 'RTBT_Mag:QH30']
+ind_quad_ids_before_ws24 = ind_quad_ids[:-5]
+ind_quad_ids_after_ws24 = ind_quad_ids[-5:]
+
+# Limits on quadrupole field strengths [T/m]
+ind_quads_before_ws24_lb = [0, -5.4775, 0, -7.96585, 0, 0, -7.0425, 
+                            0, -5.4775, 0, -5.4775, 0, -7.0425]
+ind_quads_before_ws24_ub = [5.4775, 0, 7.0425, 0, 7.96585, 7.0425, 
+                            0, 5.4775, 0, 5.4775, 0, 7.0425, 0]
+ind_quads_after_ws24_lb = [0, -5.4775, 0, -5.4775, 0]    # Don't know if these are correct... using them for now.
+ind_quads_after_ws24_ub = [5.4775, 0, 5.4775, 0, 5.4775] # Don't know if these are correct... using them for now.
 
 
 class PhaseController:
@@ -47,11 +51,13 @@ class PhaseController:
         self.probe.setCovariance(self.Sigma)
         self.ref_ws_id = ref_ws_id
         self.ref_ws_node = sequence.getNodeWithId(ref_ws_id)
-        self.default_field_strengths = self.get_field_strengths()
-        self.trajectory = None      
+        self.default_field_strengths_before_ws24 = self.get_field_strengths(ind_quad_ids_before_ws24)
+        self.default_field_strengths_after_ws24 = self.get_field_strengths(ind_quad_ids_after_ws24)
+        self.track()
+        self.channel_factory = ChannelFactory.defaultFactory()
 
-    def set_twiss(self, twissX, twissY):
-        """Set initial Twiss parameters."""
+    def set_init_twiss(self, twissX, twissY):
+        """Set Twiss parameters at lattice entrance."""
         Sigma = CovarianceMatrix().buildCovariance(twissX, twissY, Twiss(0, 0, 0))
         self.probe.setCovariance(Sigma)
         
@@ -67,8 +73,6 @@ class PhaseController:
         
     def get_twiss(self):
         """Get Twiss parameters at every state in the trajectory."""
-        if self.trajectory is None:
-            self.track()
         twiss = []
         for state in self.states:
             twissX, twissY, _ = self.adaptor.computeTwissParameters(state)
@@ -81,8 +85,6 @@ class PhaseController:
     
     def get_max_betas(self, start_id='RTBT_Mag:QH02', stop_id='RTBT_Diag:WS24'):
         """Get maximum beta functions from `start_id to `stop_id`."""
-        if self.trajectory is None:
-            self.track()
         lo = self.trajectory.indicesForElement(start_id)[0]
         hi = -1 if stop_id is None else self.trajectory.indicesForElement(stop_id)[-1]
         twiss = self.get_twiss()
@@ -94,63 +96,80 @@ class PhaseController:
     
     def get_betas_at_target(self):
         """Get beta functions at the target."""
-        if self.trajectory is None:
-            self.track()
-        twiss = self.get_twiss()
-        return twiss[-1][4:6]
+        return self.get_twiss()[-1][4:6]
     
     def set_field_strength(self, quad_id, field_strength):
-        """Set field strength [T/m] of model quad element."""
+        """Set field strength [T/m] of model quad."""
         node = self.sequence.getNodeWithId(quad_id)
         for elem in self.scenario.elementsMappedTo(node): 
             elem.setMagField(field_strength)
-            
-    def get_field_strength(self, quad_id):
-        """Get field strength [T/m] of model quad element."""
-        node = self.sequence.getNodeWithId(quad_id)
-        return self.scenario.elementsMappedTo(node)[0].getMagField()
     
-    def _set_field_strengths(self, quad_ids, field_strengths):
-        """Set field strengths [T/m] of list of model quad elements."""
+    def set_field_strengths(self, quad_ids, field_strengths):
+        """Set field strengths [T/m] of model quads."""
         if type(field_strengths) is float:
             field_strengths = len(quad_ids) * [field_strengths]
         for quad_id, field_strength in zip(quad_ids, field_strengths):
             self.set_field_strength(quad_id, field_strength)
-    
-    def set_field_strengths(self, field_strengths): 
-        """Set field strengths [T/m] of model quad elements Q03 through Q25.
-        
-        Note that only 13 strengths are needed as inputs since some magnets 
-        share power supplies.
-        """
-        self._set_field_strengths(quad_ids, field_strengths)            
-        (B02, B03, B04, B05, B06, B12,
-         B13, B14, B15, B16, B17, B18, B19) = field_strengths  
-        self._set_field_strengths(['RTBT_Mag:QV07', 'RTBT_Mag:QV09', 'RTBT_Mag:QV11'], B05)
-        self._set_field_strengths(['RTBT_Mag:QH08', 'RTBT_Mag:QH10'], B06)
-        self._set_field_strengths(['RTBT_Mag:QH20', 'RTBT_Mag:QH22', 'RTBT_Mag:QH24'], B18)
-        self._set_field_strengths(['RTBT_Mag:QV21', 'RTBT_Mag:QV23', 'RTBT_Mag:QV25'], B19)
             
-    def set_last_four_field_strengths(field_strenths):
-        """Set the field strengths of the last four model quads elements."""
-        for quad_id, field_strength in zip(last_four_quad_ids, field_strengths):
-            self.controller.set_field_strength(quad_id, field_strength)
+        def share_power(dep_quad_ids, indep_quad_id):
+            shared_field_strength = self.get_field_strength(indep_quad_id)
+            for dep_quad_id in dep_quad_ids:
+                self.set_field_strength(dep_quad_id, shared_field_strength)
+                
+        share_power(['RTBT_Mag:QV07', 'RTBT_Mag:QV09', 'RTBT_Mag:QV11'], 'RTBT_Mag:QV05')
+        share_power(['RTBT_Mag:QH08', 'RTBT_Mag:QH10'], 'RTBT_Mag:QH06')
+        share_power(['RTBT_Mag:QH20', 'RTBT_Mag:QH22', 'RTBT_Mag:QH24'], 'RTBT_Mag:QH18')
+        share_power(['RTBT_Mag:QV21', 'RTBT_Mag:QV23', 'RTBT_Mag:QV25'], 'RTBT_Mag:QV19')
             
-    def get_field_strengths(self):
-        """Get current field strengths [T/m] of the model quad elements.
+    def update_live_quad(self, quad_id):
+        """Update live quad field strength to reflect the current model value.
         
-        Note that only 13 strengths are returned since some magnets 
-        share power supplies.
+        UNTESTED
         """
+        field_strength = self.get_field_strength(quad_id)
+        ch_Bset = self.channel_factory.getChannel(quad_id + ':B_Set')
+        ch_Bbook = self.channel_factory.getChannel(quad_id + ':B_Book')
+        ch_Bset.putVal(field_strength)
+        ch_Bbook.putVal(field_strength)
+        
+    def update_live_quads(self, quad_ids):
+        """Update quad field strengths to reflect the current model values."""
+        for quad_id in quad_ids:
+            update_live_quad(quad_id)            
+            
+    def get_field_strength(self, quad_id):
+        """Get field strength [T/m] of model quad."""
+        node = self.sequence.getNodeWithId(quad_id)
+        return self.scenario.elementsMappedTo(node)[0].getMagField()
+
+    def get_live_field_strength(self, quad_id):
+        """Get field strength [T/m] of live quad.
+        
+        UNTESTED
+        """
+        ch_Bset = self.channel_factory.getChannel(quad_id + ':B_Set')
+        return ch_Bset.getValFlt()
+            
+    def get_field_strengths(self, quad_ids):
+        """Get field strengths [T/m] of model quads."""
         return [self.get_field_strength(quad_id) for quad_id in quad_ids]
     
-    def set_live_field_strengths(self):
-        """Update the live quads to reflect the current model values."""
-        raise NotImplementedError
+    def get_live_field_strengths(self, quad_ids):
+        """Get field strengths [T/m] of live quads."""
+        return [get_live_field_strength(quad_id) for quad_id in quad_ids]
     
-    def set_ref_ws_phases(self, mux, muy, beta_lims=(40, 40), maxiters=1000, 
-                          tol=1e-8, verbose=2):
-        """Set x and y phases at reference wire-scanner."""        
+    def set_ref_ws_phases(self, mux, muy, beta_lims=(40, 40), verbose=0):
+        """Set x and y phases at reference wire-scanner.
+
+        Parameters
+        ----------
+        mux, muy : float
+            The desired phase advances at the reference wire-scanner.
+        beta_lims : (xmax, ymax)
+            Maximum beta functions to allow from s=0 to ws24.
+        verbose : int
+            If greater than zero, print a before/after summary.
+        """        
         class MyScorer(Scorer):
             def __init__(self, controller):
                 self.controller = controller
@@ -158,93 +177,103 @@ class PhaseController:
                 self.target_phases = [mux, muy]
                 
             def score(self, trial, variables):
-                field_strengths = get_trial_vals(trial, variables)            
-                self.controller.set_field_strengths(field_strengths)
+                field_strengths = get_trial_vals(trial, variables)   
+                self.controller.set_field_strengths(ind_quad_ids_before_ws24, field_strengths)
                 self.controller.track()
                 calc_phases = self.controller.get_ref_ws_phases()
                 cost = norm(subtract(calc_phases, self.target_phases))
-                cost *= (1 + self.penalty_function())**2
-                return cost
+                return cost + self.penalty_function()**2
             
             def penalty_function(self):
                 max_betas = self.controller.get_max_betas() 
                 penalty = 0.
-                penalty += step_func(max_betas[0] - self.beta_lims[0])
-                penalty += step_func(max_betas[1] - self.beta_lims[1])
+                for max_beta, beta_lim in zip(max_betas, self.beta_lims):
+                    penalty += step_func(max_beta - beta_lim)
                 return penalty
             
         scorer = MyScorer(self)
         var_names = ['B02', 'B03', 'B04', 'B05', 'B06', 'B12', 'B13', 'B14',
                      'B15', 'B16', 'B17', 'B18', 'B19']
-        bounds = (quad_coeff_lb, quad_coeff_ub)
-        init_field_strengths = self.default_field_strengths      
-        self.set_field_strengths(init_field_strengths)
-        field_strengths = minimize(scorer, init_field_strengths, var_names, bounds, maxiters, tol)
+        bounds = (ind_quads_before_ws24_lb, ind_quads_before_ws24_ub)
+        init_field_strengths = self.default_field_strengths_before_ws24      
+        self.set_field_strengths(ind_quad_ids_before_ws24, init_field_strengths)
+        field_strengths = minimize(scorer, init_field_strengths, var_names, bounds)
         if verbose > 0:
             print '  Desired phases : {:.3f}, {:.3f}'.format(mux, muy)
             print '  Calc phases    : {:.3f}, {:.3f}'.format(*self.get_ref_ws_phases())
             print '  Max betas (Q03 - WS24): {:.3f}, {:.3f}'.format(*self.get_max_betas())
             print '  Betas at target: {:.3f}, {:.3f}'.format(*self.get_betas_at_target())
-        if verbose > 1:
-            print solver.getScoreBoard()
         
     def get_ref_ws_phases(self):
         """Return x and y phases (mod 2pi) at reference wire-scanner."""
-        if self.trajectory is None:
-            self.track()
         ws_state = self.trajectory.statesForElement(self.ref_ws_id)[0]
         ws_phases = self.adaptor.computeBetatronPhase(ws_state)
         return ws_phases.getx(), ws_phases.gety()
     
-    def set_betas_at_target(self, betas, maxiters=1000, tol=1e-8, verbose=0,
-                            max_beta_ws24_to_target=100.):
-        """Vary last 4 quads to set the beta functions at the target.
+    def set_betas_at_target(self, betas, beta_lim_after_ws24=100., 
+                            verbose=0):
+        """Vary quads after last wire-scanner to set betas at the target.
         
-        To do: make sure the beta function isn't too large at any point before the
-        target... sometimes it shoots off to very high values.
+        Parameters
+        ----------
+        betas : (beta_x, beta_y)
+            The desired beta functions at the target.
+        beta_lim_after_ws24 : float
+            Maximum beta function to allow between ws24 and the target.
+        verbose : int
+            If greater than zero, print a before/after summary.
         """
         class MyScorer(Scorer):
             def __init__(self, controller):
                 self.controller = controller
                 self.betas = betas
+                self.beta_lim_after_ws24 = beta_lim_after_ws24
                 
             def score(self, trial, variables):
                 field_strengths = get_trial_vals(trial, variables)            
-                self.controller._set_field_strengths(last_four_quad_ids, field_strengths)
+                self.controller.set_field_strengths(ind_quad_ids_after_ws24, field_strengths)
                 self.controller.track()
                 residuals = subtract(self.betas, self.controller.get_betas_at_target())
                 cost = norm(residuals)
                 return norm(residuals) + self.penalty_function()**2
                 
             def penalty_function(self):
-                max_betas = self.controller.get_max_betas(start_id='RTBT_Diag:WS24', stop_id=None)
+                max_betas = self.controller.get_max_betas('RTBT_Diag:WS24', None)
                 penalty = 0.
-                penalty += step_func(max_betas[0] - max_beta_ws24_to_target) 
-                penalty += step_func(max_betas[1] - max_beta_ws24_to_target)                
+                for max_beta in max_betas:
+                    penalty += step_func(max_beta - self.beta_lim_after_ws24)            
                 return penalty
             
         scorer = MyScorer(self)
-        var_names = ['B27', 'B28', 'B29', 'B30']
+        var_names = ['B26', 'B27', 'B28', 'B29', 'B30']
         init_field_strengths = [self.get_field_strength(quad_id) 
-                                for quad_id in last_four_quad_ids]     
-        bounds = (last_four_quad_coeff_lb, last_four_quad_coeff_ub)
-        field_strengths = minimize(scorer, init_field_strengths, var_names, bounds, maxiters, tol)
-        self._set_field_strengths(last_four_quad_ids, field_strengths)
+                                for quad_id in ind_quad_ids_after_ws24]     
+        bounds = (ind_quads_after_ws24_lb, ind_quads_after_ws24_ub)
+        field_strengths = minimize(scorer, init_field_strengths, var_names, bounds)
+        self.set_field_strengths(ind_quad_ids_after_ws24, field_strengths)
         if verbose > 0:
             print '  Desired betas: {:.3f}, {:.3f}'.format(*betas)
             print '  Calc betas   : {:.3f}, {:.3f}'.format(*self.get_betas_at_target())
-        if verbose > 1:
-            print solver.getScoreBoard()
             
     def get_phases_for_scan(self, phase_coverage, npts):
-        """Create array of phases for scan.
+        """Create array of phases for scan. 
+        
+        Note that this will reset the model optics to their default settings.
 
-        The phases are centered on the default phase and have a range 
-        determined by `phase_coverage`. It is a pain because OpenXAL computes
-        the phases mod 2pi.
+        Parameters
+        ----------
+        phase_coverages : float
+            Range of phase advances to cover in radians. The phases are
+            centered on the default phase. It is a pain because OpenXAL 
+            computes the phases mod 2pi. 
+        scans_per_dim : int
+            Number of phases to scan for each dimension (x, y). The total 
+            number of scans will be 2 * `scans_per_dim`.
         """
         # Put phases in range [0, 2pi]
-        self.set_field_strengths(self.default_field_strengths)
+        self.set_field_strengths(ind_quad_ids_before_ws24, self.default_field_strengths_before_ws24)
+        
+        # Get phase advances for default optics
         mux0, muy0 = self.get_ref_ws_phases()
         
         def _get_phases_for_scan_1d(dim='x'):
