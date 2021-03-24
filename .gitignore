@@ -1,10 +1,10 @@
 *.pyc
 .DS_Store
 .ipynb_checkpoints
+.jython_cache
 *.npy
 *.dat
 *.png
 *.txt
 *.mp4
 *$py.class
-/openxal/phase_scan/.jython_cache/packages/*
