@@ -3,9 +3,7 @@ This script scans the phases at WS24 in the RTBT in the OpenXAL linear model.
 Each phase (horizontal and vertical) is scanned through the range 
 [mu - 90 deg, mu + 90 deg]. 
 """
-
-# To do: it's probably best to import everything you are using even though
-# it is already imported in the `lib` module.
+from xal.smf import AcceleratorSeq 
 from xal.tools.beam import Twiss
 
 from lib.phase_controller import PhaseController

@@ -46,16 +46,35 @@ def minimize(variables, scorer, solver, tol=1e-8):
     trial = solver.getScoreBoard().getBestSolution()
     return get_trial_vals(trial, variables)
 
-
-def solve(scorer, init_vals, var_names, bounds, maxiters=1000, tol=1e-8):
-    """Given a Scorer and the, initial conditions, set up the problem and
-    minimize the score using the simplex algorithm."""
+def minimize(scorer, x0, var_names, bounds, maxiters=1000, tol=1e-8):
+    """Minimize a multivariate function using the simplex algorithm.
+    
+    Parameters
+    ----------
+    scorer : Scorer subclass
+        Must implement method `score(trial, variables).`
+    x0 : list[float], shape (n,)
+        Initial guess.
+    var_names : list[str], shape(n,)
+        List of variable names.
+    bounds : 2-tuple of list
+        Lower and upper bounds on independent variables. Each array must match
+        the size of x0 or be a scalar; in the latter case the bound will be the 
+        same for all variables.
+    """ 
     lb, ub = bounds
+    if type(lb) in [float, int]:
+        lb = len(x0) * [lb]
+    if type(ub) in [float, int]:
+        ub = len(x0) * [ub]
     variables = [Variable(name, val, l, u) for name, val, l, u 
-                 in zip(var_names, init_vals, lb, ub)]
+                 in zip(var_names, x0, lb, ub)]
     stopper = maxEvaluationsStopper(maxiters)
     solver = Solver(SimplexSearchAlgorithm(), stopper)
-    return minimize(variables, scorer, solver, tol)
+    problem = getInverseSquareMinimizerProblem(variables, scorer, tol)
+    solver.solve(problem)
+    trial = solver.getScoreBoard().getBestSolution()
+    return get_trial_vals(trial, variables)
     
 
 def least_squares(A, b, x0=None, lb=None, ub=None, verbose=0):
@@ -72,24 +91,9 @@ def least_squares(A, b, x0=None, lb=None, ub=None, verbose=0):
             residuals = subtract(dot(A, x), b)
             return norm(residuals)
     
-    n = len(A[0])
-    var_names = ['v{}'.format(i) for i in range(n)] 
+    var_names = ['v{}'.format(i) for i in range(len(A[0]))] 
     x0 = [random.random() for _ in range(n)] if x0 is None else x0
-    lb = n * [-float('inf')] if lb is None else lb
-    ub = n * [+float('inf')] if ub is None else ub
-    max_iters = 1000
-    tol = 1e-8
-
-    variables = [Variable(name, val, l, u) for name, val, l, u
-                 in zip(var_names, x0, lb, ub)]
-
+    lb = -float('inf') if lb is None else lb
+    ub = +float('inf') if ub is None else ub
     scorer = MyScorer(A, b)
-    stopper = maxEvaluationsStopper(max_iters)
-    solver = Solver(SimplexSearchAlgorithm(), stopper)
-    problem = getInverseSquareMinimizerProblem(variables, scorer, tol)
-    solver.solve(problem)
-    trial = solver.getScoreBoard().getBestSolution()
-    x = get_trial_vals(trial, variables)
-    if verbose > 0:
-        print solver.getScoreBoard()
-    return x 
+    return minimize(scorer, x0, var_names, (lb, ub))

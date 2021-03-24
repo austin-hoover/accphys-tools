@@ -1,6 +1,8 @@
 import math
 
+from xal.smf import Accelerator, AcceleratorSeq 
 from xal.model.probe import Probe
+from xal.model.probe.traj import Trajectory
 from xal.sim.scenario import AlgorithmFactory, ProbeFactory, Scenario
 from xal.tools.beam import Twiss, PhaseVector, CovarianceMatrix
 from xal.tools.beam.calc import SimpleSimResultsAdaptor, CalculationsOnBeams
@@ -10,7 +12,7 @@ from xal.extension.solver.SolveStopperFactory import maxEvaluationsStopper
 from xal.extension.solver.algorithm import SimplexSearchAlgorithm
 
 from mathfuncs import subtract, norm, step_func, put_angle_in_range
-from utils import get_trial_vals, solve
+from utils import get_trial_vals, minimize
 
 
 # Independent quadrupoles before Q25
@@ -177,7 +179,7 @@ class PhaseController:
         bounds = (quad_coeff_lb, quad_coeff_ub)
         init_field_strengths = self.default_field_strengths      
         self.set_field_strengths(init_field_strengths)
-        field_strengths = solve(scorer, init_field_strengths, var_names, bounds, maxiters, tol)
+        field_strengths = minimize(scorer, init_field_strengths, var_names, bounds, maxiters, tol)
         if verbose > 0:
             print '  Desired phases : {:.3f}, {:.3f}'.format(mux, muy)
             print '  Calc phases    : {:.3f}, {:.3f}'.format(*self.get_ref_ws_phases())
@@ -226,7 +228,7 @@ class PhaseController:
         init_field_strengths = [self.get_field_strength(quad_id) 
                                 for quad_id in last_four_quad_ids]     
         bounds = (last_four_quad_coeff_lb, last_four_quad_coeff_ub)
-        field_strengths = solve(scorer, init_field_strengths, var_names, bounds, maxiters, tol)
+        field_strengths = minimize(scorer, init_field_strengths, var_names, bounds, maxiters, tol)
         self._set_field_strengths(last_four_quad_ids, field_strengths)
         if verbose > 0:
             print '  Desired betas: {:.3f}, {:.3f}'.format(*betas)
