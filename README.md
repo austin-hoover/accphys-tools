@@ -2,8 +2,10 @@
 
 This repository is for my PhD research in accelerator physics. The structure is:
 
-**./pyorbit-studies**	- studies using my fork of [PyORBIT](https://github.com/austin-hoover/py-orbit)
+**/jupyter_notebooks** - miscellaneous studies using Jupyter notebooks
 
-**./tools** - data analysis and visualization modules 
+**/openxal**	- SNS control room scripts using [OpenXAL](https://github.com/openxal/openxal)
 
-**./jupter_notebooks** - miscellaneous studies using Jupyter notebooks
+**/pyorbit**	- studies using my fork of [PyORBIT](https://github.com/austin-hoover/py-orbit)
+
+**/tools** - data analysis and visualization modules 
