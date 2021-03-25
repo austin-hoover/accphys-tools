@@ -123,6 +123,7 @@ def get_twiss4D(Sigma, mode):
     assumes intrinsic emittances corresponding to the chosen mode is the
     larger of the two calculated."""
     e1, e2 = intrinsic_emittances(Sigma)
+    ex, ey = apparent_emittances(Sigma)
     eps = max([e1, e2])
     bx = Sigma[0, 0] / eps
     by = Sigma[2, 2] / eps
