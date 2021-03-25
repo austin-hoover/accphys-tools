@@ -169,8 +169,17 @@ class PhaseController:
         share_power(['RTBT_Mag:QV07', 'RTBT_Mag:QV09', 'RTBT_Mag:QV11'], 'RTBT_Mag:QV05')
         share_power(['RTBT_Mag:QH08', 'RTBT_Mag:QH10'], 'RTBT_Mag:QH06')
         share_power(['RTBT_Mag:QH20', 'RTBT_Mag:QH22', 'RTBT_Mag:QH24'], 'RTBT_Mag:QH18')
-        share_power(['RTBT_Mag:QV21', 'RTBT_Mag:QV23', 'RTBT_Mag:QV25'], 'RTBT_Mag:QV19')
+        share_power(['RTBT_Mag:QV21', 'RTBT_Mag:QV23', 'RTBT_Mag:QV25'], 'RTBT_Mag:QV19')         
             
+    def get_field_strength(self, quad_id):
+        """Get field strength [T/m] of model quad."""
+        node = self.sequence.getNodeWithId(quad_id)
+        return self.scenario.elementsMappedTo(node)[0].getMagField()
+            
+    def get_field_strengths(self, quad_ids):
+        """Get field strengths [T/m] of model quads."""
+        return [self.get_field_strength(quad_id) for quad_id in quad_ids]
+    
     def update_live_quad(self, quad_id):
         """Update live quad field strength to reflect the current model value.
         
@@ -185,13 +194,8 @@ class PhaseController:
     def update_live_quads(self, quad_ids):
         """Update quad field strengths to reflect the current model values."""
         for quad_id in quad_ids:
-            update_live_quad(quad_id)            
+            self.update_live_quad(quad_id)   
             
-    def get_field_strength(self, quad_id):
-        """Get field strength [T/m] of model quad."""
-        node = self.sequence.getNodeWithId(quad_id)
-        return self.scenario.elementsMappedTo(node)[0].getMagField()
-
     def get_live_field_strength(self, quad_id):
         """Get field strength [T/m] of live quad.
         
@@ -199,10 +203,6 @@ class PhaseController:
         """
         ch_Bset = self.channel_factory.getChannel(quad_id + ':B_Set')
         return ch_Bset.getValFlt()
-            
-    def get_field_strengths(self, quad_ids):
-        """Get field strengths [T/m] of model quads."""
-        return [self.get_field_strength(quad_id) for quad_id in quad_ids]
     
     def get_live_field_strengths(self, quad_ids):
         """Get field strengths [T/m] of live quads."""

@@ -1,15 +1,18 @@
 """
-This script is for performing the phase scan manually.
+This script performs the phase scan manually. For each scan
+it writes the file 'transfer_matrix_elems_i.dat', where i is the scan number. 
+Each of row of the file corresponds to a different wire-scanner.
 """
 from lib.phase_controller import PhaseController, rtbt_quad_ids, rtbt_ws_ids
-from lib.utils import loadRTBT, write_traj_to_file
+from lib.utils import loadRTBT, write_traj_to_file, delete_files_not_folders
 from lib.utils import init_twiss, design_betas_at_target
 from lib.mathfuncs import radians, multiply
 
 
 # Setup
 #------------------------------------------------------------------------------
-# Load RTBT sequence
+delete_files_not_folders('./_output/')
+
 sequence = loadRTBT()
 
 # Create phase controller
@@ -38,18 +41,18 @@ for i, (mux, muy) in enumerate(phases, start=1):
     print '{:<4} | {:.2f} | {:.2f}'.format(i, mux, muy)
 print ''
 
-
+# Set phase advance at reference wire-scanner
 print 'Scan index =', scan_index
 print 'Setting phases at {}.'.format(ref_ws_id)
 controller.set_ref_ws_phases(mux, muy, beta_lims, verbose=1)
 print 'Setting betas at target.'
 controller.set_betas_at_target(design_betas_at_target, beta_lim_after_ws24, verbose=1)
+controller.update_live_quads(rtbt_quad_ids)
 
-# Save transfer matrix for all wire-scanners. There will be 5 rows 
-# corresponding to the 16 elements of the transfer matrix for each wire-scanner
-# in the order [ws02, ws20, ws21, ws23, ws24]. In each row the transfer matrix 
-# elements are listed in the order [00, 01, 02, 03, 10, 11, 12, 13, 20, 21, 22,
-# 23, 30, 31, 32, 33].
+# Save transfer matrix at each wire-scanner. There will be one row per 
+# wire-scanner in the order [ws02, ws20, ws21, ws23, ws24]. Each row lists
+# the 16 elements of the transfer matrix in the order [00, 01, 02, 03, 10,
+# 11, 12, 13, 20, 21, 22, 23, 30, 31, 32, 33].
 file = open('_output/transfer_matrix_elements_{}.dat'.format(scan_index), 'w')
 fstr = 16 * '{} ' + '\n'
 for ws_id in rtbt_ws_ids:
@@ -58,12 +61,4 @@ for ws_id in rtbt_ws_ids:
     file.write(fstr.format(*elements))
 file.close()
 
-# Wire-scanner data then needs to collected externally. Here we use the 
-# envelope tracker for comparison. Note that we assume an uncoupled 
-# covariance matrix at the RTBT entrance -- for the Danilov distribution this 
-# will not be true. Again, there are five rows in the file -- one for each 
-# wire-scanner. Each row lists [<xx>, <yy>, <xy>].
-file = open('_output/moments_env_{}.dat'.format(scan_index), 'w')
-for ws_id in rtbt_ws_ids:
-    moments = controller.get_moments_at(ws_id)
-    file.write('{} {} {}\n'.format(*moments))
+# Wire-scanner data needs to collected externally using WireScanner app.

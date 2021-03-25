@@ -1,3 +1,4 @@
+import os
 import math
 import random
 from xal.smf import Accelerator
@@ -13,6 +14,14 @@ from mathfuncs import subtract, norm, step_func, dot, put_angle_in_range
 # Module level variables
 init_twiss = {'ax': -1.378, 'ay':0.645, 'bx': 6.243, 'by':10.354} # RTBT entrance
 design_betas_at_target = (57.705, 7.909)
+
+
+def delete_files_not_folders(directory):
+    """Delete all files in directory and subdirectories."""
+    for root, dirs, files in os.walk(directory):
+        for file in files:
+            if not file.startswith('.'):
+                os.remove(os.path.join(root, file))
 
 
 def loadRTBT():
@@ -80,7 +89,7 @@ def minimize(scorer, x0, var_names, bounds, maxiters=1000, tol=1e-8):
     return get_trial_vals(trial, variables)
     
 
-def least_squares(A, b, x0=None, lb=None, ub=None, verbose=0):
+def least_squares(A, b, x0=None, bounds=None, verbose=0):
     """Return the least-squares solution to the equation A.x = b.
     
     This will be used if we want to reconstruct the beam emittances from 
@@ -94,9 +103,10 @@ def least_squares(A, b, x0=None, lb=None, ub=None, verbose=0):
             residuals = subtract(dot(A, x), b)
             return norm(residuals)
     
-    var_names = ['v{}'.format(i) for i in range(len(A[0]))] 
+    if bounds is None:
+        bounds = (-float('inf'), float('inf'))
+    n = len(A[0])
+    var_names = ['v{}'.format(i) for i in range(n)]
     x0 = [random.random() for _ in range(n)] if x0 is None else x0
-    lb = -float('inf') if lb is None else lb
-    ub = +float('inf') if ub is None else ub
     scorer = MyScorer(A, b)
-    return minimize(scorer, x0, var_names, (lb, ub))
+    return minimize(scorer, x0, var_names, bounds)

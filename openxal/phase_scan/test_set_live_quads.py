@@ -2,29 +2,48 @@
 This script changes the live quadrupole strengths in the RTBT, then reads back
 the values to verify that it worked.
 """
-from lib.phase_controller import PhaseController, rtbt_quad_ids
+from lib.phase_controller import PhaseController, rtbt_quad_ids, rtbt_ws_ids
 from lib.utils import loadRTBT, write_traj_to_file
-from lib.utils import init_twiss, design_betas_at_target
-from lib.mathfuncs import radians
+from lib.utils import init_twiss, design_betas_at_target, delete_files_not_folders
+from lib.mathfuncs import radians, multiply
 
 
 # Setup
 #------------------------------------------------------------------------------
-# Load RTBT sequence
+delete_files_not_folders('./_output/')
+
 sequence = loadRTBT()
 
 # Create phase controller
-ref_ws_id = 'RTBT_Diag:WS24'
-controller = PhaseController(sequence, ref_ws_id)
+ref_ws_id = 'RTBT_Diag:WS24' # scan phases at this wire-scanner
+init_twiss['ex'] = init_twiss['ey'] = 20e-6 # arbitrary [m*rad] 
+controller = PhaseController(sequence, ref_ws_id, init_twiss)
 
-# Twiss parameters at RTBT entrance
-epsx = epsy = 20e-6 # arbitrary [m*rad] 
-ax0, ay0, bx0, by0 = [init_twiss[key] for key in ('ax', 'ay', 'bx', 'by')]
-controller.set_init_twiss(ax0, ay0, bx0, by0, epsx, epsy)
-
-# Beam size constraints
+# Settings
+phase_coverage = radians(180)
+scans_per_dim = 6
 beta_lims = (40, 40)
 beta_lim_after_ws24 = 100
+
+
+# Test on single quad
+#------------------------------------------------------------------------------
+quad_id = 'RTBT_Mag:QV03'
+fractional_change = 0.05
+init_field_strength_model = controller.get_field_strength(quad_id)
+init_field_strength_live = controller.get_live_field_strength(quad_id)
+
+target_field_strength = (1 + fractional_change) * init_field_strength
+controller.set_field_strength(quad_id, target_field_strength)
+controller.update_live_quad(quad_id)
+
+final_field_strength_model = controller.get_field_strength(quad_id)
+final_field_strength_live = controller.get_live_field_strength(quad_id)
+
+print 'Init field strength  (model) = {} [T/m]'.format(init_field_strength_model)
+print 'Init field strength  (live)  = {} [T/m]'.format(init_field_strength_live)
+print 'Final field strength (model) = {} [T/m]'.format(init_field_strength_model)
+print 'Final field strength (live)  = {} [T/m]'.format(init_field_strength_live)
 
 
 # Test on multiple quads
