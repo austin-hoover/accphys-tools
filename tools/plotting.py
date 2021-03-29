@@ -721,11 +721,18 @@ def eigvals_complex_plane(ax, eigvals, colors=('r','b'), legend=True, **kws):
         ax.legend(lines, labels, loc='upper right', handletextpad=0.1,
                   fontsize='small', framealpha=1)
     return ax
+    
+
+def ellipse(ax, c1, c2, angle=0.0, **plt_kws):
+    """Plot ellipse with semi-axes `c1` and `c2`. Angle is given in radians
+    and is measured below the x axis."""
+    plt_kws.setdefault('fill', False)
+    ax.add_patch(Ellipse((0, 0), 2*c1, 2*c2, -np.degrees(angle), **plt_kws))
+    return ax
 
 
 def rms_ellipses(Sigmas, figsize=(5, 5), pad=0.5, axes=None, **plt_kws):
     """Plot rms ellipse parameters directly from covariance matrix."""
-    plt_kws.setdefault('fill', False)
     Sigmas = np.array(Sigmas)
     if Sigmas.ndim == 2:
         Sigmas = Sigmas[np.newaxis, :, :]
@@ -740,7 +747,5 @@ def rms_ellipses(Sigmas, figsize=(5, 5), pad=0.5, axes=None, **plt_kws):
         for i in range(3):
             for j in range(i + 1):
                 angle, c1, c2 = ea.rms_ellipse_dims(Sigma, dims[j], dims[i + 1])
-                angle = -np.degrees(angle)
-                ellipse = Ellipse((0, 0), 4*c1, 4*c2, angle, **plt_kws)
-                axes[i, j].add_patch(ellipse)
+                ellipse(axes[i, j], 2*c1, 2*c2, angle, **plt_kws)
     return axes
