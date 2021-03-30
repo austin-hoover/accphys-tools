@@ -2,7 +2,7 @@
 This script reconstructs the covariance matrix given a list of transfer matrix
 elements and corresponding measured beam moments.
 
-The following files are assumed to be in './_output/':
+The following files are assumed to be in './output/':
     'transfer_mat_elems_i.dat'
         Transfer matrix at each wire-scanner for scan index i. There will be
         one row per wire-scanner in the order [ws02, ws20, ws21, ws23, ws24].
@@ -31,10 +31,10 @@ def read_file(filename):
 
 transfer_mat_elems_list, moments_list = [], []
 for i in range(1, nscans + 1):
-    filename = '_output/transfer_mat_elems_{}.dat'.format(i)
+    filename = 'output/transfer_mat_elems_{}.dat'.format(i)
     for transfer_mat_elems in read_file(filename):
         transfer_mat_elems_list.append(transfer_mat_elems)
-    for moments in read_file('_output/moments_{}.dat'.format(i)):
+    for moments in read_file('output/moments_{}.dat'.format(i)):
         moments_list.append(moments)
 
 # Form coefficient and observation arrays

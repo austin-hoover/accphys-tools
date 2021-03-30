@@ -3,7 +3,7 @@ This script performs the phase scan manually. For each scan
 it writes the file 'transfer_matrix_elems_i.dat', where i is the scan number. 
 Each of row of the file corresponds to a different wire-scanner.
 """
-from lib.phase_controller import PhaseController, rtbt_quad_ids, rtbt_ws_ids
+from lib.phase_controller import PhaseController, all_quad_ids, ws_ids
 from lib.utils import loadRTBT, write_traj_to_file, delete_files_not_folders
 from lib.utils import init_twiss, design_betas_at_target
 from lib.mathfuncs import radians, multiply
@@ -11,7 +11,7 @@ from lib.mathfuncs import radians, multiply
 
 # Setup
 #------------------------------------------------------------------------------
-delete_files_not_folders('./_output/')
+delete_files_not_folders('./output/')
 
 sequence = loadRTBT()
 
@@ -47,15 +47,15 @@ print 'Setting phases at {}.'.format(ref_ws_id)
 controller.set_ref_ws_phases(mux, muy, beta_lims, verbose=1)
 print 'Setting betas at target.'
 controller.set_betas_at_target(design_betas_at_target, beta_lim_after_ws24, verbose=1)
-controller.update_live_quads(rtbt_quad_ids)
+controller.update_live_quads(all_quad_ids)
 
 # Save transfer matrix at each wire-scanner. There will be one row per 
 # wire-scanner in the order [ws02, ws20, ws21, ws23, ws24]. Each row lists
 # the 16 elements of the transfer matrix in the order [00, 01, 02, 03, 10,
 # 11, 12, 13, 20, 21, 22, 23, 30, 31, 32, 33].
-file = open('_output/transfer_matrix_elements_{}.dat'.format(scan_index), 'w')
+file = open('output/transfer_matrix_elements_{}.dat'.format(scan_index), 'w')
 fstr = 16 * '{} ' + '\n'
-for ws_id in rtbt_ws_ids:
+for ws_id in ws_ids:
     M = controller.get_transfer_matrix_at(ws_id)
     elements = [elem for row in M for elem in row]
     file.write(fstr.format(*elements))

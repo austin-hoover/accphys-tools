@@ -16,9 +16,9 @@ from mathfuncs import subtract, norm, step_func, put_angle_in_range
 from utils import get_trial_vals, minimize, init_twiss
 
 #------------------------------------------------------------------------------
-rtbt_ws_ids = ['RTBT_Diag:WS02', 'RTBT_Diag:WS20', 'RTBT_Diag:WS21', 
-               'RTBT_Diag:WS23', 'RTBT_Diag:WS24']
-rtbt_quad_ids = [
+ws_ids = ['RTBT_Diag:WS02', 'RTBT_Diag:WS20', 'RTBT_Diag:WS21', 
+          'RTBT_Diag:WS23', 'RTBT_Diag:WS24']
+all_quad_ids = [
     'RTBT_Mag:QH02', 'RTBT_Mag:QV03', 'RTBT_Mag:QH04', 'RTBT_Mag:QV05', 
     'RTBT_Mag:QH06', 'RTBT_Mag:QV07', 'RTBT_Mag:QH08', 'RTBT_Mag:QV09', 
     'RTBT_Mag:QH10', 'RTBT_Mag:QV11', 'RTBT_Mag:QH12', 'RTBT_Mag:QV13', 
