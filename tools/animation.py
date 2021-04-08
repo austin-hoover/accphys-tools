@@ -3,8 +3,7 @@ This module contains functions to animate the evolution of a beam of
 particles in phase space.
 
 To do:
-    * Add option to save option to all functions.
-    * Make sure all methods use label_kws and tick_kws when creating figure.
+    * Clean up. It's a bit messy.
 """
 
 # Standard
@@ -396,21 +395,31 @@ def corner_env(
     # Create figure
     fig, axes = setup_corner(limits, figsize, norm_labels, units, space,
                              dims=dims, plt_diag=False)
-    if not grid:
-        for ax in axes.flat:
-            ax.grid(False)
+                             
     if cmap is not None:
         values = np.linspace(cmap_range[0], cmap_range[1], len(coords_list))
         colors = [cmap(i) for i in values]
-        for ax in axes.flat:
+        if dims != 'all':
+            ax = axes
             ax.set_prop_cycle(cycler('color', colors))
+        else:
+            for ax in axes.flat:
+                ax.set_prop_cycle(cycler('color', colors))
+                             
+    if not grid:
+        if dims != 'all':
+            ax = axes
+            ax.grid(False)
+        else:
+            for ax in axes.flat:
+                ax.grid(False)
+                
     plt.close()
-    
+                
     if dims != 'all':
-        if cmap is not None:
-            axes.set_prop_cycle(cycler('color', colors))
-        return _corner_env_2D(fig, axes, coords_list, dims, clear_history,
-                              show_init, plot_boundary, fill, fc, ec, fps)
+        return _corner_env_2D(fig, ax, coords_list, dims, clear_history,
+                              show_init, plot_boundary, fill, fc, ec, lw,
+                              fps, texts)
     
     # Create list of Line2D objects
     lines_list = []
@@ -456,12 +465,12 @@ def corner_env(
     return anim
     
     
-def _corner_env_2D(fig, ax, coords_list, dims, clear_history,
-                   show_init, plot_boundary, fill, fc, ec, fps):
+def _corner_env_2D(fig, ax, coords_list, dims, clear_history, show_init,
+                   plot_boundary, fill, fc, ec, lw, fps, texts):
     X_init = coords_list[0][0]
     lines = []
     for coords in coords_list:
-        line, = ax.plot([], [], '-', lw=1, color=ec)
+        line, = ax.plot([], [], '-', lw=lw, color=ec)
         lines.append(line)
     k, j = [str_to_int[dim] for dim in dims]
     
@@ -478,6 +487,7 @@ def _corner_env_2D(fig, ax, coords_list, dims, clear_history,
             if show_init and clear_history:
                 ax.plot(X_init[:, k], X_init[:, j], 'k--',
                         lw=0.5, alpha=0.25)
+            ax.set_title(texts[t])
     return animation.FuncAnimation(fig, update, frames=coords_list[0].shape[0],
                                    interval=1000/fps)
         
