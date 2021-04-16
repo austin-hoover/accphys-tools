@@ -315,8 +315,8 @@ def setup_corner(
 
     
 def corner(
-    X, env_params=None, moments=False, samples=2000, pad=0.5, figsize=None,
-    dims='all', kind='scatter', diag_kind='hist', hist_height=0.6,
+    X, env_params=None, moments=False, limits=None, samples=2000, pad=0.5,
+    figsize=None, dims='all', kind='scatter', diag_kind='hist', hist_height=0.6,
     units='mm-mrad', norm_labels=False, text=None, ax=None, diag_kws={},
     env_kws={}, text_kws={}, **plt_kws
 ):
@@ -336,6 +336,9 @@ def corner(
     moments : bool
         If True, plot the ellipse defined by the second-order moments of the
         distribution.
+    limits : (umax, upmax)
+        Maximum position and slope for the plotting windows. In None, use auto-
+        ranging.
     samples : int
         The number of randomly sampled points to use in the scatter plots.
     pad : float
@@ -407,7 +410,10 @@ def corner(
     if env_params is not None:
         env = ea.Envelope(params=env_params)
         X_env = env.generate_dist(50, 'on_ellipse')
-    limits = (1 + pad) * get_u_up_max(X) # axis limits
+        
+    # Determine axis limits
+    if limits is None:
+        limits = (1 + pad) * get_u_up_max(X) # axis limits
     
     # Create figure
     fig, axes = setup_corner(
