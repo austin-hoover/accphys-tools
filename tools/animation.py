@@ -50,10 +50,11 @@ def skip_frames(frames, skip=1, keep_last=False):
 
 
 def corner(
-    coords, env_params=None, dims='all', samples=2000, skip=0, keep_last=False,
-    pad=0.5, space=0.15, figsize=None, kind='scatter', diag_kind='hist',
-    hist_height=0.6, units='mm-mrad', norm_labels=False, text_fmt='',
-    text_vals=None, fps=1, diag_kws={}, env_kws={}, text_kws={}, **plt_kws
+    coords, env_params=None, limits=None, dims='all', samples=2000, skip=0,
+    keep_last=False, pad=0.5, space=0.15, figsize=None, kind='scatter',
+    diag_kind='hist', hist_height=0.6, units='mm-mrad', norm_labels=False,
+    text_fmt='', text_vals=None, fps=1, diag_kws={}, env_kws={}, text_kws={},
+    **plt_kws
 ):
     """Frame-by-frame phase space projections of the beam.
 
@@ -65,6 +66,8 @@ def corner(
     env_params : ndarray, shape (nframes, 8)
         The envelope parameters at each frame. They are not plotted if none
         are provided.
+    limits : (umax, upmax)
+        Maximum position and angle for plot windows.
     dims : str or tuple
         If 'all', plot all 6 phase space projections. Otherwise provide a tuple
         like ('x', 'yp') which plots x vs. y'.
@@ -189,7 +192,9 @@ def corner(
                 coords_samp[i] = rand_rows(X, samples)
                 
     # Axis limits
-    limits = (1 + pad) * get_u_up_max_global(coords)
+    if limits is None:
+        limits = get_u_up_max_global(coords)
+    limits = [(1 + pad) * limit for limit in limits]
 
     # Create figure
     fig, axes = setup_corner(

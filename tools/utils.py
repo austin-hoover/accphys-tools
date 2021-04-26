@@ -14,6 +14,9 @@ from scipy.integrate import trapz
 from IPython.display import display, HTML
 
 
+classical_proton_radius = 1.53469e-18 # [m]
+
+
 # File processing
 def list_files(dir):
     """List all files in directory not starting with '.'"""
@@ -227,6 +230,18 @@ def params_from_transfer_matrix(M):
     lattice_params['gamma_x'] = gamma_x
     lattice_params['gamma_y'] = gamma_y
     return lattice_params
+
+
+def get_perveance(kin_energy, mass, line_density):
+    """Return the dimensionless space charge perveance.
+    
+    kin_energy : kinetic energy per particle [GeV]
+    mass : mass per particle [GeV/c^2]
+    line_density : particles per length [m^-1]
+    """
+    gamma = 1 + (kin_energy / mass)
+    beta = np.sqrt(1 - (1 / (gamma**2)))
+    return (2 * classical_proton_radius * line_density) / (beta**2 * gamma**3)
 
 
 def get_moments_key(i, j):
