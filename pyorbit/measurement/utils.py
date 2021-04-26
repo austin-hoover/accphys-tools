@@ -235,14 +235,14 @@ class PhaseController:
         """Get maximum (beta_x, beta_y) from s=0 to reference wire-scanner."""
         return np.max(self.tracked_twiss[:self.ref_ws_index, 5:], axis=0)
     
-    def get_phases_for_scan(self, phase_coverage, nsteps):
+    def get_phases_for_scan(self, phase_coverage, steps_per_dim):
         """Return list of phases for scan. 
         
         First the horizontal phases are scanned, then the vertical.
         """
         nux0, nuy0 = self.get_ref_ws_phases()
         window = 0.5 * phase_coverage
-        delta_nu_list = np.linspace(-window, window, nsteps) / 360
+        delta_nu_list = np.linspace(-window, window, steps_per_dim) / 360
         phases = []
         for delta_nu in delta_nu_list:
             phases.append([nux0 + delta_nu, nuy0])

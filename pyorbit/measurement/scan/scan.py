@@ -28,8 +28,8 @@ from orbit.utils import helper_funcs as hf
 sys.path.append('/Users/46h/Research/code/accphys')
 from tools.utils import delete_files_not_folders
 
-sys.path.append('/Users/46h/Research/code/accphys/pyorbit_studies/measurement')
-from utils import (PhaseController, set_rtbt_quad_strengths, get_coord_array)
+sys.path.append('/Users/46h/Research/code/accphys/pyorbit/measurement')
+from utils import (PhaseController, get_coord_array)
 
 
 # Settings
@@ -57,7 +57,7 @@ init_twiss = (-8.082, 4.380, 23.373, 13.455) # (ax, ay, bx, by)
 # Scan
 ws_names = ['ws02', 'ws20', 'ws21', 'ws23', 'ws24']
 ref_ws_name = 'ws24' 
-nsteps = 15 # number of steps for each dimension
+steps_per_dim = 15 # number of steps for each dimension
 wsbins = 50
 phase_coverage = 180 # [deg]
 max_betas = (40, 40) # (x, y)
@@ -137,10 +137,13 @@ coords = init_dict()
 ws_phases = init_dict()
 env_params = init_dict()
 
-scan_phases = controller.get_phases_for_scan(phase_coverage, nsteps)
+scan_phases = controller.get_phases_for_scan(phase_coverage, steps_per_dim)
+
+scan_phases = np.array(scan_phases)
+scan_phases += 0.00 * (2*np.random.random(scan_phases.shape) - 1)
 
 for scan_index, (nux, nuy) in enumerate(scan_phases):
-    print 'Scan {} of {}.'.format(scan_index, 2 * nsteps)
+    print 'Scan {} of {}.'.format(scan_index, 2 * steps_per_dim)
     print 'Setting phases: nux, nuy = {:.3f}, {:.3f}.'.format(nux, nuy)
     controller.set_ref_ws_phases(nux, nuy, max_betas, verbose=2)
     controller.track_twiss()

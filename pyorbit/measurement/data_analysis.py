@@ -19,29 +19,33 @@ def to_vec(Sigma):
     return np.array([s11, s22, s12, s33, s44, s34, s13, s23, s14, s24])
     
     
-def reconstruct_moments(A, b):
-    """Reconstruct covariance matrix from measured data.
-    
-    Solves the problem A.sigma = b, where sigma is the vector
-    of 10 beam moments at the reconstruction point and A and 
-    b are defined below.
+def reconstruct(transfer_mats, moments, **kwargs):
+    """Reconstruct covariance matrix from wire-scanner data.
     
     Parameters
     ----------
-    A : ndarray, shape (3n, 10)
-        Coefficient array determined by transfer matrix elements.
-    b : ndarray, shape (3n,)
-        Observation array determined by beam moments at measurement location.
+    transfer_mats : list of (4, 4) ndarray, length n
+        List of 4x4 transfer matrix at each scan.
+    moments : list or ndarray, shape (n, 3)
+        List of [<xx>, <yy>, <xy>] moments for each scan.
+    **kwargs
+        Key word arguments passed to scipy.optimize.lsq_linear
 
     Returns
     -------
     ndarray, shape (4, 4)
         Covariance matrix at reconstruction point.
     """
-    # Squared moments can't be negative
+    A, b = [], []
+    for M, (x2, y2, xy) in zip(transfer_mats, moments):
+        A.append([M[0, 0]**2, M[0, 1]**2, 2*M[0, 0]*M[0, 1], 0, 0, 0, 0, 0, 0, 0])
+        A.append([0, 0, 0, M[2, 2]**2, M[2, 3]**2, 2*M[2, 2]*M[2, 3], 0, 0, 0, 0])
+        A.append([0, 0, 0, 0, 0, 0, M[0, 0]*M[2, 2],  M[0, 1]*M[2, 2],  M[0, 0]*M[2, 3],  M[0, 1]*M[2, 3]])
+        b.append(x2)
+        b.append(y2)
+        b.append(xy)
+    A, b = np.array(A), np.array(b)
     lb = 10 * [-np.inf]
-    lb[0] = lb[1] = lb[3] = lb[4] = 0.0 
-    bounds = opt.Bounds(lb, np.inf, keep_feasible=False)
-
-    result = opt.lsq_linear(A, b, bounds=(lb, np.inf))
+    lb[0] = lb[1] = lb[3] = lb[4] = 0.0 # Squared moments can't be negative
+    result = opt.lsq_linear(A, b, bounds=(lb, np.inf), **kwargs)
     return to_mat(result.x)
