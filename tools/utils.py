@@ -86,7 +86,7 @@ def play(anim, center=True):
     display(HTML(html_string))
     
     
-# NumPy arrays
+# Arrays
 def apply(M, X):
     """Apply M to each row of X."""
     return np.apply_along_axis(lambda x: np.matmul(M, x), 1, X)
@@ -112,18 +112,32 @@ def rand_rows(X, n):
         idx = np.random.choice(Xsamp.shape[0], n, replace=False)
         Xsamp = Xsamp[idx]
     return Xsamp
+
+
+def mat2vec(Sigma):
+    """Return vector of independent elements in 4x4 symmetric matrix Sigma."""
+    return Sigma[np.triu_indices(4)]
+                  
+                  
+def vec2mat(moment_vec):
+    """Inverse of `mat2vec`."""
+    Sigma = np.zeros((4, 4))
+    indices = np.triu_indices(4)
+    for moment, (i, j) in zip(moment_vec, zip(*indices)):
+        Sigma[i, j] = moment
+    return symmetrize(Sigma)
     
 
 # Math
 def cov2corr(cov_mat):
-    """Convert covariance matrix to correlation matrix."""
+    """Form correlation matrix from covariance matrix."""
     D = np.sqrt(np.diag(cov_mat.diagonal()))
     Dinv = la.inv(D)
     corr_mat = la.multi_dot([Dinv, cov_mat, Dinv])
     return corr_mat
     
     
-def rotation_matrix(phi):
+def rotation_matrix(angle):
     """2D rotation matrix (cw)."""
-    C, S = np.cos(phi), np.sin(phi)
-    return np.array([[C, S], [-S, C]])
+    c, s = np.cos(angle), np.sin(angle)
+    return np.array([[c, s], [-s, c]])

@@ -1,17 +1,8 @@
 """
 This module contains functions to visualize accelerator physics data.
-
-To do:
-    * Add grid option to `corner` and `corner_env`.
-    * Possibly create separate file for plotting utility functions.
-    * Add function: tune space resonance lines (complete; on hardrive currently)
-    * Create function: tune footprint.
 """
-
-# Standard
-import pickle
 from cycler import cycler
-# Third party
+
 import numpy as np
 import pandas as pd
 import matplotlib
@@ -21,14 +12,14 @@ from matplotlib.patches import Ellipse
 import seaborn as sns
 import scipy
 from pandas.plotting._matplotlib.tools import _set_ticks_props
-# Local
-from . import envelope_analysis as ea
-from .utils import rand_rows, merge_dicts
 
-# Module level variables
+from .utils import rand_rows
+from .beam_analysis import get_ellipse_coords
+
+
 _labels = [r"$x$", r"$x'$", r"$y$", r"$y'$"]
 _labels_norm = [r"$x_n$", r"$x_n'$", r"$y_n$", r"$y_n'$"]
-str_to_int = {'x':0, 'xp':1, 'y':2, 'yp':3}
+var_indices = {'x':0, 'xp':1, 'y':2, 'yp':3}
 
 
 def save(figname, dir, **kwargs):
@@ -39,7 +30,7 @@ def save(figname, dir, **kwargs):
     plt.savefig(filename, facecolor='white', **kwargs)
 
 
-def get_u_up_max(X):
+def max_u_up(X):
     """Get the maximum x{y} and x'{y'} extents for any frame in `coords`.
 
     X : ndarray, shape (nparts, 4)
@@ -50,13 +41,13 @@ def get_u_up_max(X):
     return np.array([umax, upmax])
     
     
-def get_u_up_max_global(coords):
+def max_u_up_global(coords):
     """Get the maximum x{y} and x'{y'} extents for any frame in `coords`.
 
     coords : ndarray, shape (nframes, nparts, 4)
         The beam coordinate arrays at each frame.
     """
-    u_up_local_maxes = np.array([get_u_up_max(X) for X in coords])
+    u_up_local_maxes = np.array([max_u_up(X) for X in coords])
     umax_global, upmax_global = np.max(u_up_local_maxes, axis=0)
     return np.array([umax_global, upmax_global])
     
@@ -256,7 +247,7 @@ def setup_corner(
     if dims != 'all':
         fig, ax = plt.subplots(figsize=figsize)
         despine([ax])
-        j, i = [str_to_int[dim] for dim in dims]
+        j, i = [var_indices[dim] for dim in dims]
         ax.set_xlim(limits[j])
         ax.set_ylim(limits[i])
         ax.set_xlabel(labels[j], **label_kws)
@@ -408,12 +399,11 @@ def corner(
     X_samp = rand_rows(X, samples) # sample of particles for scatter plots
     X_env = None
     if env_params is not None:
-        env = ea.Envelope(params=env_params)
-        X_env = env.generate_dist(50, 'on_ellipse')
+        X_env = get_ellipse_coords(env_params, npts=100)
         
     # Determine axis limits
     if limits is None:
-        limits = (1 + pad) * get_u_up_max(X) # axis limits
+        limits = (1 + pad) * max_u_up(X) # axis limits
     
     # Create figure
     fig, axes = setup_corner(
@@ -422,7 +412,7 @@ def corner(
         
     # Single particle
     if dims != 'all':
-        j, i = [str_to_int[dim] for dim in dims]
+        j, i = [var_indices[dim] for dim in dims]
         x, y = X_samp[:, j], X_samp[:, i]
         ax = axes
         if kind == 'scatter':
@@ -482,8 +472,8 @@ def corner_env(
     Inputs
     ------
     params : ndarray, shape (8,) or (n, 8)
-        Envelope parameters [a, b, a', b', e, f, e', f']. Each of the n rows
-        will be plotted.
+        Envelope parameters [a, b, a', b', e, f, e', f']. If multiple rows are
+        provided, each will be plotted as different ellipse.
     pad : float
         Fraction of umax and upmax to pad the axis ranges with. The edge of the 
         plot will be at umax * (1 + pad).
@@ -531,8 +521,8 @@ def corner_env(
         params = np.array(params)
     if params.ndim == 1:
         params = params[np.newaxis, :]
-    coords = ea.get_ellipse_coords(params)
-    limits = (1 + pad) * get_u_up_max_global(coords)
+    coords = [get_ellipse_coords(p, npts=100) for p in params]
+    limits = (1 + pad) * max_u_up_global(coords)
     
     # Set default key word arguments
     color = None if len(params) > 1 else 'k'
@@ -564,7 +554,7 @@ def corner_env(
     # Plot data
     for X in coords:
         if dims != 'all':
-            j, i = [str_to_int[dim] for dim in dims]
+            j, i = [var_indices[dim] for dim in dims]
             if fill:
                 ax.fill(X[:, j], X[:, i], **fill_kws)
             else:
@@ -685,7 +675,7 @@ def eigvec_trajectory(ax, M, i='x', j='y', colors=('r','b'), s=None, lw=2,
         return np.array(X)
     
     if type(i) is str:
-        i, j = str_to_int[i], str_to_int[j]
+        i, j = var_indices[i], var_indices[j]
         
     eigvals, eigvecs = np.linalg.eig(M)
     v1, _, v2, _ = eigvecs.T

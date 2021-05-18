@@ -5,10 +5,8 @@ particles in phase space.
 To do:
     * Clean up. It's a bit messy.
 """
-
-# Standard
 from cycler import cycler
-# Third party
+
 import numpy as np
 import matplotlib
 import pandas as pd
@@ -18,23 +16,19 @@ from matplotlib import pyplot as plt, ticker
 from matplotlib import animation
 from pandas.plotting._matplotlib.tools import _set_ticks_props
 from matplotlib.patches import Ellipse, transforms
-# Local
-from .envelope_analysis import get_ellipse_coords
-from .plotting import (
-    setup_corner,
-    get_labels,
-    get_u_up_max,
-    get_u_up_max_global,
-    remove_annotations,
-    vector as arrowplot,
-    str_to_int
-)
+
+from .beam_analysis import get_ellipse_coords
+from .plotting import setup_corner
+from .plotting import max_u_up, max_u_up_global
+from .plotting import remove_annotations
+from .plotting import vector
+from .plotting import var_indices
 from .utils import rand_rows
 
-# Settings
+
 plt.rcParams['animation.ffmpeg_path'] = '/usr/local/bin/ffmpeg'
- 
-# Module level variables
+    
+# I had to make this global for some reason... don't remember why.
 artists_list = []
 
 
@@ -123,7 +117,7 @@ def corner(
 
     Returns
     -------
-    anim : output from matplotlib.animation.FuncAnimation
+    matplotlib.animation.FuncAnimation
     """
     plt_env = env_params is not None
     plt_diag = diag_kind not in ['none', None]
@@ -193,7 +187,7 @@ def corner(
                 
     # Axis limits
     if limits is None:
-        limits = get_u_up_max_global(coords)
+        limits = max_u_up_global(coords)
     limits = [(1 + pad) * limit for limit in limits]
 
     # Create figure
@@ -278,7 +272,7 @@ def _corner_2D(fig, ax, coords, coords_env, dims, texts, fps, env_kws,
                text_kws, **plt_kws):
     """2D scatter plot (helper function for `corner`)."""
     nframes = coords.shape[0]
-    j, i = [str_to_int[dim] for dim in dims]
+    j, i = [var_indices[dim] for dim in dims]
     coords_x, coords_y = coords[:, :, j], coords[:, :, i]
     
     line, = ax.plot([], [], **plt_kws)
@@ -367,7 +361,7 @@ def corner_env(
 
     Returns
     -------
-    anim : output from matplotlib.animation.FuncAnimation
+    matplotlib.animation.FuncAnimation
     """
     # Get ellipse coordinates
     if params.ndim == 2:
@@ -393,7 +387,7 @@ def corner_env(
     nframes = coords_list[0].shape[0]
         
     # Configure axis limits
-    limits_list = np.array([(1 + pad) * get_u_up_max_global(coords)
+    limits_list = np.array([(1 + pad) * max_u_up_global(coords)
                             for coords in coords_list])
     limits = np.max(limits_list, axis=0)
 
@@ -477,12 +471,12 @@ def _corner_env_2D(fig, ax, coords_list, dims, clear_history, show_init,
     for coords in coords_list:
         line, = ax.plot([], [], '-', lw=lw, color=ec)
         lines.append(line)
-    k, j = [str_to_int[dim] for dim in dims]
+    k, j = [var_indices[dim] for dim in dims]
     
     def update(t):
         if clear_history:
-             for patch in ax.patches:
-                 patch.remove()
+            for patch in ax.patches:
+                patch.remove()
         for line, coords in zip(lines, coords_list):
             X = coords[t]
             if plot_boundary:
@@ -540,7 +534,7 @@ def corner_onepart(
     nframes = X.shape[0]
     
     # Create figure
-    limits = (1 + pad) * get_u_up_max(X)
+    limits = (1 + pad) * max_u_up(X)
     fig, axes = setup_corner(
         limits, figsize, norm_labels, units, space, plt_diag=False, dims=dims,
         tick_kws=tick_kws, tickm_kws=tickm_kws, label_kws=label_kws
@@ -581,7 +575,7 @@ def corner_onepart(
         remove_annotations(axes)
         _X, _Xold = X[[t]], X[:t]
         if dims != 'all':
-            j, i = [str_to_int[dim] for dim in dims]
+            j, i = [var_indices[dim] for dim in dims]
             line.set_data(_X[:, j], _X[:, i])
             if show_history:
                 line_history.set_data(_Xold[:, j], _Xold[:, i])
@@ -595,9 +589,9 @@ def corner_onepart(
                         lines_history[i][j].set_data(_Xold[:, j], _Xold[:, i+1])
                     if vecs is not None:
                         v1, v2 = vecs[0][t], vecs[1][t]
-                        arrowplot(ax, v1[[j, i+1]], origin=(0, 0), c='r',
+                        vector(ax, v1[[j, i+1]], origin=(0, 0), c='r',
                                   head_width=0.2, head_length=0.4)
-                        arrowplot(ax, v2[[j, i+1]], origin=(v1[[j, i+1]]),
+                        vector(ax, v2[[j, i+1]], origin=(v1[[j, i+1]]),
                                   c='b', head_width=0.2, head_length=0.4)
             axes[1, 2].annotate(texts[t], xy=(0.35, 0.5),
                                 xycoords='axes fraction', **text_kws)

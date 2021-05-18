@@ -10,6 +10,32 @@ moment_cols = ['x2','xxp','xy','xyp','xp2','yxp','xpyp','y2','yyp','yp2']
 twiss2D_cols = ['ax','ay','bx','by','ex','ey']
 twiss4D_cols = ['ax','ay','bx','by','u','nu','e1','e2','e4D']
 
+
+def get_ellipse_coords(env_params, npts=100):
+    """Get (x, y) coordinates along ellipse boundary from envelope parameters.
+    
+    This function is specific to the Danilov distribution.
+
+    Parameters
+    ----------
+    params : array-like
+        The envelope parameters [a, b, a', b', e, f, e', f'].
+    npts : float
+        Number of points along the ellipse.
+        
+    Returns
+    -------
+    coords : ndarray, shape (npts, 4)
+        Columns are [x, x', y, y'].
+    """
+    a, b, ap, bp, e, f, ep, fp = env_params
+    psi = np.linspace(0, 2 * np.pi, npts)
+    cos, sin = np.cos(psi), np.sin(psi)
+    x, xp = a*cos + b*sin, ap*cos + bp*sin
+    y, yp = e*cos + f*sin, ep*cos + fp*sin
+    coords = np.vstack([x, xp, y, yp]).T
+    return coords
+
     
 def rms_ellipse_dims(Sigma, x1='x', x2='y'):
     """Return (angle, c1, c2) of rms ellipse in x1-x2 plane, where angle is the
@@ -27,7 +53,7 @@ def rms_ellipse_dims(Sigma, x1='x', x2='y'):
     
     
 def intrinsic_emittances(Sigma):
-    """Return the intrinsic emittances from the covariance matrix."""
+    """Return intrinsic emittances from covariance matrix."""
     U = np.array([[0, 1, 0, 0], [-1, 0, 0, 0], [0, 0, 0, 1], [0, 0, -1, 0]])
     trSU2 = np.trace(la.matrix_power(np.matmul(Sigma, U), 2))
     detS = la.det(Sigma)
@@ -37,14 +63,14 @@ def intrinsic_emittances(Sigma):
     
     
 def apparent_emittances(Sigma):
-    """Return the apparent emittances from the covariance matrix."""
+    """Return apparent emittances from covariance matrix."""
     eps_x = np.sqrt(la.det(Sigma[:2, :2]))
     eps_y = np.sqrt(la.det(Sigma[2:, 2:]))
     return eps_x, eps_y
     
     
 def get_twiss2D(Sigma):
-    """Return the 2D Twiss parameters from the covariance matrix."""
+    """Return 2D Twiss parameters from covariance matrix."""
     eps_x, eps_y = apparent_emittances(Sigma)
     beta_x = Sigma[0, 0] / eps_x
     beta_y = Sigma[2, 2] / eps_y
@@ -54,9 +80,12 @@ def get_twiss2D(Sigma):
     
     
 def get_twiss4D(Sigma, mode):
-    """Return the 4D Twiss parameters from the covariance matrix. This
-    assumes intrinsic emittances corresponding to the chosen mode is the
-    larger of the two calculated."""
+    """Return 4D Twiss parameters from covariance matrix. 
+    
+    This is technically only valid for the Danilov distribution. What we
+    really need to do is compute V from the eigenvectors of Sigma U, then
+    compute the Twiss parameters from V.
+    """
     e1, e2 = intrinsic_emittances(Sigma)
     ex, ey = apparent_emittances(Sigma)
     eps = max([e1, e2])
@@ -73,59 +102,59 @@ def get_twiss4D(Sigma, mode):
     
 
 class Stats:
-    """Container for beam statistics.
-
-     Attributes
-     ----------
-     mode : {1, 2}
-          The mode of the beam if it is supposed to describe a Danilov
-          distribution. Currently, I don't know how to determine this from the
-          covariance matrix. I can find the intrinsic emittances, but the order
-          in which they are returned seems to be independent of the beam mode.
-     twiss2D : pandas DataFrame
-         2D Twiss parameters. The columns are:
-             'ex': rms apparent emittance in x-x' plane
-             'ey': rms apparent emittance in y-y' plane
-             'bx': beta_x = <x^2> / ex
-             'by': beta_y = <y^2> / ey
-             'ax': alpha_x = -<xx'> / ex
-             'ay': alpha_y = -<yy'> / ey
-     twiss4D : pandas DataFrame
-         4D Twiss parameters. In the following 'l' can be 1 or 2 depending on
-         which of the two intrinsic emittances is nonzero. The columns are:
-             'e1': rms intrinsic emittance for mode 1
-             'e2': rms intrinsic emittance for mode 2
-             'e4D': rms 4D emittance = e1 * e2
-             'bx': beta_lx = <x^2> / el (l = 1 if e2=0, or 2 if e1=0)
-             'by': beta_ly = <y^2> / el
-             'ax': alpha_lx = -<xx'> / el
-             'ay': alpha_ly = -<yy'> / el
-             'u' : ey/el if l == 1, or ex/el if mode == 2
-             'nu': the x-y phase difference in the beam. It is related to the
-                   correlation coefficient as cos(nu) = x-y correlation
-                   coefficent.
+    """Container for transverse beam statistics.
+    
+    Attributes
+    ----------
+    mode : {1, 2}
+        The mode of the beam if it is supposed to describe a Danilov
+        distribution. Currently, I don't know how to determine this from the
+        covariance matrix. I can find the intrinsic emittances, but the order
+        in which they are returned seems to be independent of the beam mode.
+    twiss2D : pandas DataFrame
+        2D Twiss parameters. The columns are:
+            'ex': rms apparent emittance in x-x' plane
+            'ey': rms apparent emittance in y-y' plane
+            'bx': beta_x = <x^2> / ex
+            'by': beta_y = <y^2> / ey
+            'ax': alpha_x = -<xx'> / ex
+            'ay': alpha_y = -<yy'> / ey
+    twiss4D : pandas DataFrame
+        4D Twiss parameters. In the following 'l' can be 1 or 2 depending on
+        which of the two intrinsic emittances is nonzero. The columns are:
+            'e1': rms intrinsic emittance for mode 1
+            'e2': rms intrinsic emittance for mode 2
+            'e4D': rms 4D emittance = e1 * e2
+            'bx': beta_lx = <x^2> / el (l = 1 if e2=0, or 2 if e1=0)
+            'by': beta_ly = <y^2> / el
+            'ax': alpha_lx = -<xx'> / el
+            'ay': alpha_ly = -<yy'> / el
+            'u' : ey/el if l == 1, or ex/el if mode == 2
+            'nu': the x-y phase difference in the beam. It is related to the
+                  correlation coefficient as cos(nu) = x-y correlation
+                  coefficent.
         Technically, the above definitions are only true if the 4D emittance is
         zero. So maybe we should compute directly from the definition in
         Lebedev/Bogacz (I think I had trouble with this before).
-     moments : pandas DataFrame
-         The 10 transverse beam moments. Columns are labeled 'x2' for <x^2>,
-         'xxp' for <xx'>, etc.
-     corr : pandas DataFrame
-         The 10 transverse beam correlation coefficents. Columns labels are the
+    moments : pandas DataFrame
+        The 10 transverse beam moments. Columns are labeled 'x2' for <x^2>,
+        'xxp' for <xx'>, etc.
+    corr : pandas DataFrame
+        The 10 transverse beam correlation coefficents. Columns labels are the
         same as `moments`.
-     realspace : pandas DataFrame
-         Dimensions of the beam ellipse in real (x-y) space, where the ellipse
-         is defined by 4 * x^T * Sigma * x, where Sigma is the covariance matrix
-         and x = [x, x', y, y']. The columns are:
-             'angle': the tilt angle (in degrees) measured below the x-axis.
-             'cx' : the horizontal radius of the ellipse when `angle` is zero.
-             'cy' : the vertical radius of the ellipse when `angle` is zero.
-             'area': the area of the ellipse
-             'area_rel' the area normalized by the initial area (the first row)
-     env_params : pandas DataFrame
-         The envelope parameters of the beam ellipse. If only the moments are
-         provided, these are meaningless and are kept at zero.
-     """
+    realspace : pandas DataFrame
+        Dimensions of the beam ellipse in real (x-y) space, where the ellipse
+        is defined by 4 * x^T * Sigma * x, where Sigma is the covariance matrix
+        and x = [x, x', y, y']. The columns are:
+            'angle': the tilt angle (in degrees) measured below the x-axis.
+            'cx' : the horizontal radius of the ellipse when `angle` is zero.
+            'cy' : the vertical radius of the ellipse when `angle` is zero.
+            'area': the area of the ellipse
+            'area_rel' the area normalized by the initial area (the first row)
+    env_params : pandas DataFrame
+        The envelope parameters of the beam ellipse. If only the moments are
+        provided, these are meaningless and are kept at zero.
+    """
     def __init__(self, mode):
         self.mode = mode
         self.twiss2D = None
