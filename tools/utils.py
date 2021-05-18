@@ -1,44 +1,38 @@
-"""Various utility functions."""
-
-# Standard
 import os
-# Third party
+
 import numpy as np
-import scipy
 import pandas as pd
 import sympy
 import IPython
 from numpy import linalg as la
 from sympy import pprint, Matrix
-from scipy.integrate import trapz
 from IPython.display import display, HTML
 
 
-classical_proton_radius = 1.53469e-18 # [m]
-
-
 # File processing
-def list_files(dir):
-    """List all files in directory not starting with '.'"""
-    files = os.listdir(dir)
-    return [file for file in files if not file.startswith('.')]
+def list_files(path, join=True):
+    files = []
+    for file in os.listdir(path):
+        file_path = os.path.join(path, file)
+        if os.path.isfile(file_path) and not file.startswith('.'):
+            if join:
+                files.append(file_path)
+            else:
+                files.append(file)
+    return files
     
     
-def is_empty(dir):
-    """Return True if directory is empty."""
-    return len(list_files(dir)) > 0
+def is_empty(path):
+    return len(list_files(path)) > 0
     
     
-def delete_files_not_folders(dir):
-    """Delete all files in directory and subdirectories."""
-    for root, dirs, files in os.walk(dir):
+def delete_files_not_folders(path):
+    for root, folders, files in os.walk(path):
         for file in files:
-            if not file.startswith('.'):
-                os.remove(os.path.join(root, file))
+            os.remove(os.path.join(root, file))
                 
                 
 def file_exists(file):
-    """Return True if the file exists."""
     return os.path.isfile(file)
     
     
@@ -119,8 +113,8 @@ def rand_rows(X, n):
         Xsamp = Xsamp[idx]
     return Xsamp
     
-    
-# General math
+
+# Math
 def cov2corr(cov_mat):
     """Convert covariance matrix to correlation matrix."""
     D = np.sqrt(np.diag(cov_mat.diagonal()))
@@ -133,160 +127,3 @@ def rotation_matrix(phi):
     """2D rotation matrix (cw)."""
     C, S = np.cos(phi), np.sin(phi)
     return np.array([[C, S], [-S, C]])
-
-
-# Accelerator physics
-def rotation_matrix_4D(phi):
-    C, S = np.cos(phi), np.sin(phi)
-    return np.array([[C, 0, S, 0], [0, C, 0, S], [-S, 0, C, 0], [0, -S, 0, C]])
-
-
-def phase_adv_matrix(mu1, mu2):
-    R = np.zeros((4, 4))
-    R[:2, :2] = rotation_matrix(mu1)
-    R[2:, 2:] = rotation_matrix(mu2)
-    return R
-    
-    
-def rotate_vec(x, phi):
-    return np.matmul(rotation_matrix_4D(phi), x)
-
-
-def rotate_mat(M, phi):
-    R = rotation_matrix_4D(phi)
-    return la.multi_dot([R, M, R.T])
-    
-    
-def mat2vec(Sigma):
-    """Return vector of independent elements in 4x4 symmetric matrix Sigma."""
-    return Sigma[np.triu_indices(4)]
-                  
-                  
-def vec2mat(moment_vec):
-    """Return 4x4 symmetric matrix from 10 element vector."""
-    Sigma = np.zeros((4, 4))
-    indices = np.triu_indices(4)
-    for moment, (i, j) in zip(moment_vec, zip(*indices)):
-        Sigma[i, j] = moment
-    return symmetrize(Sigma)
-
-
-def Vmat_2D(alpha_x, beta_x, alpha_y, beta_y):
-    """Normalization matrix (uncoupled)"""
-    def V_uu(alpha, beta):
-        return np.array([[beta, 0.0], [-alpha, 1.0]]) / np.sqrt(beta)
-    V = np.zeros((4, 4))
-    V[:2, :2] = V_uu(alpha_x, beta_x)
-    V[2:, 2:] = V_uu(alpha_y, beta_y)
-    return V
-    
-    
-def get_phase_adv(beta, positions, units='deg'):
-    """Compute the phase advance by integrating the beta function."""
-    npts = len(positions)
-    phases = np.zeros(npts)
-    for i in range(npts):
-        phases[i] = trapz(1/beta[:i], positions[:i]) # radians
-    if units == 'deg':
-        phases = np.degrees(phases)
-    elif units == 'tune':
-        phases /= 2*np.pi
-    return phases
-    
-    
-def params_from_transfer_matrix(M):
-    """Return dictionary of lattice parameters from the transfer matrix."""
-    keys = ['frac_tune_x', 'frac_tune_y', 'alpha_x', 'alpha_y', 'beta_x',
-            'beta_y', 'gamma_x', 'gamma_y']
-    lattice_params = {key: None for key in keys}
-
-    cos_phi_x = (M[0, 0] + M[1, 1]) / 2
-    cos_phi_y = (M[2, 2] + M[3, 3]) / 2
-    if abs(cos_phi_x) >= 1 or abs(cos_phi_y) >= 1 :
-        return lattice_params
-    sign_x = sign_y = +1
-    if abs(M[0, 1]) != 0:
-        sign_x = M[0, 1] / abs(M[0, 1])
-    if abs(M[2, 3]) != 0:
-        sign_y = M[2, 3] / abs(M[2, 3])
-    sin_phi_x = sign_x * np.sqrt(1 - cos_phi_x**2)
-    sin_phi_y = sign_y * np.sqrt(1 - cos_phi_y**2)
-
-    nux = sign_x * np.arccos(cos_phi_x) / (2 * np.pi)
-    nuy = sign_y * np.arccos(cos_phi_y) / (2 * np.pi)
-    beta_x = M[0, 1] / sin_phi_x
-    beta_y = M[2, 3] / sin_phi_y
-    alpha_x = (M[0, 0] - M[1, 1]) / (2 * sin_phi_x)
-    alpha_y = (M[2, 2] - M[3, 3]) / (2 * sin_phi_y)
-    gamma_x = -M[1, 0] / sin_phi_x
-    gamma_y = -M[3, 2] / sin_phi_y
-
-    lattice_params['frac_tune_x'] = nux
-    lattice_params['frac_tune_y'] = nuy
-    lattice_params['beta_x'] = beta_x
-    lattice_params['beta_y'] = beta_y
-    lattice_params['alpha_x'] = alpha_x
-    lattice_params['alpha_y'] = alpha_y
-    lattice_params['gamma_x'] = gamma_x
-    lattice_params['gamma_y'] = gamma_y
-    return lattice_params
-
-
-def get_perveance(kin_energy, mass, line_density):
-    """Return the dimensionless space charge perveance.
-    
-    kin_energy : kinetic energy per particle [GeV]
-    mass : mass per particle [GeV/c^2]
-    line_density : particles per length [m^-1]
-    """
-    gamma = 1 + (kin_energy / mass)
-    beta = np.sqrt(1 - (1 / (gamma**2)))
-    return (2 * classical_proton_radius * line_density) / (beta**2 * gamma**3)
-
-
-def get_moments_key(i, j):
-    """Return the key corresponding to Sigma[i, j].
-    
-    These keys are used for the column names when creating a DataFrame for
-    the beam moments.
-    """
-    dictionary = {
-        (0, 0):'x2' ,
-        (1, 0):'xxp',
-        (2, 0):'xy',
-        (3, 0):'xyp',
-        (1, 1):'xp2',
-        (2, 1):'yxp',
-        (3, 1):'xpyp',
-        (2, 2):'y2',
-        (3, 2):'yyp',
-        (3, 3):'yp2'
-    }
-    if i < j:
-        i, j = j, i
-    return dictionary[(i, j)]
-
-
-def get_moments_label(i, j):
-    """Return a string corresponding to Sigma[i, j], e.g. '<x^2>.'"""
-    dictionary = {
-        (0, 0):r"$\langle{x^2}\rangle$",
-        (1, 0):r"$\langle{xx'}\rangle$",
-        (2, 0):r"$\langle{xy}\rangle$",
-        (3, 0):r"$\langle{xy'}\rangle$",
-        (1, 1):r"$\langle{x'^2}\rangle$",
-        (2, 1):r"$\langle{yx'}\rangle$",
-        (3, 1):r"$\langle{x'y'}\rangle$",
-        (2, 2):r"$\langle{y^2}\rangle$",
-        (3, 2):r"$\langle{yy'}\rangle$",
-        (3, 3):r"$\langle{y'^2}\rangle$"
-    }
-    str_to_int = {'x':0, 'xp':1, 'y':2, 'yp':3}
-    if type(i) is str:
-        i = str_to_int[i]
-    if type(j) is str:
-        j = str_to_int[j]
-    {'x':0, 'xp':1, 'y':2, 'yp':3}
-    if i < j:
-        i, j = j, i
-    return dictionary[(i, j)]
