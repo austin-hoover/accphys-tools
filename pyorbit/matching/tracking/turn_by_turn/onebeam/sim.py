@@ -6,62 +6,61 @@ turn-by-turn envelope parameters, bunch moments, and/or bunch coordinates.
 The saved file formats are '.npy', which is convenient for storing multi-dim
 arrays. They can be loaded by calling `np.load(filename)`.
 """
-
-# Standard 
 import sys
-# Third party
 import numpy as np
 from tqdm import tqdm, trange
-# PyORBIT
+
 from bunch import Bunch
 from spacecharge import SpaceChargeCalc2p5D
 from orbit.analysis import AnalysisNode
-from orbit.coupling import bogacz_lebedev as BL
-from orbit.envelope import Envelope
+from orbit.analysis import add_analysis_nodes
+from orbit.analysis import get_analysis_nodes_data
+from orbit.envelope import DanilovEnvelope
 from orbit.lattice import AccLattice, AccNode, AccActionsContainer
 from orbit.space_charge.envelope import set_env_solver_nodes, set_perveance
 from orbit.space_charge.sc2p5d.scLatticeModifications import setSC2p5DAccNodes
 from orbit.teapot import TEAPOT_Lattice
+from orbit.twiss import twiss
 from orbit.utils import helper_funcs as hf
-# Local
+
 sys.path.append('/Users/46h/Research/code/accphys') 
 from tools.utils import delete_files_not_folders
 
     
 # Settings
 #------------------------------------------------------------------------------
-
 # General
 mass = 0.93827231 # GeV/c^2
-energy = 1.0 # GeV/c^2
-intensity = 1e14
-nturns_track = 50
-nparts = int(1.5e5)
+kin_energy = 1.0 # GeV/c^2
+intensity = 0.0e14
+bunch_length = 150.0 # m
+nparts = int(1e5)
 ntestparts = 100
-track_bunch = False
-store_bunch_coords = False
+nturns_track = 100
+track_bunch = True
+store_bunch_coords = True
 
 # Lattice
-latfile = '_latfiles/fodo_quadstart.lat'
-latseq = 'fodo'
+latfile = '_latfiles/SNSring_linear_noRF_nux6.18_nuy6.18.lat'
+latseq = 'rnginj'
 fringe = False
 
 # Initial beam
-mode = 1
-eps = 50e-6 # intrinsic emitance = ex + ey
-ex_frac = 0.3 # ex/eps
+mode = 2
+eps = 40e-6 # intrinsic emitance
+eps_x_frac = 0.25 # ex/eps
 nu = np.radians(90) # x-y phase difference
 
 # Space charge solver
-max_solver_spacing = 0.05 # [m]
+max_solver_spacing = 1.0 # [m]
 min_solver_spacing = 1e-6
 gridpts = (128, 128, 1) # (x, y, z)
 
 # Matching
-match = False 
-tol = 1e-7 # absolute tolerance for cost function
+match = True 
+tol = 1e-4 # absolute tolerance for cost function
 verbose = 2 # {0 (silent), 1 (report once at end), 2 (report at each step)}
-perturb_radius = 0.0 # If nonzero, perturb the matched envelope
+perturb_radius = 0.0 # between 0 (no effect) and 1.0
 method = 'auto' # 'lsq' or 'replace_by_avg'
 
 # Output data locations
@@ -74,20 +73,20 @@ files = {
 }
 
 delete_files_not_folders('_output/')
-
+    
         
 # Envelope
 #------------------------------------------------------------------------------
 
 # Create envelope matched to bare lattice
 lattice = hf.lattice_from_file(latfile, latseq, fringe)
-env = Envelope(eps, mode, ex_frac, mass, energy, length=lattice.getLength())
-env.match_bare(lattice, '2D') # if '4D', beam will be flat for uncoupled lattice
+env = DanilovEnvelope(eps, mode, eps_x_frac, mass, kin_energy, length=bunch_length)
+env.match_bare(lattice, '2D') # if '4D', and unequal tunes, beam will have 0 area
     
-# Match with space charge
-env.set_spacecharge(intensity)
+# Create envelope 
+env.set_intensity(intensity)
 solver_nodes = set_env_solver_nodes(lattice, env.perveance, max_solver_spacing)
-if match:
+if match and intensity > 0:
     print 'Matching.'
     env.match(lattice, solver_nodes, tol=tol, verbose=verbose, method=method)
 if perturb_radius > 0:
@@ -97,7 +96,9 @@ init_params = np.copy(env.params)
     
 # Get linear transfer matrix
 M = env.transfer_matrix(lattice)
-print 'Effective transfer matrix is {}stable.'.format('' if hf.is_stable(M) else '')
+mux, muy = 360 * env.tunes(lattice)
+print 'Transfer matrix is {}stable.'.format('' if twiss.is_stable(M) else 'un')
+print '    mux, muy = {:.3f}, {:.3f} deg'.format(mux, muy)
 
 # Track envelope
 print 'Tracking envelope.'
