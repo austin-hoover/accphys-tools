@@ -12,50 +12,48 @@ This script does the following:
 The saved file formats are '.npy', which is convenient for storing multi-dim
 arrays. They can be loaded by calling `np.load(filename)`.
 """
-
-# Standard 
 import sys
-# Third party
 import numpy as np
 from tqdm import tqdm, trange
-# PyORBIT
+
 from bunch import Bunch
 from spacecharge import SpaceChargeCalc2p5D
-from orbit.analysis import (
-    AnalysisNode, add_analysis_nodes, get_analysis_nodes_data)
-from orbit.coupling import bogacz_lebedev as BL
-from orbit.envelope import Envelope
+from orbit.analysis import AnalysisNode
+from orbit.analysis import add_analysis_nodes
+from orbit.analysis import get_analysis_nodes_data
+from orbit.envelope import DanilovEnvelope
 from orbit.lattice import AccLattice, AccNode, AccActionsContainer
 from orbit.space_charge.envelope import set_env_solver_nodes, set_perveance
 from orbit.space_charge.sc2p5d.scLatticeModifications import setSC2p5DAccNodes
 from orbit.teapot import TEAPOT_Lattice
+from orbit.twiss import twiss
 from orbit.utils import helper_funcs as hf
-# Local
+
 sys.path.append('/Users/46h/Research/code/accphys') 
 from tools.utils import delete_files_not_folders
     
     
 # Settings
 #------------------------------------------------------------------------------
-
 # General
 mass = 0.93827231 # GeV/c^2
-energy = 1.0 # GeV/c^2
-intensity = 1e14
+kin_energy = 1.0 # GeV/c^2
+intensity = 30.0e14
+bunch_length = 150.0 # m
 nparts = int(1e5)
-ntestparts = 1000
-track_bunch = True
-store_bunch_coords = True
+ntestparts = 100
+track_bunch = False
+store_bunch_coords = False
 
 # Lattice
-latfile = '_latfiles/fodo_quadstart.lat'
+latfile = '_latfiles/fodo_driftstart.lat'
 latseq = 'fodo'
 fringe = False
 
 # Initial beam
-mode = 2
-eps = 50e-6 # intrinsic emitance
-ex_frac = 0.5 # ex/eps
+mode = 1
+eps = 40e-6 # intrinsic emitance
+eps_x_frac = 0.25 # ex/eps
 nu = np.radians(90) # x-y phase difference
 
 # Space charge solver
@@ -67,7 +65,7 @@ gridpts = (128, 128, 1) # (x, y, z)
 match = True 
 tol = 1e-4 # absolute tolerance for cost function
 verbose = 2 # {0 (silent), 1 (report once at end), 2 (report at each step)}
-perturb_radius = 0 # if nonzero, perturb the matched envelope
+perturb_radius = 0.0 # between 0 (no effect) and 1.0
 method = 'auto' # 'lsq' or 'replace_by_avg'
 
 # Output data locations
@@ -88,16 +86,15 @@ delete_files_not_folders('_output/')
 
 # Create envelope matched to bare lattice
 lattice = hf.lattice_from_file(latfile, latseq, fringe)
-env = Envelope(eps, mode, ex_frac, mass, energy, length=lattice.getLength())
-env.match_bare(lattice, '4D')
+env = DanilovEnvelope(eps, mode, eps_x_frac, mass, kin_energy, length=bunch_length)
+env.match_bare(lattice, '2D')
 
-# Get 2D Twiss parameters within bare lattice
-bunch, params_dict = hf.initialize_bunch(mass, energy)
-twiss = hf.twiss_throughout(lattice, bunch)
-np.save('_output/data/twiss.npy', twiss)
+# Save 2D Twiss parameters within bare lattice
+bunch, params_dict = hf.initialize_bunch(mass, kin_energy)
+np.save('_output/data/twiss.npy', hf.twiss_throughout(lattice, bunch))
     
 # Match with space charge
-env.set_spacecharge(intensity)
+env.set_intensity(intensity)
 solver_nodes = set_env_solver_nodes(lattice, env.perveance, max_solver_spacing)
 
 if match and intensity > 0:
@@ -111,7 +108,7 @@ init_params = np.copy(env.params)
 # Get linear transfer matrix
 M = env.transfer_matrix(lattice)
 mux, muy = 360 * env.tunes(lattice)
-print 'Transfer matrix is {}stable.'.format('' if hf.is_stable(M) else 'un')
+print 'Transfer matrix is {}stable.'.format('' if twiss.is_stable(M) else 'un')
 print '    mux, muy = {:.3f}, {:.3f} deg'.format(mux, muy)
 
 # Track envelope
