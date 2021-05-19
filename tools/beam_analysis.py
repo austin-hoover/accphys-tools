@@ -163,8 +163,10 @@ class Stats:
         self.corr = None
         self.realspace = None
         self.env_params = None
+        self._initialized = False
         
     def _create_empty_arrays(self, data):
+        self._initialized = True
         self.nframes = data.shape[0]
         self.env_params_arr = np.zeros((self.nframes, 8))
         self.moments_arr = np.zeros((self.nframes, 10))
@@ -174,6 +176,8 @@ class Stats:
         self.twiss4D_arr = np.zeros((self.nframes, 9))
         
     def read_moments(self, moments_list):
+        if not self._initialized:
+            self._create_empty_arrays(moments_list)
         for i, moments in enumerate(moments_list):
             cov_mat = vec2mat(moments)
             self.moments_arr[i] = moments
@@ -188,7 +192,8 @@ class Stats:
         self._create_dfs()
         
     def read_env(self, env_params_list):
-        self._create_empty_arrays(env_params_list)
+        if not self._initialized:
+            self._create_empty_arrays(env_params_list)
         moments_list = []
         for env_params in env_params_list:
             a, b, ap, bp, e, f, ep, fp = env_params
