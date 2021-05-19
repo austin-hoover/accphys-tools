@@ -81,7 +81,7 @@ tbt_params_list = []
 costs = []
 for twiss_params in tqdm(result.history):
     env.set_twiss4D(twiss_params)
-    costs.append(0.5 * np.sum(env._residuals(lattice)))
+    costs.append(0.5 * np.sum(env._residuals(lattice)**2))
     tbt_params = env.track_store_params(lattice, nturns)
     tbt_params_list.append(tbt_params)
 np.save('_output/data/tbt_params_list.npy', tbt_params_list)

@@ -9,40 +9,35 @@ the matched solution is approximately a diagonal line with an opposite tilt
 angle. The packaged optimizer struggles with this case, but the 
 'replace by average' method is able to find the matched beam (not always).
 """
-
-# Standard 
 import sys
-import copy
-# Third party
 import numpy as np
 from tqdm import tqdm, trange
-# PyORBIT
+
 from bunch import Bunch
 from spacecharge import SpaceChargeCalc2p5D
-from orbit.analysis import (
-    AnalysisNode,
-    add_analysis_nodes, 
-    get_analysis_nodes_data, 
-    clear_analysis_nodes_data)
-from orbit.analysis.analysis import covmat2vec
-from orbit.coupling import bogacz_lebedev as BL
-from orbit.envelope import Envelope
+from orbit.analysis import AnalysisNode
+from orbit.analysis import add_analysis_nodes
+from orbit.analysis import get_analysis_nodes_data
+from orbit.envelope import DanilovEnvelope
 from orbit.lattice import AccLattice, AccNode, AccActionsContainer
 from orbit.space_charge.envelope import set_env_solver_nodes, set_perveance
 from orbit.space_charge.sc2p5d.scLatticeModifications import setSC2p5DAccNodes
 from orbit.teapot import TEAPOT_Lattice
+from orbit.twiss import twiss
 from orbit.utils import helper_funcs as hf
-# Local
+
 sys.path.append('/Users/46h/Research/code/accphys') 
 from tools.utils import delete_files_not_folders
     
     
 # Settings
 #------------------------------------------------------------------------------
-
 # General
 mass = 0.93827231 # GeV/c^2
-energy = 1.0 # GeV/c^2
+kin_energy = 1.0 # GeV/c^2
+intensities = np.linspace(0, 1.5e14, 75)
+bunch_length = 5.0
+n_turns_track = 20
 
 # Lattice
 latfile = '_latfiles/fodo_skew_quadstart.lat'
@@ -52,7 +47,7 @@ fringe = False
 # Initial beam
 mode = 1
 eps = 50e-6 # intrinsic emitance
-ex_frac = 0.5 # ex/eps
+eps_x_frac = 0.5 # ex/eps
 nu = np.radians(90) # x-y phase difference
 
 # Space charge solver
@@ -61,44 +56,34 @@ min_solver_spacing = 1e-6
 
 # Matching
 match = True 
-tol = 1e-4 # absolute tolerance for cost function
-verbose = 2 # {0 (silent), 1 (report once at end), 2 (report at each step)}
-perturb_radius = 0. # if nonzero, perturb the matched envelope
-method = 'replace_by_avg'
+tol = 1e-4
+verbose = 0
+
 
 delete_files_not_folders('_output/')
 
 
+# Simulation
 #------------------------------------------------------------------------------
-
-intensities = np.linspace(0, 1.5e14, 75)
-env = Envelope(eps, mode, ex_frac, mass, energy, length=5.0)
-
-def cost_func(env, lattice):
-    residuals = env._mismatch_error(lattice)
-    return 0.5 * np.sum(residuals**2)
-
-cost_lists = []
-matched_params_lists = []
-tbt_params_lists = []
-
-for method in ('lsq', 'replace_by_avg'):
+cost_lists, matched_params_lists, tbt_params_lists = [], [], []
+env = DanilovEnvelope(eps, mode, eps_x_frac, mass, kin_energy, length=bunch_length)
+for method in ('lsq', 'replace_avg'):
     print 'Method =', method
     cost_list = []
     tbt_params_list = [] 
     for intensity in tqdm(intensities):
         lattice = hf.lattice_from_file(latfile, latseq, fringe)
         env.match_bare(lattice)
-        env.set_spacecharge(intensity)
+        env.set_intensity(intensity)
         solver_nodes = set_env_solver_nodes(lattice, env.perveance, max_solver_spacing)
         if intensity > 0:
-            env.match(lattice, solver_nodes, method=method, tol=tol, verbose=0)
-        cost_list.append(cost_func(env, lattice))
-        tbt_params_list.append(env.track_store_params(lattice, 20))
+            env.match(lattice, solver_nodes, method=method, tol=tol, verbose=verbose)
+        cost_list.append(0.5 * np.sum(env._residuals(lattice)**2))
+        tbt_params_list.append(env.track_store_params(lattice, n_turns_track))
     cost_lists.append(cost_list)
     tbt_params_lists.append(tbt_params_list)
     
 np.save('_output/data/cost_lists.npy', cost_lists)
 np.save('_output/data/tbt_params_lists.npy', tbt_params_lists)
 np.save('_output/data/perveances.npy', 
-        hf.get_perveance(mass, energy, intensities/lattice.getLength()))
+        hf.get_perveance(mass, kin_energy, intensities/lattice.getLength()))
