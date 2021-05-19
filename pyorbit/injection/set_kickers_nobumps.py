@@ -39,31 +39,15 @@ ring = time_dep.TIME_DEP_Lattice()
 ring.readMADX('_latfiles/SNSring_linear_noRF_nux6.18_nuy6.18.lat', 'rnginj')
 ring.initialize()
 ring.set_fringe(False)
-
-# Here we increase the strengths of the quadrupoles in the injection
-# region. They are a bit lower than the default values; because of this, the 
-# kickers can't get the required slope at s = 0. We might have to fix the 
-# strength of these quads, then set the tunes equal to each other by varying
-# the other quads in the ring. I think this must be done in MADX. Put this 
-# on hold for now.
-quad_names = ['qth_a10', 'qtv_a11', 'qtv_a12', 'qth_a13']
-for quad_name in quad_names:
-    quad_node = ring.getNodeForName(quad_name)
-    kq = quad_node.getParam('kq')
-    print quad_name, kq * hf.get_Brho(mass, kin_energy)
-    quad_node.setParam('kq', 1.0 * kq)
     
-# Injection kicker magnets (listed in order)
+# Injection kicker magnets
 kicker_names = ['ikickh_a10', 'ikickv_a10', 'ikickh_a11', 'ikickv_a11',
                 'ikickv_a12', 'ikickh_a12', 'ikickv_a13', 'ikickh_a13']
 param_names = ['kx', 'ky', 'kx', 'ky', 'ky', 'kx', 'ky', 'kx']
 kicker_nodes = [ring.getNodeForName(name) for name in kicker_names]
 
-# Maximum injection kicker angles for 1 GeV kinetic energy [mrad]
-max_kick_angles = np.array([12.84, 12.84, 7.13, 7.12, 7.12, 7.12, 12.84, 12.84])
-
-# Those are the old limits -- new limits are 15% higher
-max_kick_angles *= 1.15
+# Maximum injection kicker angles at 1 GeV kinetic energy [mrad]
+max_kick_angles = 1.15 * np.array([12.84, 12.84, 7.13, 7.12, 7.12, 7.12, 12.84, 12.84])
 
 # Scale angles based on actual kinetic energy
 def get_momentum(kin_energy, mass):
@@ -72,6 +56,10 @@ max_kick_angles *= (get_momentum(1.0, mass) / get_momentum(kin_energy, mass))
 
 # Convert from mrad to rad
 max_kick_angles *= 1e-3
+
+# ARTIFICIALLY INCREASE KICKER LIMITS. The values seem to be less than the defaults,
+# and with the provided kicker limits, we can't get to the closd orbit.
+max_kick_angles *= 2.0
 
 
 def set_kick_angles(angles, region=1):
@@ -116,17 +104,8 @@ def set_inj_region_closed_orbit(coords_s0, **kws):
         result = opt.least_squares(penalty, np.zeros(4), bounds=bounds, **kws)
         kick_angles[:0] = result.x
     return kick_angles
-    
-    
-# Get necessary kicker angles
-coords_s0 = np.array([x_foil - 0.010, 0.000, y_foil, -0.001])
-kick_angles = set_inj_region_closed_orbit(coords_s0, verbose=1)  
 
-print 'Constraint violations:'
-diffs = np.abs(kick_angles) - max_kick_angles
-for name, diff in zip(kicker_names, diffs):
-    print '{} | {}'.format(name, 1000 * hf.step_func(diff))
-    
+
 def get_traj(lattice, init_coords):
     """Return single particle trajectory through lattice."""
     bunch_, params_dict_ = hf.initialize_bunch(mass, kin_energy)
@@ -141,6 +120,16 @@ def get_traj(lattice, init_coords):
         node.clear_data()
     return np.array(coords), np.array(positions)
 
+    
+# Get necessary kicker angles
+coords_s0 = np.array([x_foil - 0.010, 0.000, y_foil, -0.001])
+kick_angles = set_inj_region_closed_orbit(coords_s0, verbose=1)  
+
+print 'Constraint violations:'
+diffs = np.abs(kick_angles) - max_kick_angles
+for name, diff in zip(kicker_names, diffs):        
+    print '{} | {}'.format(name, 1000 * hf.step_func(diff))
+    
 # Save injection region trajectory
 ring.split(0.01)
 inj_region1 = hf.get_sublattice(ring, 'inj_start', None)

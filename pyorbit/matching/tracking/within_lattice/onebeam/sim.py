@@ -93,10 +93,9 @@ env.match_bare(lattice, '2D')
 bunch, params_dict = hf.initialize_bunch(mass, kin_energy)
 np.save('_output/data/twiss.npy', hf.twiss_throughout(lattice, bunch))
     
-# Match with space charge
+# Create envelope 
 env.set_intensity(intensity)
 solver_nodes = set_env_solver_nodes(lattice, env.perveance, max_solver_spacing)
-
 if match and intensity > 0:
     print 'Matching.'
     env.match(lattice, solver_nodes, tol=tol, verbose=verbose, method=method)

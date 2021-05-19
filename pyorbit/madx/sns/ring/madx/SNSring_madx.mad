@@ -17,8 +17,8 @@
   BETA  := sqrt(1-1/(GAMMA*GAMMA));  !  Value BETA  
 !--------------Select Nominal Tunes--------------------------  
 
-QH:=6.20418611621;
-QV:=6.2424583661;
+QH:=6.18435224145;
+QV:=6.19267532872;
   MUH:=QH/4.0;  
   MUV:=QV/4.0;  
 
@@ -32,7 +32,7 @@ QV:=6.2424583661;
 
 !--------------Call the Lattice file------------------------- 
 
-CALL, file = './_input/SNSring_linear_noRF.lat';
+CALL, file = './_input/SNSring_linear.lat';
 
 !------------------------------------------------------------
 ! Set up the beam parameters

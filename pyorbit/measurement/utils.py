@@ -10,42 +10,21 @@ from scipy.constants import speed_of_light
 # PyORBIT
 from bunch import Bunch
 from orbit.analysis import AnalysisNode, WireScannerNode
-from orbit.bunch_generators import TwissContainer, GaussDist2D, WaterBagDist2D, KVDist2D
-from orbit.envelope import Envelope
 from orbit.matrix_lattice import BaseMATRIX, MATRIX_Lattice
 from orbit_utils import Matrix
 from orbit.teapot import TEAPOT_Lattice, TEAPOT_MATRIX_Lattice
 from orbit.utils import helper_funcs as hf
 
+
 # Global variables
-madx_output_files = ['esave', 'madx.ps', 'optics1', 'optics2', 'rtbt.lat']
-rtbt_quad_names = ['q02', 'q03', 'q04', 'q05', 'q06', 'q12', 'q13',
-                   'q14', 'q15', 'q16', 'q17', 'q18', 'q19']
-rtbt_quad_coeff_lb = np.array([0, -5.4775, 0, -7.96585, 0, 0, -7.0425,
-                               0, -5.4775, 0, -5.4775, 0, -7.0425])
-rtbt_quad_coeff_ub = np.array([5.4775, 0, 7.0425, 0, 7.96585, 7.0425, 
-                               0, 5.4775, 0, 5.4775, 0, 7.0425, 0])
+rtbt_ind_quad_names = ['q02', 'q03', 'q04', 'q05', 'q06', 'q12', 'q13',
+                       'q14', 'q15', 'q16', 'q17', 'q18', 'q19']
 
-
-def run(command): 
-    """Run bash command."""
-    subprocess.call(command, shell=True)
+rtbt_quad_coeff_lb = np.array([0, -4.35, 0, -7.95, 0, 0, -5.53,
+                               0, -4.35, 0, -4.35, 0, -5.53])
+rtbt_quad_coeff_ub = np.array([5.5, 0, 5.5, 0, 7.95, 5.53, 
+                               0, 4.35, 0, 4.35, 0, 5.53, 0])
     
-    
-def run_madx(script, hide_output=True, output_dir='_output/madx/'):
-    """Run MADX script and move output."""
-    cmd = './madx {} > /dev/null 2>&1' if hide_output else './madx {}'
-    run(cmd.format(script))
-    run('mv {} {}'.format(' '.join(madx_output_files), output_dir))
-    
-    
-def delete_first_line(file):
-    """Delete first line of file."""
-    with open(file, 'r') as fin:
-        data = fin.read().splitlines(True)
-    with open(file, 'w') as fout:
-        fout.writelines(data[1:])
-
         
 def unpack(tracked_twiss):
     """Get ndarray from tuple returned by `MATRIX_Lattice.trackTwissData`.
@@ -67,21 +46,21 @@ def unpack(tracked_twiss):
     return np.array(data).T
 
 
-def get_rtbt_quad_nodes(lattice):
-    return [lattice.getNodeForName(name) for name in rtbt_quad_names]
+def get_rtbt_ind_quad_nodes(lattice):
+    return [lattice.getNodeForName(name) for name in rtbt_ind_quad_names]
 
 
-def set_rtbt_quad_strengths(lattice, quad_strengths):
-    quad_nodes = get_rtbt_quad_nodes(lattice)
+def set_rtbt_ind_quad_strengths(lattice, quad_strengths):
+    quad_nodes = get_rtbt_ind_quad_nodes(lattice)
     for node, kq in zip(quad_nodes, quad_strengths):
         node.setParam('kq', kq)
 
-    # Handle shared power supplies  
+    # Handle shared power supplies
     def set_strengths(names, kq):
         for name in names:
             node = lattice.getNodeForName(name)
             node.setParam('kq', kq)
-
+      
     (k02, k03, k04, k05, k06, k12, 
      k13, k14, k15, k16, k17, k18, k19) = quad_strengths
     set_strengths(['q07', 'q09', 'q11'], k05)
@@ -109,19 +88,20 @@ class PhaseController:
     """
     def __init__(self, lattice, init_twiss, mass, kin_energy, ref_ws_name):
         self.lattice = lattice
-        self.mass, self.kin_energy = mass, kin_energy
-        self.matlat = self.get_matrix_lattice()
         self.init_twiss = init_twiss
+        self.mass = mass
+        self.kin_energy = kin_energy
+        self.ref_ws_name = ref_ws_name
+        self.matlat = self.get_matrix_lattice()
         self.tracked_twiss = None
-        self.quad_nodes = get_rtbt_quad_nodes(self.lattice)
+        self.quad_nodes = get_rtbt_ind_quad_nodes(self.lattice)
         self.default_quad_strengths = self.get_quad_strengths()
         self.track_twiss()
-        self.ref_ws_name = ref_ws_name
         self.ref_ws_node = self.lattice.getNodeForName(ref_ws_name)
         self.ref_ws_index = self.get_node_index(ref_ws_name)
         
     def get_matrix_lattice(self):
-        """Obtain linear matrix representation of lattice.
+        """Return TEAPOT_MATRIX_Lattice from the TEAPOT_Lattice.
         
         This is very slow; the matrices are not stored, but are instead 
         calculated at each step using the method in 
@@ -156,17 +136,13 @@ class PhaseController:
         return [node.getParam('kq') for node in self.quad_nodes]
     
     def set_quad_strengths(self, quad_strengths):
-        """Set quad strengths and update the matrix lattice. 
-        
-        Only 13 are provided due to shared power supplies. 
-        """
-        set_rtbt_quad_strengths(self.lattice, quad_strengths)
+        """Set independent quad strengths and update the matrix lattice."""
+        set_rtbt_ind_quad_strengths(self.lattice, quad_strengths)
         self.matlat = self.get_matrix_lattice()
         
     def apply_settings(self, lattice):
-        """Adjust quad strengths in `lattice` to reflect the current controller
-        state."""
-        set_rtbt_quad_strengths(lattice, self.get_quad_strengths())
+        """Adjust quad strengths in `lattice` to current controller state."""
+        set_rtbt_ind_quad_strengths(lattice, self.get_quad_strengths())
         
     def get_transfer_matrix(self, node_name):
         """Calculate linear transfer matrix up to a certain node."""
@@ -208,10 +184,17 @@ class PhaseController:
             Maximum beta functions allowed before reference wire-scanner.
         **kws
             Key word arguments for `scipy.optimize.least_squares`.
+            
+        Returns
+        -------
+        ndarray, shape (13,)
+            The independent quadrupole strengths needed to obtain the 
+            desired phases.
         """
         Brho = hf.get_Brho(self.mass, self.kin_energy)
         lb = rtbt_quad_coeff_lb / Brho
         ub = rtbt_quad_coeff_ub / Brho
+        max_betas = np.array(max_betas)
         
         def cost(quad_strengths):            
             self.set_quad_strengths(quad_strengths)
@@ -219,70 +202,47 @@ class PhaseController:
             nux_calc, nuy_calc = self.get_ref_ws_phases()
             residuals = np.array([nux_calc - nux, nuy_calc - nuy])
             max_betas_calc = self.get_max_betas() 
-            penalty = 0
-            penalty += hf.step_func(max_betas_calc[0] - max_betas[0])
-            penalty += hf.step_func(max_betas_calc[1] - max_betas[1])
-            return residuals * (1 + penalty)
+            penalty = np.clip(max_betas_calc - max_betas, 0.0, None)
+            return residuals + penalty
 
         result = opt.least_squares(cost, self.default_quad_strengths, 
                                    bounds=(lb, ub), **kws)
-        new_quad_strengths = result.x
-        self.set_quad_strengths(new_quad_strengths)
+        self.set_quad_strengths(result.x)
         if np.any(np.array(self.get_max_betas()) > max_betas):
             print 'WARNING: maximum beta functions exceed limit.'
+            print 'Max betas =', self.get_max_betas()
+        return result.x
         
     def get_max_betas(self):
-        """Get maximum (beta_x, beta_y) from s=0 to reference wire-scanner."""
+        """Get maximum (beta_x, beta_y) between s=0 and reference wire-scanner."""
         return np.max(self.tracked_twiss[:self.ref_ws_index, 5:], axis=0)
     
-    def get_phases_for_scan(self, phase_coverage, steps_per_dim):
+    def get_phases_for_scan(self, phase_coverage, steps_per_dim, method=1):
         """Return list of phases for scan. 
         
-        First the horizontal phases are scanned, then the vertical.
+        phase_coverage : float
+            Number of degrees to cover in the scan.
+        steps_per_dims : int
+            Number of steps to take in each dimension.
+        method : {1, 2}
+            Method 1 varies x with y fixed, then y with x fixed. Method 2
+            varies both at the same time.
         """
+        total_steps = 2 * steps_per_dim
         nux0, nuy0 = self.get_ref_ws_phases()
-        window = 0.5 * phase_coverage
-        delta_nu_list = np.linspace(-window, window, steps_per_dim) / 360
-        phases = []
-        for delta_nu in delta_nu_list:
-            phases.append([nux0 + delta_nu, nuy0])
-        for delta_nu in delta_nu_list:
-            phases.append([nux0, nuy0 + delta_nu]) 
-        return phases
-    
+        window = 0.5 * phase_coverage / 360
+       
+        if method == 1:
+            delta_nu_list = np.linspace(-window, window, steps_per_dim)
+            phases = []
+            for delta_nu in delta_nu_list:
+                phases.append([nux0 + delta_nu, nuy0])
+            for delta_nu in delta_nu_list:
+                phases.append([nux0, nuy0 + delta_nu])
+            
+        elif method == 2:
+            nux_list = np.linspace(nux0 - window, nux0 + window, 2 * steps_per_dim)
+            nuy_list = np.linspace(nuy0 + window, nuy0 - window, 2 * steps_per_dim)
+            phases = list(zip(nux_list, nuy_list))
 
-def get_coord_array(kind, twiss, emittances, nparts, mode=1):
-    """Return transverse bunch coordinate array given 2D Twiss parameters.
-    
-    Parameters
-    ----------
-    kind : {'danilov', 'kv', 'gaussian', 'waterbag'}
-        The kind of distribution.
-    init_twiss : (alpha_x, alpha_y, beta_x, beta_y)
-        The 2D Twiss parameters.
-    emittances : (eps_x, eps_y)
-        The r.m.s. emittances.
-    nparts : int
-        Number of macroparticles.
-    mode : {1, 2}
-        The rotational mode if the Danilov distribution is chosen.
-    """
-    ax, ay, bx, by = twiss
-    ex, ey = emittances
-    if kind == 'danilov':
-        intrinsic_emittance = ex + ey
-        ex_frac = ex / intrinsic_emittance
-        env = Envelope(intrinsic_emittance, mode=mode)
-        env.fit_twiss2D(ax, ay, bx, by, ex_frac)
-        X = env.generate_dist(nparts)
-    else:
-        constructors = {'kv':KVDist2D, 
-                        'gaussian':GaussDist2D, 
-                        'waterbag':WaterBagDist2D}
-        (ax, ay, bx, by) = init_twiss
-        twissX = TwissContainer(ax, bx, ex)
-        twissY = TwissContainer(ay, by, ey)
-        kws = {'cut_off':3} if kind == 'gaussian' else {} 
-        dist_generator = constructors[kind](twissX, twissY, **kws)
-        X = np.array([dist_generator.getCoordinates() for _ in range(nparts)])
-    return X
+        return phases

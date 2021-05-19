@@ -1,7 +1,7 @@
 import numpy as np
 
 
-def get_moment_label(i, j):
+def moment_label(i, j):
     """Return the label corresponding to Sigma[i, j].
     
     These keys are used for the column names when creating a DataFrame for
@@ -24,7 +24,7 @@ def get_moment_label(i, j):
     return dictionary[(i, j)]
 
 
-def get_moment_label_string(i, j):
+def moment_label_string(i, j):
     """Return a string corresponding to Sigma[i, j], e.g. '<x^2>.'"""
     dictionary = {
         (0, 0):r"$\langle{x^2}\rangle$",
