@@ -54,10 +54,10 @@ def corner(
 
     Parameters
     ----------
-    coords : list or ndarray, shape (nframes, nparts, 4)
+    coords : list or ndarray, shape (n_frames, nparts, 4)
         Each element contains the transverse beam coordinate array at a
         particular frame. Each frame can have a different number of particles.
-    env_params : ndarray, shape (nframes, 8)
+    env_params : ndarray, shape (n_frames, 8)
         The envelope parameters at each frame. They are not plotted if none
         are provided.
     limits : (umax, upmax)
@@ -102,7 +102,7 @@ def corner(
         Each new frame will display text indicating the turn, position, etc..
         For example: 'Turn = 5' or 's = 17.4 m'. The string that will be printed
         is `text_fmt.format(text_vals[f])`, where f is the frame number. If
-        `text_vals` is None, we use list(range(nframes)).
+        `text_vals` is None, we use list(range(n_frames)).
     fps : int
         Frames per second.
     {plt, diag, env, text}_kws : dict
@@ -152,12 +152,15 @@ def corner(
     nparts_list = np.array([X.shape[0] for X in coords])
     if type(coords) is np.ndarray:
         coords = [X for X in coords]
-    nframes = len(coords)
-    coords_env = get_ellipse_coords(env_params) if plt_env else None
+    n_frames = len(coords)    
+    if plt_env:
+        coords_env = np.array([get_ellipse_coords(p) for p in env_params])
+    else:
+        coords_env = None
 
     # Configure text updates
     if text_vals is None:
-        text_vals = list(range(nframes))
+        text_vals = list(range(n_frames))
     if text_fmt is None: # display empty text
         text_fmt = ''
     texts = np.array([text_fmt.format(val) for val in text_vals])
@@ -167,7 +170,7 @@ def corner(
     if plt_env:
         coords_env = skip_frames(coords_env, skip, keep_last)
     texts = skip_frames(texts, skip, keep_last)
-    nframes = len(coords)
+    n_frames = len(coords)
         
     # Take random sample of particles for scatter plots
     nparts_is_static = all([n == nparts_list[0] for n in nparts_list])
@@ -214,7 +217,7 @@ def corner(
 
     # Compute the maximum histogram height among frames to keep ylim fixed
     if plt_diag:
-        max_heights = np.zeros((nframes, 4))
+        max_heights = np.zeros((n_frames, 4))
         for i, X in enumerate(coords):
             for j in range(4):
                 max_heights[i, j] = np.max(np.histogram(X[:, j], bins='auto')[0])
@@ -263,7 +266,7 @@ def corner(
                             **text_kws)
 
     # Call animator and possibly save the animation
-    anim = animation.FuncAnimation(fig, update, frames=nframes, blit=False,
+    anim = animation.FuncAnimation(fig, update, frames=n_frames, blit=False,
                                    interval=1000/fps)
     return anim
 
@@ -271,7 +274,7 @@ def corner(
 def _corner_2D(fig, ax, coords, coords_env, dims, texts, fps, env_kws,
                text_kws, **plt_kws):
     """2D scatter plot (helper function for `corner`)."""
-    nframes = coords.shape[0]
+    n_frames = coords.shape[0]
     j, i = [var_indices[dim] for dim in dims]
     coords_x, coords_y = coords[:, :, j], coords[:, :, i]
     
@@ -289,7 +292,7 @@ def _corner_2D(fig, ax, coords, coords_env, dims, texts, fps, env_kws,
             line_env.set_data(X_env[:, j], X_env[:, i])
         ax.set_title(texts[t], **text_kws)
         
-    return animation.FuncAnimation(fig, update, init_func=init, frames=nframes,
+    return animation.FuncAnimation(fig, update, init_func=init, frames=n_frames,
                                    interval=1000/fps)
     
 
@@ -304,8 +307,8 @@ def corner_env(
 
     Parameters
     ----------
-    params : ndarray, shape (nframes, 8)
-        If shape is (nframes, 8), gives the envelope parameters at each frame.
+    params : ndarray, shape (n_frames, 8)
+        If shape is (n_frames, 8), gives the envelope parameters at each frame.
         If a list of these arrays is provided, each envelope in the list will
         be plotted.
     dims : str or tuple
@@ -345,7 +348,7 @@ def corner_env(
         Each new frame will display text indicating the turn, position, etc..
         For example: 'Turn = 5' or 's = 17.4 m'. The string that will be printed
         is `text_fmt.format(text_vals[f])`, where f is the frame number. If
-        `text_vals` is None, we use list(range(nframes)).
+        `text_vals` is None, we use list(range(n_frames)).
     units : str or bool
         Whether to display units on the axis labels. Options are 'mm-mrad' or
         'm-rad'. No units are displayed if None.
@@ -364,10 +367,14 @@ def corner_env(
     matplotlib.animation.FuncAnimation
     """
     # Get ellipse coordinates
-    if params.ndim == 2:
-        params = params[np.newaxis, :]
-    n_envelopes, nframes, _ = params.shape
-    coords_list = [get_ellipse_coords(p) for p in params]
+    params_list = np.copy(params)
+    if params_list.ndim == 2:
+        params_list = params_list[np.newaxis, :]
+    n_envelopes, n_frames, _ = params_list.shape
+    coords_list = []
+    for params in params_list:
+        coords = np.array([get_ellipse_coords(p) for p in params])
+        coords_list.append(coords)
     X_init = coords_list[0][0]
     if n_envelopes > 1:
         fill = False
@@ -375,7 +382,7 @@ def corner_env(
             
     # Configure text updates
     if text_vals is None:
-        text_vals = list(range(nframes))
+        text_vals = list(range(n_frames))
     if text_fmt is None: # display empty text
         text_fmt = ''
     texts = np.array([text_fmt.format(val) for val in text_vals])
@@ -384,7 +391,7 @@ def corner_env(
     for i in range(n_envelopes):
         coords_list[i] = skip_frames(coords_list[i], skip, keep_last)
     texts = skip_frames(texts, skip ,keep_last)
-    nframes = coords_list[0].shape[0]
+    n_frames = coords_list[0].shape[0]
         
     # Configure axis limits
     limits_list = np.array([(1 + pad) * max_u_up_global(coords)
@@ -456,7 +463,7 @@ def corner_env(
         axes[0, 1].annotate(texts[t], xy=(0.35, 0.5), xycoords='axes fraction')
                         
     # Call animator and (maybe) save the animation
-    anim = animation.FuncAnimation(fig, update, frames=nframes,
+    anim = animation.FuncAnimation(fig, update, frames=n_frames,
                                    interval=1000/fps)
     if figname:
         writer = animation.writers['ffmpeg'](fps=fps, bitrate=bitrate)
@@ -518,9 +525,9 @@ def corner_onepart(
     history_kws.setdefault('zorder', 0)
     
     # Configure text updates
-    nframes = X.shape[0]
+    n_frames = X.shape[0]
     if text_vals is None:
-        text_vals = list(range(nframes))
+        text_vals = list(range(n_frames))
     if text_fmt is None: # display empty text
         text_fmt = ''
     texts = [text_fmt.format(val) for val in text_vals]
@@ -531,7 +538,7 @@ def corner_onepart(
         vecs = np.array(vecs)
         vecs = vecs[:, ::skip+1]
     texts = texts[::skip+1]
-    nframes = X.shape[0]
+    n_frames = X.shape[0]
     
     # Create figure
     limits = (1 + pad) * max_u_up(X)
@@ -596,7 +603,7 @@ def corner_onepart(
             axes[1, 2].annotate(texts[t], xy=(0.35, 0.5),
                                 xycoords='axes fraction', **text_kws)
 
-    anim = animation.FuncAnimation(fig, update, init_func=init, frames=nframes,
+    anim = animation.FuncAnimation(fig, update, init_func=init, frames=n_frames,
                                    interval=1000/fps)
     if figname:
         writer = animation.writers['ffmpeg'](fps=fps, bitrate=bitrate)
