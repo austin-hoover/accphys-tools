@@ -1,10 +1,3 @@
-"""
-This module contains functions to animate the evolution of a beam of
-particles in phase space.
-
-To do:
-    * Clean up. It's a bit messy.
-"""
 from cycler import cycler
 
 import numpy as np

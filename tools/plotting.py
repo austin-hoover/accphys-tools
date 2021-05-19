@@ -1,6 +1,3 @@
-"""
-This module contains functions to visualize accelerator physics data.
-"""
 from cycler import cycler
 
 import numpy as np
