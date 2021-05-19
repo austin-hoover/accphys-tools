@@ -30,6 +30,7 @@ mass = 0.93827231 # GeV/c^2
 kin_energy = 1.0 # GeV
 intensity = 3e14
 bunch_length = 5.0 # m
+match = True
 
 # Lattice
 mux = 80 # total x phase advance [deg]
@@ -69,7 +70,9 @@ for angle in angles:
     lattice = hf.fodo_lattice(mux, muy, length, fill_fac, angle, start)
     env.set_intensity(intensity)
     solver_nodes = set_env_solver_nodes(lattice, env.perveance, max_solver_spacing)
-    env.match(lattice, solver_nodes, verbose=2)
+    env.match_bare(lattice, solver_nodes=solver_nodes)
+    if match and intensity > 0:
+        env.match(lattice, solver_nodes, verbose=2)
     transfer_mats.append(env.transfer_matrix(lattice))
     env_monitor_nodes = add_analysis_nodes(lattice, kind='env_monitor')
     env.track(lattice)
