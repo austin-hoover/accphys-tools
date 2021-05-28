@@ -56,28 +56,28 @@ delete_files_not_folders('_output/')
 # Initial settings
 #------------------------------------------------------------------------------
 use = {
-    'collimator': False,
-    'foil': False,
-    'fringe': False,
+    'collimator': True,
+    'foil': True,
+    'fringe': True,
     'kickers': True,
-    'longitudinal impedence': False,
+    'longitudinal impedence': True,
     'pyorbit diagnostics': False,
-    'rf': False,
+    'rf': True,
     'skew quads': False,
     'solenoid': False,
-    'space charge': False,
+    'space charge': True,
 }
 x_foil = 0.0492 
 y_foil = 0.0468
-kin_energy = 0.800 # [GeV]
+kin_energy = 1.00 # [GeV]
 mass = 0.93827231 # [GeV/c^2]
 turns = 1000
 macros_per_turn = 260
 intensity = 1.5e14
 
 # Initial and final coordinates at s = 0
-inj_coords_t0 = np.array([x_foil, 0.0, y_foil, 0.0])
-inj_coords_t1 = np.array([x_foil - 0.030, 0.0, y_foil, -0.003])
+inj_coords_t0 = np.array([x_foil - 10e-3, 0.0, y_foil - 9e-3, 0.0])
+inj_coords_t1 = np.array([x_foil - 25e-3, 0.0, y_foil - 30e-3, 0.0])
 
 print 'Switches:'
 pprint(use)
@@ -90,6 +90,7 @@ if use['solenoid']:
     latfile = '_latfiles/SNSring_noRF_sol_nux6.18_nuy6.18.lat'
 else:
     latfile = '_latfiles/SNSring_noRF_nux6.18_nuy6.18.lat'
+latfile = '_latfiles/SNSring_nux6.20_nuy6.23.lat'
 latseq = 'rnginj'
 ring = time_dep.TIME_DEP_Lattice()
 ring.readMADX(latfile, latseq)
@@ -218,10 +219,10 @@ esparams = (esnu, esphase, esmax, nulltime)
 dist_z = SNSESpreadDist(ring_length, zmin, zmax, tailfraction, sync_part, emean, 
                         esigma, etrunc, emin, emax, ecparams, esparams)
 
-## Uncomment for uniform longitudinal distribution
-eoffset = 0.0
-deltaEfrac = 0.0
-dist_z = UniformLongDist(zmin, zmax, sync_part, eoffset, deltaEfrac)
+# Uncomment for uniform longitudinal distribution
+# eoffset = 0.0
+# deltaEfrac = 0.0
+# dist_z = UniformLongDist(zmin, zmax, sync_part, eoffset, deltaEfrac)
 
 
 # Injection kickers
@@ -514,7 +515,7 @@ injection_node.addChildNode(bunch_monitor_node, injection_node.EXIT)
 ring.set_fringe(use['fringe'])
 
 print 'Painting...'
-for _ in trange(100):
+for _ in trange(turns):
     ring.trackBunch(bunch, params_dict)
     
 print 'Saving turn-by-turn coordinates...'
