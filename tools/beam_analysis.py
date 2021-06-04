@@ -2,13 +2,27 @@ import numpy as np
 import numpy.linalg as la
 import pandas as pd
 
-from .utils import mat2vec, vec2mat, cov2corr
+from .utils import cov2corr, symmetrize
 
 
 env_cols = ['a','b','ap','bp','e','f','ep','fp']
 moment_cols = ['x2','xxp','xy','xyp','xp2','yxp','xpyp','y2','yyp','yp2']
 twiss2D_cols = ['ax','ay','bx','by','ex','ey']
 twiss4D_cols = ['ax','ay','bx','by','u','nu','e1','e2','e4D']
+
+
+def mat2vec(Sigma):
+    """Return vector of independent elements in 4x4 symmetric matrix Sigma."""
+    return Sigma[np.triu_indices(4)]
+                  
+                  
+def vec2mat(moment_vec):
+    """Inverse of `mat2vec`."""
+    Sigma = np.zeros((4, 4))
+    indices = np.triu_indices(4)
+    for moment, (i, j) in zip(moment_vec, zip(*indices)):
+        Sigma[i, j] = moment
+    return symmetrize(Sigma)
 
 
 def get_ellipse_coords(env_params, npts=100):
