@@ -9,6 +9,10 @@ from sympy import pprint, Matrix
 from IPython.display import display, HTML
 
 
+def is_number(x):
+    return type(x) in [float, int]
+
+
 # File processing
 def list_files(path, join=True):
     files = []
@@ -40,6 +44,30 @@ def file_exists(file):
 def merge_lists(x, y):
     """Returns [x[0], y[0], ..., x[-1], y[-1]]"""
     return [x for pair in zip(a, b) for x in pair]
+    
+    
+def split_list(items, token):
+    """Split `items` into sublists, excluding `token`.
+
+    Example:
+    >>> items = ['cat', 'dog', 'x', 'tree', 'bark']
+    >>> split_list(items, 'x')
+    [['cat', 'dog'], ['tree', 'bark']]
+    """
+    indices = [i for i, item in enumerate(items) if item == token]
+    sublists = []
+    if items[0] != token:
+        sublists.append(items[:indices[0]])
+    for lo, hi in zip(indices[:-1], indices[1:]):
+        sublists.append(items[lo + 1:hi])
+    if items[-1] != token:
+        sublists.append(items[indices[-1] + 1:])
+    return sublists
+    
+
+def sort_list_using_another_list(list1, list2):
+    return [item0 for item0, item1
+            in sorted(zip(list1, list2), key=lambda item: item[1])]
     
     
 def merge_dicts(*dictionaries):
