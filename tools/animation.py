@@ -1,3 +1,11 @@
+"""Various animation functions
+
+TO DO:
+    * Pad axes using the width of the distribution (see plotting.py).
+    * Add option to plotting windows at the projected means of the distribution
+      (see plotting.py).
+"""
+
 from cycler import cycler
 
 import numpy as np

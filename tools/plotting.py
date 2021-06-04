@@ -10,7 +10,7 @@ import seaborn as sns
 import scipy
 from pandas.plotting._matplotlib.tools import _set_ticks_props
 
-from .utils import rand_rows
+from .utils import rand_rows, is_number
 from .beam_analysis import get_ellipse_coords
 
 
@@ -28,21 +28,32 @@ def save(figname, dir, **kwargs):
 
 
 def max_u_up(X):
-    """Get the maximum x{y} and x'{y'} extents for any frame in `coords`.
+    """Get maximum position (u) and slope (u') in coordinate array.
 
     X : ndarray, shape (nparts, 4)
-        The beam coordinate array.
+        Coordinate array with columns: [x, x', y, y'].
     """
     xmax, xpmax, ymax, ypmax = np.max(X, axis=0)
     umax, upmax = max(xmax, ymax), max(xpmax, ypmax)
     return np.array([umax, upmax])
     
     
+def min_u_up(X):
+    """Get minimum position (u) and slope (u') in coordinate array.
+
+    X : ndarray, shape (nparts, 4)
+        Coordinate array with columns: [x, x', y, y'].
+    """
+    xmin, xpmin, ymin, ypmin = np.min(X, axis=0)
+    umin, upmin = min(xmin, ymin), max(xpmin, ypmin)
+    return np.array([umin, upmin])
+    
+    
 def max_u_up_global(coords):
     """Get the maximum x{y} and x'{y'} extents for any frame in `coords`.
 
     coords : ndarray, shape (nframes, nparts, 4)
-        The beam coordinate arrays at each frame.
+        Coordinate arrays at each frame.
     """
     u_up_local_maxes = np.array([max_u_up(X) for X in coords])
     umax_global, upmax_global = np.max(u_up_local_maxes, axis=0)
@@ -195,7 +206,10 @@ def setup_corner(
     Inputs
     ------
     limits : (umax, upmax)
-        The maximum position (umax) and slope (upmax) in the plot windows.
+        The maximum position (umax) and slope (upmax) in the plot windows. All
+        plot windows are made square, so xmax = ymax = -xmin = -ymax = umax, and
+        and xpmax = ypmax = -xpmin = -ypmin = upmax. Alternatively, (umin, umax)
+        or (upmin, upmax) can be passed.
     figsize : tuple or int
         Size of the figure (x_size, y_size). If an int is provided, the number
         is used as the size for both dimensions.
@@ -227,21 +241,29 @@ def setup_corner(
     # Preliminaries
     if figsize is None:
         if dims == 'all':
-            figsize = 6 if plt_diag else 5
+            figsize = 6.0 if plt_diag else 5.0
         else:
-            figsize = 3
-    if type(figsize) in [int, float]:
+            figsize = 3.0
+    if is_number(figsize):
         figsize = (figsize, figsize)
+        
+    def unpack(item):
+        if is_number(item):
+            lo, hi = -item, item
+        else:
+            lo, hi = item
+        return lo, hi
+    (umin, umax), (upmin, upmax) = unpack(limits[0]), unpack(limits[1])
+    limits = 2 * [(umin, umax), (upmin, upmax)]
+
     labels = get_labels(units, norm_labels)
-    umax, upmax = limits
-    limits = 2 * [(-umax, umax), (-upmax, upmax)]
+
     loc_u, loc_up = ticker.MaxNLocator(3), ticker.MaxNLocator(3)
     mloc_u, mloc_up = ticker.AutoMinorLocator(4), ticker.AutoMinorLocator(4)
     locators = 2 * [loc_u, loc_up]
     mlocators = 2 * [mloc_u, mloc_up]
     
-    # Only 2 variables plotted
-    if dims != 'all':
+    if dims != 'all': # only 2 variables plotted
         fig, ax = plt.subplots(figsize=figsize)
         despine([ax])
         j, i = [var_indices[dim] for dim in dims]
@@ -303,10 +325,10 @@ def setup_corner(
 
     
 def corner(
-    X, env_params=None, moments=False, limits=None, samples=2000, pad=0.5,
-    figsize=None, dims='all', kind='scatter', diag_kind='hist', hist_height=0.6,
-    units='mm-mrad', norm_labels=False, text=None, ax=None, diag_kws={},
-    env_kws={}, text_kws={}, **plt_kws
+    X, env_params=None, moments=False, limits=None, zero_center=True,
+    samples=2000, pad=0.5, figsize=None, dims='all', kind='scatter',
+    diag_kind='hist', hist_height=0.6, units='mm-mrad', norm_labels=False,
+    text=None, ax=None, diag_kws=None, env_kws=None, text_kws=None, **plt_kws
 ):
     """Plot the pairwise relationships between the beam phase space coordinates.
     
@@ -325,12 +347,20 @@ def corner(
         If True, plot the ellipse defined by the second-order moments of the
         distribution.
     limits : (umax, upmax)
-        Maximum position and slope for the plotting windows. In None, use auto-
-        ranging.
+        The maximum position (umax) and slope (upmax) in the plot windows. All
+        plot windows are made square, so xmax = ymax = -xmin = -ymax = umax, and
+        and xpmax = ypmax = -xpmin = -ypmin = upmax. If None, auto-ranging is
+        performed. Alternatively, a list of tuples can be passed: [(umin, umax),
+        (upmin, upmax)]. If either element is None, auto-ranging is performed
+        on those coordinates.
+    zero_center : bool
+        If true, center the plot window on the origin. Otherwise, center the
+        plot window on the projected means of the distribution.
     samples : int
         The number of randomly sampled points to use in the scatter plots.
     pad : float
-        Padding for the axis ranges: umax_new = (1 + pad) * umax_old.
+        Padding for the axis ranges: umax_new = (1 + pad) * 0.5 * w, where w is
+        the width of the distribution (max - min).
     figsize : tuple or int
         Size of the figure (x_size, y_size). If an int is provided, the number
         is used as the size for both dimensions.
@@ -374,6 +404,9 @@ def corner(
     plt_diag = diag_kind not in ('none', None)
     
     # Set default key word arguments
+    diag_kws = dict() if diag_kws is None else diag_kws
+    env_kws = dict() if env_kws is None else env_kws
+    text_kws = dict() if text_kws is None else text_kws
     if kind == 'scatter' or kind == 'scatter_density':
         plt_kws.setdefault('s', 3)
         plt_kws.setdefault('c', 'steelblue')
@@ -399,9 +432,38 @@ def corner(
         X_env = get_ellipse_coords(env_params, npts=100)
         
     # Determine axis limits
+    means = np.mean(X, axis=0)
+    maxs = np.max(X, axis=0)
+    mins = np.min(X, axis=0)
+    widths = (1 + pad) * np.abs(maxs - mins)
+    maxs = means + 0.5 * widths
+    mins = means - 0.5 * widths
+    umax = max(maxs[0], maxs[2])
+    umin = min(mins[0], mins[2])
+    upmax = max(maxs[1], maxs[3])
+    upmin = min(mins[1], mins[3])
+    if zero_center:
+        umax = max(abs(umax), abs(umin))
+        umin = -umax
+        upmax = max(abs(upmax), abs(upmin))
+        upmin = -upmax
+        
+    # If any None is encountered, use the calculated limits. Otherwise, use the
+    # user-supplied limits.
     if limits is None:
-        limits = (1 + pad) * max_u_up(X) # axis limits
-    
+        limits = [(umin, umax), (upmin, upmax)]
+    else:
+        _limits = []
+        if limits[0] is None:
+            _limits.append((umin, umax))
+        else:
+            _limits.append(limits[0])
+        if limits[1] is None:
+            _limits.append((upmin, upmax))
+        else:
+            _limits.append(limits[1])
+        limits = _limits
+        
     # Create figure
     fig, axes = setup_corner(
         limits, figsize, norm_labels, units, dims=dims, plt_diag=plt_diag,
