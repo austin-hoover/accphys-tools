@@ -10,7 +10,7 @@ from IPython.display import display, HTML
 
 
 def is_number(x):
-    return type(x) in [float, int]
+    return type(x) in [float, int, np.float64, np.int]
 
 
 # File processing
@@ -63,6 +63,14 @@ def split_list(items, token):
     if items[-1] != token:
         sublists.append(items[indices[-1] + 1:])
     return sublists
+    
+    
+def repeat_list(items, n=2):
+    new = []
+    for item in items:
+        for _ in range(n):
+            new.append(item)
+    return new
     
 
 def sort_list_using_another_list(list1, list2):
