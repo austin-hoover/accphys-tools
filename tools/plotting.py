@@ -11,7 +11,7 @@ import scipy
 from pandas.plotting._matplotlib.tools import _set_ticks_props
 
 from .utils import rand_rows, is_number
-from .beam_analysis import get_ellipse_coords
+from .beam_analysis import get_ellipse_coords, rms_ellipse_dims
 
 
 _labels = [r"$x$", r"$x'$", r"$y$", r"$y'$"]
@@ -801,6 +801,6 @@ def rms_ellipses(Sigmas, figsize=(5, 5), pad=0.5, axes=None, **plt_kws):
     for Sigma in Sigmas:
         for i in range(3):
             for j in range(i + 1):
-                angle, c1, c2 = ea.rms_ellipse_dims(Sigma, dims[j], dims[i + 1])
+                angle, c1, c2 = rms_ellipse_dims(Sigma, dims[j], dims[i + 1])
                 ellipse(axes[i, j], 2*c1, 2*c2, angle, **plt_kws)
     return axes
