@@ -248,17 +248,17 @@ def setup_corner(
         figsize = (figsize, figsize)
         
     def unpack(item):
-        if is_number(item):
-            lo, hi = -item, item
-        else:
+        if type(item) in [list, tuple, np.ndarray]:
             lo, hi = item
+        else:
+            lo, hi = -item, item
         return lo, hi
     (umin, umax), (upmin, upmax) = unpack(limits[0]), unpack(limits[1])
     limits = 2 * [(umin, umax), (upmin, upmax)]
 
     labels = get_labels(units, norm_labels)
 
-    loc_u, loc_up = ticker.MaxNLocator(3), ticker.MaxNLocator(3)
+    loc_u, loc_up = ticker.MaxNLocator(2), ticker.MaxNLocator(2)
     mloc_u, mloc_up = ticker.AutoMinorLocator(4), ticker.AutoMinorLocator(4)
     locators = 2 * [loc_u, loc_up]
     mlocators = 2 * [mloc_u, mloc_up]
@@ -308,14 +308,15 @@ def setup_corner(
     fig.align_labels()
     set_limits(b_row, limits, 'x')
     set_limits(l_col, limits[1:], 'y')
-    start = 0 if plt_diag else 1
-    for row, loc, mloc in zip(axes, locators[start:], mlocators[start:]):
-        for ax in row:
-            ax.yaxis.set_major_locator(loc)
-            ax.yaxis.set_minor_locator(mloc)
+    for i, row in enumerate(axes):
+        if not plt_diag:
+            i += 1
+        for ax in row[:i]:
+#            ax.yaxis.set_major_locator(locators[i])
+            ax.yaxis.set_minor_locator(mlocators[i])
     for col, loc, mloc in zip(axes.T, locators, mlocators):
         for ax in col:
-            ax.xaxis.set_major_locator(loc)
+#            ax.xaxis.set_major_locator(loc)
             ax.xaxis.set_minor_locator(mloc)
     for ax in axes.flat:
         ax.tick_params(**tick_kws)
@@ -467,7 +468,8 @@ def corner(
     # Create figure
     fig, axes = setup_corner(
         limits, figsize, norm_labels, units, dims=dims, plt_diag=plt_diag,
-        label_kws={'fontsize':'medium'})
+        label_kws={'fontsize':'medium'}
+    )
         
     # Single particle
     if dims != 'all':
