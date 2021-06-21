@@ -308,16 +308,16 @@ def setup_corner(
     fig.align_labels()
     set_limits(b_row, limits, 'x')
     set_limits(l_col, limits[1:], 'y')
-    for i, row in enumerate(axes):
-        if not plt_diag:
-            i += 1
-        for ax in row[:i]:
+#    for i, row in enumerate(axes):
+#        if not plt_diag:
+#            i += 1
+#        for ax in row[:i]:
 #            ax.yaxis.set_major_locator(locators[i])
-            ax.yaxis.set_minor_locator(mlocators[i])
-    for col, loc, mloc in zip(axes.T, locators, mlocators):
-        for ax in col:
+#            ax.yaxis.set_minor_locator(mlocators[i])
+#    for col, loc, mloc in zip(axes.T, locators, mlocators):
+#        for ax in col:
 #            ax.xaxis.set_major_locator(loc)
-            ax.xaxis.set_minor_locator(mloc)
+#            ax.xaxis.set_minor_locator(mloc)
     for ax in axes.flat:
         ax.tick_params(**tick_kws)
     if space is None:
