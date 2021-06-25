@@ -8,7 +8,6 @@ from matplotlib.lines import Line2D
 from matplotlib.patches import Ellipse
 import seaborn as sns
 import scipy
-from pandas.plotting._matplotlib.tools import _set_ticks_props
 
 from .utils import rand_rows, is_number
 from .beam_analysis import get_ellipse_coords, rms_ellipse_dims
