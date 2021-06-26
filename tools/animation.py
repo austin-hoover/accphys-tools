@@ -5,7 +5,6 @@ TO DO:
     * Add option to plotting windows at the projected means of the distribution
       (see plotting.py).
 """
-
 from cycler import cycler
 
 import numpy as np
@@ -15,7 +14,6 @@ import seaborn as sns
 import scipy
 from matplotlib import pyplot as plt, ticker
 from matplotlib import animation
-from pandas.plotting._matplotlib.tools import _set_ticks_props
 from matplotlib.patches import Ellipse, transforms
 
 from .beam_analysis import get_ellipse_coords
