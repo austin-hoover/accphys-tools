@@ -407,6 +407,8 @@ def corner(
     diag_kws = dict() if diag_kws is None else diag_kws
     env_kws = dict() if env_kws is None else env_kws
     text_kws = dict() if text_kws is None else text_kws
+#    if kind == 'hist':
+#        plt_kws.setdefault()
     if kind == 'scatter' or kind == 'scatter_density':
         plt_kws.setdefault('s', 3)
         plt_kws.setdefault('c', 'steelblue')
@@ -510,6 +512,8 @@ def corner(
                 ax.scatter(x, y, **plt_kws)
             elif kind == 'scatter_density':
                 scatter_density(ax, x, y, **plt_kws)
+            elif kind == 'hist':
+                ax.hist2d(x, y, **plt_kws)
             if X_env is not None:
                 ax.plot(X_env[:, j], X_env[:, i+1], **env_kws)
     if moments:

@@ -5,15 +5,13 @@ from PyORBIT are correct.
 
 To run: `./START.sh convert.py 1`
 """
-
-# Standard
 import sys
 import fileinput
 import subprocess
-# Third party
+
 import numpy as np
 from scipy.optimize import least_squares
-# PyORBIT
+
 from orbit.teapot import teapot, TEAPOT_Lattice, TEAPOT_MATRIX_Lattice
 from bunch import Bunch
 from orbit.utils import helper_funcs as hf
@@ -53,7 +51,7 @@ def get_tunes(file, seq, fringe=False):
     return nux, nuy
            
            
-def madx_to_pyorbit_tunes(madx_script, nux_true, nuy_true, latfile, latseq,
+def madx_to_pyorbit_tunes(madx_script, nux, nuy, latfile, latseq,
                           atol, rtol=1e-4, seed=None):
     """Find correct MADX tunes for desired PyORBIT tunes.
     
@@ -64,7 +62,7 @@ def madx_to_pyorbit_tunes(madx_script, nux_true, nuy_true, latfile, latseq,
     ----------
     madx_script : str
         Name of madx script which generates lattice.
-    nux_true{nuy_true} : float
+    nux{nuy} : float
         The desired horizontal{vertical} tune.
     latfile : str
         The name of the lattice file output by the MADX script.
@@ -83,7 +81,7 @@ def madx_to_pyorbit_tunes(madx_script, nux_true, nuy_true, latfile, latseq,
     """
     set_output_file(madx_script, latfile)
     
-    nux_madx, nuy_madx = nux_true, nuy_true
+    nux_madx, nuy_madx = nux, nuy
     converged_x = converged_y = False
     max_iters = 1000
     for _ in range(max_iters):
@@ -93,10 +91,10 @@ def madx_to_pyorbit_tunes(madx_script, nux_true, nuy_true, latfile, latseq,
         print 'MADX tunes:    {}, {}'.format(nux_madx, nuy_madx)
         print 'PyORBIT tunes: {}, {}'.format(nux_calc, nuy_calc)
         print ''
-        error_x = (nux_true % 1) - nux_calc
-        error_y = (nuy_true % 1) - nuy_calc
-        converged_x = abs(error_x) < atol or abs(error_x/nux_true) < rtol
-        converged_y = abs(error_y) < atol or abs(error_y/nuy_true) < rtol
+        error_x = (nux % 1) - nux_calc
+        error_y = (nuy % 1) - nuy_calc
+        converged_x = abs(error_x) < atol or abs(error_x/nux) < rtol
+        converged_y = abs(error_y) < atol or abs(error_y/nuy) < rtol
         if not converged_x:
             nux_madx += error_x
         if not converged_y:
@@ -106,8 +104,8 @@ def madx_to_pyorbit_tunes(madx_script, nux_true, nuy_true, latfile, latseq,
 
 
 # Settings
-nux_true = 6.18
-nuy_true = 6.18
+nux = 6.23
+nuy = 6.20
 atol = 1e-3
 madx_script = 'SNSring_madx.mad'
 latfile = 'LATTICE.lat'
@@ -118,7 +116,7 @@ subprocess.call('rm ./_output/*', shell=True)
 
 # Find correct madx inputs
 nux_madx, nuy_madx, error_x, error_y = madx_to_pyorbit_tunes(
-    madx_script, nux_true, nuy_true, latfile, latseq, atol
+    madx_script, nux, nuy, latfile, latseq, atol
 )
 print 'MADX tunes:'
 print '    nux_madx = {:.4e}'.format(nux_madx)
