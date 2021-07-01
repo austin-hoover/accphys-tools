@@ -1,3 +1,8 @@
+"""
+This script tracks a coasting beam through a symmetric FODO lattice. The
+bare lattice tune is decreased slowly from 100 degrees to 90 degrees over
+500 cells.
+"""
 import sys
 import numpy as np
 from scipy import optimize as opt
