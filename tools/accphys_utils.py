@@ -39,6 +39,15 @@ def V_matrix_4x4_uncoupled(alpha_x, alpha_y, beta_x, beta_y):
     return V
 
 
+def Sigma_from_twiss2D(alpha_x, alpha_y, beta_x, beta_y, eps_x, eps_y):
+    gamma_x = (1 + alpha_x**2) / beta_x
+    gamma_y = (1 + alpha_y**2) / beta_y
+    Sigma = np.zeros((4, 4))
+    Sigma[:2, :2] = eps_x * np.array([[beta_x, -alpha_x], [-alpha_x, gamma_x]])
+    Sigma[2:, 2:] = eps_y * np.array([[beta_y, -alpha_y], [-alpha_y, gamma_y]])
+    return Sigma
+
+
 def params_from_transfer_matrix(M):
     """Return dictionary of lattice parameters from a transfer matrix.
     
@@ -211,3 +220,37 @@ def get_perveance(kin_energy, mass, line_density):
     gamma = 1 + (kin_energy / mass)
     beta = np.sqrt(1 - (1 / (gamma**2)))
     return (2 * classical_proton_radius * line_density) / (beta**2 * gamma**3)
+
+
+def normalize(vec, alpha_x, alpha_y, beta_x, beta_y):
+    """Normalize [x, x', y, y'] by 2D Twiss parameters."""
+    V = V_matrix_4x4_uncoupled(alpha_x, alpha_y, beta_x, beta_y)
+    return np.matmul(np.linalg.inv(V), vec)
+
+
+def normalized_Sigma(Sigma, alpha_x, alpha_y, beta_x, beta_y):
+    V = V_matrix_4x4_uncoupled(alpha_x, alpha_y, beta_x, beta_y)
+    Vinv = np.linalg.inv(V)
+    return np.linalg.multi_dot([Vinv, Sigma, Vinv.T])
+
+
+def possible_points(transfer_mat, sig_xx, sig_yy, dim, twiss=None, slope_min_max=(-100, 100)):
+    """Get possible points at location 0 given particle position at downstream location 1."""
+    x_max = 2.0 * np.sqrt(sig_xx)
+    y_max = 2.0 * np.sqrt(sig_yy)
+    h_pts, v_pts = [], []
+    for slope in slope_min_max:
+        if dim == 'x':
+            vec_1 = [x_max, slope, 0, 0]
+            i, j = 0, 1
+        elif dim == 'y':
+            vec_1 = [0, 0, y_max, slope]
+            i, j = 2, 3
+        vec_0 = np.matmul(np.linalg.inv(transfer_mat), vec_1)
+        if twiss is not None:
+            V = V_matrix_4x4_uncoupled(*twiss)
+            V_inv = np.linalg.inv(V)
+            vec_0 = np.matmul(V_inv, vec_0)
+        h_pts.append(vec_0[i])
+        v_pts.append(vec_0[j])
+    return h_pts, v_pts

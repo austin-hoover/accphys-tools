@@ -326,7 +326,7 @@ def setup_corner(
     
 def corner(
     X, env_params=None, moments=False, limits=None, zero_center=True,
-    samples=2000, pad=0.5, figsize=None, dims='all', kind='scatter',
+    samples=10000, pad=0.5, figsize=None, dims='all', kind='scatter',
     diag_kind='hist', hist_height=0.6, units='mm-mrad', norm_labels=False,
     text=None, ax=None, diag_kws=None, env_kws=None, text_kws=None, **plt_kws
 ):
@@ -357,7 +357,8 @@ def corner(
         If true, center the plot window on the origin. Otherwise, center the
         plot window on the projected means of the distribution.
     samples : int
-        The number of randomly sampled points to use in the scatter plots.
+        The number of randomly sampled points to use in the scatter plots. If
+        'all', use all the points.
     pad : float
         Padding for the axis ranges: umax_new = (1 + pad) * 0.5 * w, where w is
         the width of the distribution (max - min).
@@ -407,8 +408,9 @@ def corner(
     diag_kws = dict() if diag_kws is None else diag_kws
     env_kws = dict() if env_kws is None else env_kws
     text_kws = dict() if text_kws is None else text_kws
-#    if kind == 'hist':
-#        plt_kws.setdefault()
+    if kind == 'hist':
+        plt_kws.setdefault('bins', 40)
+        samples = 'all'
     if kind == 'scatter' or kind == 'scatter_density':
         plt_kws.setdefault('s', 3)
         plt_kws.setdefault('c', 'steelblue')
@@ -428,7 +430,10 @@ def corner(
     text_kws.setdefault('horizontalalignment', 'center')
     
     # Get data
-    X_samp = rand_rows(X, samples) # sample of particles for scatter plots
+    if samples == 'all':
+        X_samp = X
+    else:
+        X_samp = rand_rows(X, samples)
     X_env = None
     if env_params is not None:
         X_env = get_ellipse_coords(env_params, npts=100)
@@ -472,17 +477,21 @@ def corner(
         label_kws={'fontsize':'medium'}
     )
         
-    # Single particle
+    # Plot only one projection
     if dims != 'all':
         j, i = [var_indices[dim] for dim in dims]
-        x, y = X_samp[:, j], X_samp[:, i]
+        x, y = X[:, j], X[:, i]
+        x_samp, y_samp = X_samp[:, j], X_samp[:, i]
         ax = axes
         if kind == 'scatter':
-            ax.scatter(x, y, **plt_kws)
+            ax.scatter(x_samp, y_samp, **plt_kws)
         elif kind == 'scatter_density':
-            ax = scatter_density(ax, x, y, **plt_kws)
+            ax = scatter_density(ax, x, y, samples=samples, **plt_kws)
+        elif kind == 'hist':
+            ax.hist2d(x, y, **plt_kws)
         if X_env is not None:
-            ax.plot(X_env[:, j], X_env[:, i], **env_kws)
+            x_env, y_env = X_env[:, j], X_env[:, i]
+            ax.plot(x_env, y_env, **env_kws)
         return axes
         
     # Diagonal plots
@@ -507,18 +516,20 @@ def corner(
     for i in range(3):
         for j in range(i + 1):
             ax = scatter_axes[i, j]
-            x, y = X_samp[:, j], X_samp[:, i+1]
+            x, y = X[:, j], X[:, i + 1]
+            x_samp, y_samp = X_samp[:, j], X_samp[:, i + 1]
             if kind == 'scatter':
-                ax.scatter(x, y, **plt_kws)
+                ax.scatter(x_samp, y_samp, **plt_kws)
             elif kind == 'scatter_density':
-                scatter_density(ax, x, y, **plt_kws)
+                scatter_density(ax, x, y, samples=samples, **plt_kws)
             elif kind == 'hist':
                 ax.hist2d(x, y, **plt_kws)
             if X_env is not None:
-                ax.plot(X_env[:, j], X_env[:, i+1], **env_kws)
+                x_env, y_env = X_env[:, j], X_env[:, i + 1]
+                ax.plot(x_env, y_env, **env_kws)
     if moments:
         rms_ellipses(np.cov(X.T), axes=scatter_axes, **env_kws)
-                
+    
     if text:
         text_pos = (0.35, 0) if plt_diag else (0.35, 0.5)
         axes[1, 2].annotate(text, xy=text_pos, xycoords='axes fraction',
@@ -674,19 +685,56 @@ def fft(ax, x, y, grid=True, figname=None):
     return ax
 
 
-def scatter_density(ax, x, y, **kws):
-    """Scatter plot with color weighted by density.
+def scatter_density(ax, x, y, samples='all', sort=True, bins=40,
+                    method='interp', **kws):
+    """Scatter plot with colors weighted by local density.
     
-    Taken from StackOverflow answer by Joe Kington: 'https://stackoverflow.com/questions/20105364/how-can-i-make-a-scatter-plot-colored-by-density-in-matplotlib'
+    Taken from StackOverflow: 'https://stackoverflow.com/questions/20105364/how-can-i-make-a-scatter-plot-colored-by-density-in-matplotlib'.
+    
+    Parameters
+    ----------
+    ax : AxesSubplot
+        The axis on which to plot.
+    x, y : ndarray
+        The data.
+    samples : int
+        The number of random samples to plot. All points are used in the
+        density estimates. If 'all', plot all the points.
+    sort : bool
+        If True, plot higher-density points on top.
+    bins : int
+        If interpolating from 2d histogram, this determines the number of bins
+        used in the histogram.
+    method : {'interp', 'kde'}
+        If 'interp', interpolate the densities from a 2d histogram using a
+        spline method. If 'kde', use a gaussian kernel density estimate. KDE
+        is MUCH slower.
+    **kws
+        Key word arguments passed to matplotlib.pyplot.scatter.
     """
-    # Calculate the point density
     xy = np.vstack([x, y])
-    z = scipy.stats.gaussian_kde(xy)(xy)
+    if method == 'kde':
+        z = scipy.stats.gaussian_kde(xy)(xy)
+    elif method == 'interp':
+        data, x_e, y_e = np.histogram2d(x, y, bins=bins, density=True)
+        z = scipy.interpolate.interpn(
+            (0.5 * (x_e[1:] + x_e[:-1]), 0.5 * (y_e[1:] + y_e[:-1])),
+            data,
+            xy.T,
+            method='splinef2d',
+            bounds_error=False
+        )
+    else:
+        raise ValueError("'method' must be in ['interp', 'kde']")
 
-    # Sort the points by density, so that the densest points are plotted last
-    idx = z.argsort()
-    x, y, z = x[idx], y[idx], z[idx]
-
+    if sort:
+        idx = z.argsort()
+        x, y, z = x[idx], y[idx], z[idx]
+        
+    if samples != 'all' and len(z) > samples:
+        idx = np.random.choice(len(z), samples, replace=False)
+        x, y, z = x[idx], y[idx], z[idx]
+        
     ax.scatter(x, y, c=z, **kws)
     return ax
 
