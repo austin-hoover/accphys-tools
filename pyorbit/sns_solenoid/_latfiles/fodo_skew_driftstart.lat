@@ -1,9 +1,0 @@
-k0x := 0.5049168449;
-tilt := 3*(pi/180);
-
-qf: quadrupole, l=1.25, k1= k0x, tilt=-tilt;
-qd: quadrupole, l=1.25, k1=-k0x, tilt=tilt;
-fodo: sequence, l = 5;
-qf, at = 1.25;
-qd, at = 3.75;
-endsequence;

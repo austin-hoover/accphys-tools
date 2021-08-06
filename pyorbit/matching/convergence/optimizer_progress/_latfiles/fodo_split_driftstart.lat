@@ -1,7 +1,0 @@
-// mu0x, mu0y = 75, 85 deg
-qf: quadrupole,l= 1.25,k1= 0.4908455289;
-qd: quadrupole,l= 1.25,k1= -0.5201874552;
-fodo: sequence, l = 5;
-qf, at = 1.25;
-qd, at = 3.75;
-endsequence;
