@@ -1,3 +1,4 @@
+from __future__ import print_function
 import os
 
 import numpy as np
@@ -5,7 +6,6 @@ import scipy.optimize as opt
 from scipy.constants import speed_of_light
 
 from bunch import Bunch
-from orbit.analysis import AnalysisNode, WireScannerNode
 from orbit.matrix_lattice import BaseMATRIX, MATRIX_Lattice
 from orbit_utils import Matrix
 from orbit.teapot import TEAPOT_Lattice, TEAPOT_MATRIX_Lattice
@@ -122,22 +122,26 @@ class PhaseController:
         position = self.node_position(node_name)
         dist_from_node = np.abs(self.tracked_twiss[:, 0] - position)
         return int(np.where(dist_from_node < tol)[0])
-            
-    def quad_strengths(self, quad_names):
-        """Get independent quad strengths."""
-        nodes = [self.lattice.getNodeForName(name) for name in quad_names]
-        return np.array([node.getParam('kq') for node in nodes])
     
-    def set_quad_strengths(self, quad_names, quad_strengths):
+    def quad_strength(self, quad_name):
+        node = self.lattice.getNodeForName(quad_name)
+        return node.getParam('kq')
+    
+    def quad_strengths(self, quad_names):
+        return np.array([self.quad_strength(quad_name) for quad_name in quad_names])
+    
+    def set_quad_strength(self, quad_name, quad_strength):
         """Set independent quad strengths and update the matrix lattice."""
-        set_rtbt_quad_strengths(self.lattice, quad_names, quad_strengths)
+        node = self.lattice.getNodeForName(quad_name)
+        node.setParam('kq', quad_strength)
+        if quad_name in SHARED_POWER:
+            for dep_quad_name in SHARED_POWER[quad_name]:
+                self.set_quad_strength(dep_quad_name, quad_strength)
+                
+    def set_quad_strengths(self, quad_names, quad_strengths):
+        for quad_name, quad_strength in zip(quad_names, quad_strengths):
+            self.set_quad_strength(quad_name, quad_strength)
         self.sync_matrix_lattice()
-        
-    def apply_settings(self, lattice):
-        """Apply quad strengths in current controller state to `lattice`."""
-        quad_names = self.ind_quad_names
-        quad_strengths = self.quad_strengths(quad_names)
-        set_rtbt_quad_strengths(lattice, quad_names, quad_strengths)
         
     def transfer_matrix(self, node_name):
         """Calculate linear transfer matrix up to a certain node."""
@@ -181,8 +185,8 @@ class PhaseController:
         self.set_quad_strengths(ind_quad_names, result.x)
         max_betas = self.max_betas()
         if np.any(max_betas > beta_lims):
-            print 'WARNING: maximum beta functions exceed limit.'
-            print 'Max betas =', self.max_betas()
+            print('WARNING: maximum beta functions exceed limit.')
+            print('Max betas =', self.max_betas())
         return result.x
         
     def max_betas(self):
@@ -201,7 +205,7 @@ class PhaseController:
             varies both at the same time.
         """
         total_steps = 2 * steps_per_dim
-        nux0, nuy0 = self.get_ref_ws_phases()
+        nux0, nuy0 = self.phase_adv(self.ref_ws_name)
         window = 0.5 * phase_coverage / 360
         if method == 1:
             delta_nu_list = np.linspace(-window, window, steps_per_dim)
@@ -214,4 +218,4 @@ class PhaseController:
             nux_list = np.linspace(nux0 - window, nux0 + window, 2 * steps_per_dim)
             nuy_list = np.linspace(nuy0 + window, nuy0 - window, 2 * steps_per_dim)
             phases = list(zip(nux_list, nuy_list))
-        return phases
+        return np.array(phases)
