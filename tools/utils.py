@@ -2,18 +2,13 @@ import os
 
 import numpy as np
 import pandas as pd
-import sympy
 import IPython
 from numpy import linalg as la
 from sympy import pprint, Matrix
 from IPython.display import display, HTML
 
 
-def is_number(x):
-    return type(x) in [float, int, np.float64, np.int]
-
-
-# File processing
+# Files
 def list_files(path, join=True):
     files = []
     for file in os.listdir(path):
@@ -38,6 +33,15 @@ def delete_files_not_folders(path):
                 
 def file_exists(file):
     return os.path.isfile(file)
+
+
+def ancestor_folder_path(current_path, ancestor_folder_name):  
+    parent_path = os.path.dirname(current_path)
+    if parent_path == current_path:
+        raise ValueError("Couldn't find ancestor folder.")
+    if parent_path.split('/')[-1] == ancestor_folder_name:
+        return parent_path
+    return ancestor_folder_path(parent_path, ancestor_folder_name)
     
     
 # Lists and dicts
@@ -165,7 +169,6 @@ def vec2mat(moment_vec):
     
     
 # The following three functions are from Tony Yu's blog post: https://tonysyu.github.io/ragged-arrays.html#.YKVwQy9h3OR
-    
 def stack_ragged(array_list, axis=0):
     """Stacks list of arrays along first axis.
     
@@ -191,7 +194,8 @@ def load_stacked_arrays(filename, axis=0):
     idx = npz_file['stacked_index']
     stacked = npz_file['stacked_array']
     return np.split(stacked, idx, axis=axis)
-    
+
+
 
 # Math
 def cov2corr(cov_mat):
