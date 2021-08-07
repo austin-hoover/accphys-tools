@@ -1,0 +1,1 @@
+The goal here is just to plot the beta functions of a lattice generated from OpenXAL. The beta functions look strange; I think it has to do with the fact that OpenXAL didn't include any of the extraction kickers when converting to a MADX input file. Leaving it alone for now.
