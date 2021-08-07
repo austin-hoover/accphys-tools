@@ -1,10 +1,14 @@
-*.pyc
 .DS_Store
 .ipynb_checkpoints
 .jython_cache
+*.pyc
 *.npy
+*.npz
 *.dat
-*.png
 *.txt
+*.png
+*.jpg
 *.mp4
+*.mov
+*.gif
 *$py.class

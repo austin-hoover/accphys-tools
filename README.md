@@ -1,3 +1,3 @@
 # accphys
 
-This repository contains data analysis/visualization tools. 
+This repository contains various studies in accelerator physics.
