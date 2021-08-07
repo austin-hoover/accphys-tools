@@ -9,7 +9,6 @@ from matplotlib.patches import Ellipse
 import seaborn as sns
 import scipy
 
-from .utils import rand_rows, is_number
 from .beam_analysis import get_ellipse_coords, rms_ellipse_dims
 
 
@@ -243,7 +242,7 @@ def setup_corner(
             figsize = 6.0 if plt_diag else 5.0
         else:
             figsize = 3.0
-    if is_number(figsize):
+    if type(figsize) in [float, int]:
         figsize = (figsize, figsize)
         
     def unpack(item):
@@ -433,7 +432,7 @@ def corner(
     if samples == 'all':
         X_samp = X
     else:
-        X_samp = rand_rows(X, samples)
+        X_samp = utils.rand_rows(X, samples)
     X_env = None
     if env_params is not None:
         X_env = get_ellipse_coords(env_params, npts=100)
