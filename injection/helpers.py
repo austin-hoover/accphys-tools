@@ -1,7 +1,8 @@
 import numpy as np
 
 from bunch import Bunch
-from orbit.analysis import AnalysisNode, add_analysis_node, add_analysis_nodes
+from orbit.diagnostics import BunchMonitorNode
+from orbit.diagnostics import add_analysis_nodes
 from orbit.lattice import AccLattice, AccNode, AccActionsContainer
 from orbit.teapot import teapot, TEAPOT_Lattice
 from orbit.utils import helper_funcs as hf
@@ -12,13 +13,14 @@ def get_traj(lattice, init_coords, mass, kin_energy):
     bunch_, params_dict_ = hf.initialize_bunch(mass, kin_energy)
     x, xp, y, yp = init_coords
     bunch_.addParticle(x, xp, y, yp, 0.0, 0.0)
-    monitors = add_analysis_nodes(lattice, kind='bunch_monitor')
+    monitor_nodes = add_analysis_nodes(BunchMonitorNode, lattice, dense=True, 
+                                       transverse_only=True, mm_mrad=False)
     lattice.trackBunch(bunch_, params_dict_)
     coords, positions = [], []
-    for node in monitors:
-        coords.append(node.get_data('bunch_coords')[0])
-        positions.append(node.position)
-        node.clear_data()
+    for monitor_node in monitor_nodes:
+        coords.append(monitor_node.get_data(turn=0)[0])
+        positions.append(monitor_node.position)
+        monitor_node.clear_data()
     return np.array(coords), np.array(positions)
 
 

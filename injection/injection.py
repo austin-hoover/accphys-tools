@@ -1,11 +1,11 @@
-"""
-This script simulates full injection in the SNS ring.
-"""
+"""This script simulates full injection in the SNS ring."""
+from __future__ import print_function
 import sys
+from pprint import pprint
+
 import numpy as np
 import scipy.optimize as opt
 from tqdm import tqdm, trange
-from pprint import pprint
 
 from bunch import Bunch
 from foil import Foil
@@ -14,9 +14,10 @@ from spacecharge import LSpaceChargeCalc
 from spacecharge import Boundary2D
 from spacecharge import SpaceChargeCalc2p5D
 from spacecharge import SpaceChargeCalcSliceBySlice2D
-
-from orbit.analysis import AnalysisNode, add_analysis_node, add_analysis_nodes
 from orbit.collimation import TeapotCollimatorNode, addTeapotCollimatorNode
+from orbit.diagnostics import BunchMonitorNode
+from orbit.diagnostics import BunchStatsNode
+from orbit.diagnostics import add_analysis_node
 from orbit.diagnostics import addTeapotDiagnosticsNode
 from orbit.diagnostics import StatLats, Moments
 from orbit.diagnostics import TeapotStatLatsNode
@@ -45,149 +46,77 @@ from orbit.time_dep import time_dep
 from orbit.time_dep.waveforms import SquareRootWaveform, ConstantWaveform
 from orbit.utils import helper_funcs as hf
 from orbit.utils.general import save_stacked_array
+from orbit.utils.general import delete_files_not_folders
 
 from helpers import get_traj, get_part_coords, track_part
-
-sys.path.append('/Users/46h/Research/code/accphys/tools')
-from utils import delete_files_not_folders
-delete_files_not_folders('_output/')
 
 
 # Initial settings
 #------------------------------------------------------------------------------
+delete_files_not_folders('_output/')
+
 use = {
     'collimator': True,
-    'foil': True,
+    'foil scattering': True,
     'fringe': True,
     'kickers': True,
     'longitudinal impedence': True,
     'pyorbit diagnostics': False,
     'rf': True,
     'skew quads': False,
-    'solenoid': False,
     'space charge': True,
     'uniform longitudinal distribution': False,
 }
 x_foil = 0.0492 
 y_foil = 0.0468
-kin_energy = 1.00 # [GeV]
+kin_energy = 1.0 # [GeV]
 mass = 0.93827231 # [GeV/c^2]
 turns = 1000
 macros_per_turn = 260
 intensity = 1.5e14
 
 # Initial and final coordinates at injection point
-inj_coords_t0 = np.array([x_foil - 10e-3, 0.0, y_foil - 9e-3, 0.0])
-inj_coords_t1 = np.array([x_foil - 25e-3, 0.0, y_foil - 30e-3, 0.0])
+inj_coords_t0 = np.array([x_foil, 0.0, y_foil, 0.0])
+inj_coords_t1 = np.array([x_foil - 15e-3, 0.0, y_foil, 1e-3])
 
-print 'Switches:'
+print('Switches:')
 pprint(use)
 
 
 # Lattice setup
 #------------------------------------------------------------------------------
 # Load SNS ring
-# if use['solenoid']:
-#     latfile = '_latfiles/SNSring_noRF_sol_nux6.18_nuy6.18.lat'
-# else:
-#     latfile = '_latfiles/SNSring_noRF_nux6.18_nuy6.18.lat'
-latfile = '_latfiles/SNSring_nux6.23_nuy6.20.lat'
-latseq = 'rnginj'
+madx_file = '_input/SNSring_noRF_sol_nux6.18_nuy6.18.lat'
+madx_seq = 'rnginj'
 ring = time_dep.TIME_DEP_Lattice()
-ring.readMADX(latfile, latseq)
+ring.readMADX(madx_file, madx_seq)
 ring.set_fringe(False)
 ring.initialize()
 ring_length = ring.getLength()
-env_ring = hf.lattice_from_file(latfile, latseq) # for envelope tracking
 
-# # Toggle skew quads
-# def get_skew_quad_nodes(ring):
-#     skew_quad_nodes = []
-#     for node in ring.getNodes():
-#         name = node.getName()
-#         if name.startswith('qsc'):
-#             node.setParam('skews', [0, 1])
-#             skew_quad_nodes.append(node)
-#     return skew_quad_nodes
+# Toggle skew quads
+def get_skew_quad_nodes(ring):
+    skew_quad_nodes = []
+    for node in ring.getNodes():
+        name = node.getName()
+        if name.startswith('qsc'):
+            node.setParam('skews', [0, 1])
+            skew_quad_nodes.append(node)
+    return skew_quad_nodes
         
-# def set_skew_quad_strengths(skew_quad_nodes, skew_quad_strengths):
-#     for node, strength in zip(skew_quad_nodes, skew_quad_strengths):
-#         node.setParam('kls', [0.0, strength])
+def set_skew_quad_strengths(skew_quad_nodes, skew_quad_strengths):
+    for node, strength in zip(skew_quad_nodes, skew_quad_strengths):
+        node.setParam('kls', [0.0, strength])
         
-# if use['skew quads']:
-#     skew_quad_nodes = get_skew_quad_nodes(ring)
-#     env_skew_quad_nodes = get_skew_quad_nodes(env_ring)
-#     skew_quad_strengths = np.zeros(len(skew_quad_nodes))
-#     skew_quad_strengths[12] = 0.1
-#     set_skew_quad_strengths(skew_quad_nodes, skew_quad_strengths)
-#     set_skew_quad_strengths(env_skew_quad_nodes, skew_quad_strengths)
+if use['skew quads']:
+    skew_quad_nodes = get_skew_quad_nodes(ring)
+    env_skew_quad_nodes = get_skew_quad_nodes(env_ring)
+    skew_quad_strengths = np.zeros(len(skew_quad_nodes))
+    skew_quad_strengths[12] = 0.1
+    set_skew_quad_strengths(skew_quad_nodes, skew_quad_strengths)
+    set_skew_quad_strengths(env_skew_quad_nodes, skew_quad_strengths)
 
     
-# # Envelope matching
-# #------------------------------------------------------------------------------
-# print 'Matching envelope.'
-
-# eps = 40e-6 # nonzero intrinsic emittance [m rad]
-# mode = 1
-# eps_x_frac = 0.2
-# bunch_length = (139.68 / 360.0) * ring_length
-# env = DanilovEnvelope(eps, mode, eps_x_frac, mass, kin_energy, bunch_length)
-
-# if use['space charge']:
-#     env.set_intensity(intensity)
-# else:
-#     env.set_intensity(0.0)
-# max_solver_spacing = 1.0
-# env_solver_nodes = set_env_solver_nodes(env_ring, env.perveance, max_solver_spacing)
-# env.match(env_ring, env_solver_nodes, method='lsq', verbose=2)
-# env.print_twiss4D()
-
-# alpha_lx, alpha_ly, beta_lx, beta_ly, u, nu = env.twiss4D()
-
-# ## Exchange modes
-# # if mode == 1:
-# #     mode = 2
-# # elif mode == 2:
-# #     mode = 1
-
-# if mode == 1:
-#     v_l = np.array([
-#         np.sqrt(beta_lx),
-#         -(alpha_lx + 1j*(1 - u)) / np.sqrt(beta_lx),
-#         np.sqrt(beta_ly) * np.exp(1j * nu),
-#         -((alpha_ly + 1j*u) / np.sqrt(beta_ly)) * np.exp(1j * nu),
-#     ])
-# elif mode == 2:
-#     v_l = np.array([
-#         np.sqrt(beta_lx) * np.exp(1j * nu),
-#         -((alpha_lx + 1j*u) / np.sqrt(beta_lx)) * np.exp(1j * nu),
-#         np.sqrt(beta_ly),
-#         -(alpha_ly + 1j*(1 - u)) / np.sqrt(beta_ly)
-#     ])
-    
-# phase = np.radians(0.0)
-# final_coords = np.real(np.sqrt(4 * eps) * v_l * np.exp(-1j * phase))
-    
-# # # Find phase which minimizes required slope from kickers
-# # smallest_max_abs_slope = np.inf
-# # eigvec_phase = 0.0
-# # final_coords = np.zeros(4)
-# # for phase in np.linspace(0.0, 2 * np.pi, 100):
-# #     x, xp, y, yp = np.real(np.sqrt(4 * eps) * v_l * np.exp(-1j * phase))
-# #     max_abs_slope = max(abs(xp), abs(yp))
-# #     if max_abs_slope < smallest_max_abs_slope:
-# #         smallest_max_abs_slope = max_abs_slope
-# #         eigvec_phase = phase
-# #         final_coords = [x, xp, y, yp]
-
-# inj_coords_t1 = np.subtract([x_foil, 0.0, y_foil, 0.0], final_coords)
-# print 'final coords (foil frame) [mm mrad]:', 1e3 * final_coords
-# print 'inj_coords_t0:', 1e3 * inj_coords_t0
-# print 'inj_coords_t1:', 1e3 * inj_coords_t1
-# np.save('matched_eigenvector', v_l)
-# np.save('matched_env_params', env.params)
-
-
 # Beam setup
 #------------------------------------------------------------------------------
 # Initialize bunch_
@@ -314,7 +243,7 @@ def optimize_kickers(inj_coords, **kws):
     return np.array(kicker_angles)
 
 if use['kickers']:
-    print 'Optimizing injection kickers.'
+    print('Optimizing injection kickers.')
     kws = dict(max_nfev=10000, verbose=1)
     kicker_angles_t0 = optimize_kickers(inj_coords_t0, **kws)  
     kicker_angles_t1 = optimize_kickers(inj_coords_t1, **kws)  
@@ -508,7 +437,7 @@ injection_node = TeapotInjectionNode(macros_per_turn, bunch, lostbunch,
                                      foil_boundaries, dist_x, dist_y, dist_z)
 addTeapotInjectionNode(ring, 0.0, injection_node)
 
-if use['foil']:
+if use['foil scattering']:
     foil_node = TeapotFoilNode(foil_xmin, foil_xmax, foil_ymin, foil_ymax, thickness)
     foil_node.setScatterChoice(2)
     addTeapotFoilNode(ring, 0.000001, foil_node)
@@ -529,7 +458,7 @@ if use['pyorbit diagnostics']:
     moment = TeapotMomentsNode('_output/data/moments_pyorbit', order)
     addTeapotDiagnosticsNode(ring, 0.2, moment)
 
-bunch_monitor_node = AnalysisNode(0.0, 'bunch_monitor', longitudinal=True)
+bunch_monitor_node = BunchMonitorNode(mm_mrad=True, transverse_only=False)
 injection_node.addChildNode(bunch_monitor_node, injection_node.EXIT)
 
 
@@ -537,19 +466,22 @@ injection_node.addChildNode(bunch_monitor_node, injection_node.EXIT)
 #------------------------------------------------------------------------------
 ring.set_fringe(use['fringe'])
 
-print 'Painting...'
+print('Painting...')
+# for _ in trange(turns):
 for _ in trange(turns):
     ring.trackBunch(bunch, params_dict)
     
-print 'Saving turn-by-turn coordinates...'
-coords = bunch_monitor_node.get_data('bunch_coords', 'all_turns')
+print('Saving turn-by-turn coordinates...')
+coords = bunch_monitor_node.get_data()
 save_stacked_array('_output/data/coords.npz', coords)
     
     
 # Save injection region closed orbit trajectory
 #------------------------------------------------------------------------------
 if use['kickers']:
-    ring = hf.lattice_from_file(latfile, latseq)
+    ring = TEAPOT_Lattice()
+    ring.readMADX(madx_file, madx_seq)
+    ring.set_fringe(False)
     kicker_nodes = [ring.getNodeForName(name) for name in kicker_names]
     ring.split(0.01)
     inj_region1 = hf.get_sublattice(ring, 'inj_start', None)
@@ -557,7 +489,7 @@ if use['kickers']:
     for i, kicker_angles in enumerate([kicker_angles_t0, kicker_angles_t1]):
         set_kicker_angles(kicker_nodes, kicker_angles)
         coords1, positions1 = get_traj(inj_region1, [0, 0, 0, 0], mass, kin_energy)
-        coords2, positions2 = get_traj(inj_region2, 1e-3 * coords1[-1], mass, kin_energy)
+        coords2, positions2 = get_traj(inj_region2, coords1[-1], mass, kin_energy)
         coords = np.vstack([coords1, coords2])
         positions = np.hstack([positions1, positions2 + positions1[-1]])
         np.save('_output/data/inj_region_coords_t{}.npy'.format(i), coords)
