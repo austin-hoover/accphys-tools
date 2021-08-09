@@ -19,9 +19,21 @@ from orbit.teapot import TEAPOT_Lattice
 from orbit.utils import helper_funcs as hf
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+from data_analysis import reconstruct
 from utils import delete_files_not_folders
 from utils import PhaseController
 
+
+def print_stats(Sigma):
+    eps_1, eps_2 = analysis.apparent_emittances(Sigma)
+    eps_x, eps_y = analysis.intrinsic_emittances(Sigma)
+    eps_1, eps_2, eps_x, eps_y = 1e6 * np.array([eps_1, eps_2, eps_x, eps_y])
+    alpha_x, alpha_y, beta_x, beta_y = analysis.twiss2D(Sigma)
+    print('  eps_1, eps_2 = {} {} [mm mrad]'.format(eps_1, eps_2))
+    print('  eps_x, eps_y = {} {} [mm mrad]'.format(eps_x, eps_y))
+    print('  alpha_x, alpha_y = {} {} [rad]'.format(alpha_x, alpha_y))
+    print('  beta_x, beta_y = {} {} [m/rad]'.format(beta_x, beta_y))
+    
 
 # Settings
 #------------------------------------------------------------------------------
@@ -29,9 +41,8 @@ from utils import PhaseController
 n_parts = 100000
 mass = 0.93827231 # [GeV/c^2]
 kin_energy = 1.0 # [GeV]
-intensity = 0.0
-bunch_length = 150.0 # [m]
-beam_input_file = '_input/Bm_Parts_2M.txt'
+intensity = 0.0e14
+beam_input_file = '_input/init_dist_128K.dat'
 
 # Space charge solver
 max_solver_spacing = 1.0
@@ -47,8 +58,8 @@ init_twiss = {'alpha_x': -0.25897, 'alpha_y': 0.9749,
 # Scan parameters
 ws_names = ['ws02', 'ws20', 'ws21', 'ws23', 'ws24']
 ref_ws_name = 'ws24' 
-steps_per_dim = 3 # number of steps for each dimension
-method = 1
+steps_per_dim = 5 # number of steps for each dimension
+method = 2
 phase_coverage = 30.0 # [deg]
 beta_lims = (40, 40) # (x, y)
 
@@ -78,125 +89,90 @@ for ws_name in ws_names:
 #------------------------------------------------------------------------------
 controller = PhaseController(lattice, init_twiss, mass, kin_energy, ref_ws_name)
 
-# Save default optics
+# Save default optics.
 twiss_df = pd.DataFrame(controller.tracked_twiss.copy(), 
                         columns=['s','nux','nuy','ax','ay','bx','by'])
 twiss_df[['nux','nuy']] %= 1
 twiss_df.to_csv('_output/data/twiss.dat', index=False)
 
-# Save wire-scanner positions
+# Save wire-scanner positions.
 ws_positions = [controller.node_position(ws_name) for ws_name in ws_names]
 np.savetxt('_output/data/ws_positions.dat', ws_positions)
 
 
 # Initialize beam
-# ------------------------------------------------------------------------------
-# Load from file (this was provide by Jeff Holmes)
+#------------------------------------------------------------------------------
 print('Loading initial beam coordinates.')
-X0 = np.loadtxt(beam_input_file) # [mm-mrad]
-
-# Take random sample of particles.
-n_samples = 100000
-idx = np.random.choice(X0.shape[0], n_samples, replace=False)
-X0 = X0[idx]
-
-# # Artificial distribution
-# X0 = np.random.normal(size=(20000, 6))
-# X0[:, 0] *= 0.020
-# X0[:, 1] *= 0.002
-# X0[:, 2] *= 0.020
-# X0[:, 3] *= 0.002
-# X0[:, 4] = np.random.uniform(0, 250.0, size=(20000,))
-# X0[:, 5] = 0.0
-
-# Print initial beam statistics.
+X0 = np.loadtxt(beam_input_file)
 Sigma0 = np.cov(X0.T)
 Sigma0 = Sigma0[:4, :4]
-eps_1, eps_2 = analysis.apparent_emittances(Sigma0)
-eps_x, eps_y = analysis.intrinsic_emittances(Sigma0)
-alpha_x, alpha_y, beta_x, beta_y = analysis.twiss2D(Sigma0)
-print('Initial beam:')
-print('  eps_1, eps_2 = {} {} [mm mrad]'.format(eps_1, eps_2))
-print('  eps_x, eps_y = {} {} [mm mrad]'.format(eps_x, eps_y))
-print('  alpha_x, alpha_y = {} {} [mm mrad]'.format(alpha_x, alpha_y))
-print('  beta_x, beta_y = {} {} [mm mrad]'.format(beta_x, beta_y))
+print('Initial beam stats:')
+print('Sigma =')
+print(Sigma0)
+print_stats(Sigma0)
 
-# Convert to m-rad and fill bunch.
-X0[:, :4] *= 1e-3
-X0[:, 4] *= lattice.getLength() / (2 * np.pi)
-bunch, params = hf.initialize_bunch(mass, kin_energy)
-for i in range(n_parts):
-    bunch.addParticle(0, 0, 0, 0, 0, 0)
+# Initialize Bunch.
+bunch, params_dict = hf.initialize_bunch(mass, kin_energy)
+for (x, xp, y, yp, z, dE) in X0:
+    bunch.addParticle(x, xp, y, yp, z, dE)
 
 def reset_bunch(bunch):
-    """Restore bunch to its initial state."""
     for i, (x, xp, y, yp, z, dE) in enumerate(X0):
         bunch.x(i, x)
         bunch.y(i, y)
+        bunch.z(i, z)
         bunch.xp(i, xp)
         bunch.yp(i, yp)
-        bunch.z(i, z)
         bunch.dE(i, dE)
 
-        
+
 # Perform scan
 #------------------------------------------------------------------------------
-# Initialize dictionaries. Each dictionary holds a list of moments/transfer
-# matrices at each wire-scanner.
-transfer_mats, moments = dict(), dict()
-ws_phases = dict()
+transfer_mats = dict() # transfer matrix at each wire-scanner
+moments = dict() # moments at each wire-scanner
+phases = dict() # phase advance at each wire-scanner
 for ws_name in ws_names:
     transfer_mats[ws_name] = []
     moments[ws_name] = []
-    ws_phases[ws_name] = []
+    phases[ws_name] = []
 
-# Calculate the correct optics for each step in the scan. This allows us to 
-# perform Monte Carlo simulations without recalculating at each step.
 scan_phases = controller.get_phases_for_scan(phase_coverage, steps_per_dim, method)
-quad_names = controller.ind_quad_names
-quad_strengths_list = []
 for scan_index, (nux, nuy) in enumerate(scan_phases, start=1):
     print('Calculating optics for scan {} of {}.'.format(scan_index, 2 * steps_per_dim))
     print('nux, nuy = {:.3f}, {:.3f}.'.format(nux, nuy))
-    controller.set_phase_adv(ref_ws_name, nux, nuy, beta_lims, verbose=2)
+    controller.set_phase_adv(ref_ws_name, nux, nuy, beta_lims, verbose=1)
     controller.track()
-    quad_strengths = controller.quad_strengths(quad_names)
-    quad_strengths_list.append(quad_strengths)
-    
-
-for scan_index, quad_strengths in enumerate(quad_strengths_list):
-    
-    # Set the correct lattice optics.
-    controller.set_quad_strengths(quad_names, quad_strengths)
-
-    # Track the bunch through the lattice.
     print('Tracking bunch.')
     reset_bunch(bunch)
-    lattice.trackBunch(bunch, params)
-    
-    # Compute moments and transfer matrix at each wire-scanner.
+    lattice.trackBunch(bunch, params_dict)
+    print('Collecting measurements.')
     for ws_name in ws_names:
         ws_node = ws_nodes[ws_name]
         sig_xx, sig_yy, sig_xy = ws_node.get_moments()
-        moments[ws_name].append([sig_xx, sig_yy, sig_xy])
         transfer_mats[ws_name].append(controller.transfer_matrix(ws_name))
-        ws_phases[ws_name].append(controller.phase_adv(ws_name))
-
-    # Save tracked Twiss parameters
-    twiss_df = pd.DataFrame(controller.tracked_twiss, 
-                            columns=['s','nux','nuy','ax','ay','bx','by'])
-    twiss_df[['nux','nuy']] %= 1
-    twiss_df.to_csv('_output/data/twiss_{}.dat'.format(scan_index), index=False)
-
-            
+        moments[ws_name].append(ws_node.get_moments())
+        phases[ws_name].append(controller.phase_adv(ws_name))
+        
+# Reconstruct covariance matrix.
+active_ws_names = ws_names[:]
+max_n_meas = 20
+transfer_mats_list, moments_list = [], []
+for ws_name in active_ws_names:
+    transfer_mats_list.extend(transfer_mats[ws_name][:max_n_meas])
+    moments_list.extend(moments[ws_name][:max_n_meas])
+    
+Sigma_rec = reconstruct(transfer_mats_list, moments_list)
+print('Reconstructed beam stats:')
+print('Sigma =')
+print(Sigma_rec)
+print_stats(Sigma_rec)
+    
 # Save data
 #------------------------------------------------------------------------------
-for ws in ws_names:
-    np.save('_output/data/{}/phases.npy'.format(ws), ws_phases[ws])
-    np.save('_output/data/{}/transfer_mats.npy'.format(ws), transfer_mats[ws])
-    np.save('_output/data/{}/moments.npy'.format(ws), moments[ws])
-    
+np.savetxt('_output/data/Sigma_rec.dat', Sigma_rec)
 np.savetxt('_output/data/Sigma0.dat', Sigma0)
 np.savetxt('_output/data/X0.dat', X0)
-np.savetxt('_output/init_twiss.dat', 
-           [init_twiss[key] for key in ['alpha_x', 'alpha_y', 'beta_x', 'beta_y']])
+for ws in ws_names:
+    np.save('_output/data/{}/phases.npy'.format(ws), phases[ws])
+    np.save('_output/data/{}/transfer_mats.npy'.format(ws), transfer_mats[ws])
+    np.save('_output/data/{}/moments.npy'.format(ws), moments[ws])
