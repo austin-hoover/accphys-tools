@@ -43,8 +43,8 @@ def skip_frames(frames, skip=1, keep_last=False):
 
 
 def corner(
-    coords, env_params=None, limits=None, dims='all', samples=2000, skip=0,
-    keep_last=False, pad=0.5, space=0.15, figsize=None, kind='scatter',
+    coords, env_params=None, limits=None, zero_center=True, dims='all', samples=2000, 
+    skip=0, keep_last=False, pad=0.5, space=0.15, figsize=None, kind='scatter',
     diag_kind='hist', hist_height=0.6, units='mm-mrad', norm_labels=False,
     text_fmt='', text_vals=None, fps=1, diag_kws={}, env_kws={}, text_kws={},
     **plt_kws
@@ -187,10 +187,70 @@ def corner(
             if X.shape[0] > samples:
                 coords_samp[i] = rand_rows(X, samples)
                 
-    # Axis limits
+                
+                
+    # Axis limits. This section is garbage; please fix.    
+    umin_list = []
+    umax_list = []
+    upmin_list = []
+    upmax_list = []
+    
+    for X in coords:
+        means = np.mean(X, axis=0)
+        maxs = np.max(X, axis=0)
+        mins = np.min(X, axis=0)
+        widths = (1 + pad) * np.abs(maxs - mins)
+        maxs = means + 0.5 * widths
+        mins = means - 0.5 * widths
+        umax = max(maxs[0], maxs[2])
+        umin = min(mins[0], mins[2])
+        upmax = max(maxs[1], maxs[3])
+        upmin = min(mins[1], mins[3])
+        umin_list.append(umin)
+        umax_list.append(umax)
+        upmin_list.append(upmin)
+        upmax_list.append(upmax)
+        
+    umin = min(umin_list)
+    umax = max(umax_list)
+    upmin = min(upmin_list)
+    upmax = max(upmax_list)
+    if zero_center:
+        umax = max(abs(umax), abs(umin))
+        umin = -umax
+        upmax = max(abs(upmax), abs(upmin))
+        upmin = -upmax
+        
+    umin *= (1 + pad)
+    umax *= (1 + pad)
+    upmin *= (1 + pad)
+    upmax *= (1 + pad)
+    
+    # If any None is encountered, use the calculated limits. Otherwise, use the
+    # user-supplied limits.
     if limits is None:
-        limits = max_u_up_global(coords)
-    limits = [(1 + pad) * limit for limit in limits]
+        limits = [(umin, umax), (upmin, upmax)]
+    else:
+        _limits = []
+        if limits[0] is None:
+            _limits.append((umin, umax))
+        else:
+            _limits.append(limits[0])
+        if limits[1] is None:
+            _limits.append((upmin, upmax))
+        else:
+            _limits.append(limits[1])
+        limits = _limits
+    
+    
+    
+    
+    
+    
+    
+#     if limits is None:
+#         limits = max_u_up_global(coords)
+#     limits = [(1 + pad) * limit for limit in limits]
 
     # Create figure
     fig, axes = setup_corner(
