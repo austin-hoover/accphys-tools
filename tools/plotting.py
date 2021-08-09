@@ -10,6 +10,7 @@ import seaborn as sns
 import scipy
 
 from .beam_analysis import get_ellipse_coords, rms_ellipse_dims
+from . import utils
 
 
 _labels = [r"$x$", r"$x'$", r"$y$", r"$y'$"]
