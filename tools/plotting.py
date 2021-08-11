@@ -1,4 +1,5 @@
 from cycler import cycler
+import copy
 
 import numpy as np
 import pandas as pd
@@ -525,7 +526,7 @@ def corner(
             elif kind == 'scatter_density':
                 scatter_density(ax, x, y, samples=samples, **plt_kws)
             elif kind == 'hist':
-                ax.hist2d(x, y, **plt_kws)
+                ax.hist2d(x, y, range=(ax.get_xlim(), ax.get_ylim()), **plt_kws)
             if X_env is not None:
                 x_env, y_env = X_env[:, j], X_env[:, i + 1]
                 ax.plot(x_env, y_env, **env_kws)
