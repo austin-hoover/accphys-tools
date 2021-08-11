@@ -409,7 +409,7 @@ def corner(
     env_kws = dict() if env_kws is None else env_kws
     text_kws = dict() if text_kws is None else text_kws
     if kind == 'hist':
-        plt_kws.setdefault('bins', 40)
+        plt_kws.setdefault('bins', 45)
         samples = 'all'
     if kind == 'scatter' or kind == 'scatter_density':
         plt_kws.setdefault('s', 3)
@@ -417,11 +417,13 @@ def corner(
         plt_kws.setdefault('marker', '.')
         plt_kws.setdefault('ec', 'none')
         plt_kws.setdefault('zorder', 5)
+        diag_kws.setdefault('color', plt_kws['c'])
     if kind == 'scatter_density':
         plt_kws.pop('c', None)
     if diag_kind == 'hist':
         diag_kws.setdefault('histtype', 'step')
         diag_kws.setdefault('bins', 'auto')
+        diag_kws.setdefault('color', 'k')
     elif diag_kind == 'kde':
         diag_kws.setdefault('lw', 1)
     env_kws.setdefault('color', 'k')
