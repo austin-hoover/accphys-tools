@@ -6,6 +6,7 @@ TO DO:
       (see plotting.py).
 """
 from cycler import cycler
+import copy
 
 import numpy as np
 import matplotlib
@@ -122,25 +123,29 @@ def corner(
     plt_diag = diag_kind not in ['none', None]
 
     # Set default key word arguments
-    if 's' in plt_kws:
-        ms = plt_kws['s']
-        plt_kws.pop('s', None)
-        plt_kws['ms'] = ms
-    if 'c' in plt_kws:
-        color = plt_kws['c']
-        plt_kws.pop('c', None)
-        plt_kws['color'] = color
-    plt_kws.setdefault('ms', 2)
-    plt_kws.setdefault('color', 'steelblue')
-    plt_kws.setdefault('marker', '.')
-    plt_kws.setdefault('zorder', 5)
-    plt_kws.setdefault('lw', 0)
-    plt_kws.setdefault('markeredgewidth', 0)
-    plt_kws.setdefault('fillstyle', 'full')
+    if kind == 'scatter':
+        if 's' in plt_kws:
+            ms = plt_kws['s']
+            plt_kws.pop('s', None)
+            plt_kws['ms'] = ms
+        if 'c' in plt_kws:
+            color = plt_kws['c']
+            plt_kws.pop('c', None)
+            plt_kws['color'] = color
+        plt_kws.setdefault('ms', 2)
+        plt_kws.setdefault('color', 'steelblue')
+        plt_kws.setdefault('marker', '.')
+        plt_kws.setdefault('zorder', 5)
+        plt_kws.setdefault('lw', 0)
+        plt_kws.setdefault('markeredgewidth', 0)
+        plt_kws.setdefault('fillstyle', 'full')
+        diag_kws.setdefault('color', plt_kws['color'])
+    elif kind == 'hist':
+        plt_kws.setdefault('cmap', 'viridis')
+        plt_kws.setdefault('bins', 40)
     if diag_kind == 'hist':
         diag_kws.setdefault('histtype', 'step')
         diag_kws.setdefault('bins', 'auto')
-        diag_kws.setdefault('color', plt_kws['color'])
     elif diag_kind == 'kde':
         diag_kws.setdefault('lw', 1)
     env_kws.setdefault('color', 'k')
@@ -189,7 +194,7 @@ def corner(
                 
                 
                 
-    # Axis limits. This section is garbage; please fix.    
+    # Axis limits. Please clean up this section.   
     umin_list = []
     umax_list = []
     upmin_list = []
@@ -242,11 +247,7 @@ def corner(
             _limits.append(limits[1])
         limits = _limits
     
-    
-    
-    
-    
-    
+
     
 #     if limits is None:
 #         limits = max_u_up_global(coords)
@@ -268,13 +269,14 @@ def corner(
     scatter_axes = axes[1:, :-1] if plt_diag else axes
     for i in range(3):
         for j in range(i + 1):
-            line, = scatter_axes[i, j].plot([], [], **plt_kws)
-            lines[i].append(line)
+            if kind == 'scatter':
+                line, = scatter_axes[i, j].plot([], [], **plt_kws)
+                lines[i].append(line)
             if plt_env:
                 line, = scatter_axes[i, j].plot([], [], **env_kws)
                 lines_env[i].append(line)
 
-    # Compute the maximum histogram height among frames to keep ylim fixed
+    # Compute the maximum histogram height among frames to keep ylim fixed.
     if plt_diag:
         max_heights = np.zeros((n_frames, 4))
         for i, X in enumerate(coords):
@@ -296,7 +298,23 @@ def corner(
         X, X_samp = coords[t], coords_samp[t]
         for i in range(3):
             for j in range(i + 1):
-                lines[i][j].set_data(X_samp[:, j], X_samp[:, i+1])
+                if kind == 'scatter':
+                    lines[i][j].set_data(X_samp[:, j], X_samp[:, i+1])
+                elif kind == 'hist':
+                    if j in [0, 2]:
+                        xrange = limits[0]
+                    else:
+                        xrange = limits[1]
+                    if i in [0, 2]:
+                        yrange = limits[1]
+                    else:
+                        yrange = limits[0]
+                    brange = (xrange, yrange)
+                    bins = plt_kws['bins']
+                    plt_kws_temp = copy.deepcopy(plt_kws)
+                    del plt_kws_temp['bins']
+                    scatter_axes[i, j].hist2d(X_samp[:, j], X_samp[:, i+1], bins, brange, **plt_kws_temp)
+                    
                 if plt_env:
                     X_env = coords_env[t]
                     lines_env[i][j].set_data(X_env[:, j], X_env[:, i+1])
