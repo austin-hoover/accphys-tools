@@ -27,7 +27,6 @@ from phase_controller import PhaseController
 # Settings
 #------------------------------------------------------------------------------
 # Beam
-n_parts = 100000
 mass = 0.93827231 # [GeV/c^2]
 kin_energy = 1.0 # [GeV]
 intensity = 1.5e14

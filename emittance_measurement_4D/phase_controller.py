@@ -15,10 +15,8 @@ from orbit.utils import helper_funcs as hf
 # Global variables
 IND_QUAD_NAMES = ['q02', 'q03', 'q04', 'q05', 'q06', 'q12', 'q13',
                   'q14', 'q15', 'q16', 'q17', 'q18', 'q19']
-FIELD_LB = np.array([0, -4.35, 0, -7.95, 0, 0, -5.53,
-                          0, -4.35, 0, -4.35, 0, -5.53])
-FIELD_UB = np.array([5.5, 0, 5.5, 0, 7.95, 5.53, 
-                          0, 4.35, 0, 4.35, 0, 5.53, 0])
+IND_QUAD_FIELD_LB = np.array([0, -4.35, 0, -7.95, 0, 0, -5.53, 0, -4.35, 0, -4.35, 0, -5.53])
+IND_QUAD_FIELD_UB = np.array([5.5, 0, 5.5, 0, 7.95, 5.53, 0, 4.35, 0, 4.35, 0, 5.53, 0])
 SHARED_POWER = {
     'q05': ['q07', 'q09', 'q11'],
     'q06': ['q08', 'q10'],
@@ -79,10 +77,21 @@ class PhaseController:
         self.init_twiss = init_twiss
         self.mass = mass
         self.kin_energy = kin_energy
+        self.Brho = hf.get_Brho(mass, kin_energy)
         self.ref_ws_name = ref_ws_name
         self.sync_matrix_lattice()
         self.tracked_twiss = None
-        self.ind_quad_names = IND_QUAD_NAMES
+        self.quad_names_set = {node.getName() for node in self.lattice.getNodes()}
+        self.ind_quad_names = []
+        self.ind_quad_strengths_lb = []
+        self.ind_quad_strengths_ub = []
+        for name, lb, ub in zip(IND_QUAD_NAMES, IND_QUAD_FIELD_LB, IND_QUAD_FIELD_UB):
+            if name in self.quad_names_set:
+                self.ind_quad_names.append(name)
+                self.ind_quad_strengths_lb.append(lb / self.Brho)
+                self.ind_quad_strengths_ub.append(ub / self.Brho)
+        self.ind_quad_strengths_lb = np.array(self.ind_quad_strengths_lb)
+        self.ind_quad_strengths_ub = np.array(self.ind_quad_strengths_ub)
         self.ind_quad_nodes = [lattice.getNodeForName(name) for name in self.ind_quad_names]
         self.default_quad_strengths = self.quad_strengths(self.ind_quad_names)
         self.track()
@@ -170,13 +179,18 @@ class PhaseController:
         """Return phases (divided by 2pi) from lattice entrance to node."""
         return self.tracked_twiss[self.node_index(node_name), [1, 2]]  
     
+    def twiss(self, node_name):
+        i = self.node_index(node_name)
+        s, mu_x, mu_y, alpha_x, alpha_y, beta_x, beta_y = self.tracked_twiss[i]
+        return np.array([alpha_x, alpha_y, beta_x, beta_y])
+    
     def set_phase_adv(self, node_name, nux, nuy, beta_lims=(40., 40.), **lsq_kws):
         """Set phase advance from lattice entrance to the node."""
-        ind_quad_names = ['q18', 'q19']
+        quads_to_vary = ['q18', 'q19']
         target_phases = [nux, nuy]
         
         def cost_func(quad_strengths):
-            self.set_quad_strengths(ind_quad_names, quad_strengths)
+            self.set_quad_strengths(quads_to_vary, quad_strengths)
             self.track()
             calc_phases = self.phase_adv(node_name)
             residuals = np.subtract(target_phases, calc_phases)
@@ -184,14 +198,13 @@ class PhaseController:
             cost += np.sum(np.clip(self.max_betas()  - beta_lims, 0., None)**2)
             return cost
 
-        idx = [IND_QUAD_NAMES.index(name) for name in ind_quad_names]
-        Brho = hf.get_Brho(self.mass, self.kin_energy)
-        lb = FIELD_LB[idx] / Brho
-        ub = FIELD_UB[idx] / Brho
+        idx = [self.ind_quad_names.index(name) for name in quads_to_vary]
+        lb = self.ind_quad_strengths_lb[idx]
+        ub = self.ind_quad_strengths_ub[idx]
         beta_lims = np.array(beta_lims)
         guess = self.default_quad_strengths[idx]
         result = opt.least_squares(cost_func, guess, bounds=(lb, ub), **lsq_kws)
-        self.set_quad_strengths(ind_quad_names, result.x)
+        self.set_quad_strengths(quads_to_vary, result.x)
         max_betas = self.max_betas()
         if np.any(max_betas > beta_lims):
             print('WARNING: maximum beta functions exceed limit.')
