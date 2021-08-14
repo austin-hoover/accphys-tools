@@ -17,23 +17,12 @@ from orbit.diagnostics import add_analysis_nodes
 from orbit.space_charge.sc2p5d.scLatticeModifications import setSC2p5DAccNodes
 from orbit.teapot import TEAPOT_Lattice
 from orbit.utils import helper_funcs as hf
+from orbit.utils.general import delete_files_not_folders
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from data_analysis import reconstruct
-from utils import delete_files_not_folders
-from utils import PhaseController
+from phase_controller import PhaseController
 
-
-def print_stats(Sigma):
-    eps_1, eps_2 = analysis.apparent_emittances(Sigma)
-    eps_x, eps_y = analysis.intrinsic_emittances(Sigma)
-    eps_1, eps_2, eps_x, eps_y = 1e6 * np.array([eps_1, eps_2, eps_x, eps_y])
-    alpha_x, alpha_y, beta_x, beta_y = analysis.twiss2D(Sigma)
-    print('  eps_1, eps_2 = {} {} [mm mrad]'.format(eps_1, eps_2))
-    print('  eps_x, eps_y = {} {} [mm mrad]'.format(eps_x, eps_y))
-    print('  alpha_x, alpha_y = {} {} [rad]'.format(alpha_x, alpha_y))
-    print('  beta_x, beta_y = {} {} [m/rad]'.format(beta_x, beta_y))
-    
 
 # Settings
 #------------------------------------------------------------------------------
@@ -41,10 +30,11 @@ def print_stats(Sigma):
 n_parts = 100000
 mass = 0.93827231 # [GeV/c^2]
 kin_energy = 1.0 # [GeV]
-intensity = 0.0e14
+intensity = 1.5e14
 beam_input_file = '_input/init_dist_128K.dat'
 
 # Space charge solver
+use_space_charge = False
 max_solver_spacing = 1.0
 min_solver_spacing = 0.00001
 gridpts = (128, 128, 1)
@@ -52,14 +42,16 @@ gridpts = (128, 128, 1)
 # Lattice
 madx_file = '_input/rtbt.lat'
 madx_seq = 'whole1'
-init_twiss = {'alpha_x': -0.25897, 'alpha_y': 0.9749,
-              'beta_x': 2.2991, 'beta_y': 14.2583}
+init_twiss = {'alpha_x': -0.25897, 
+              'alpha_y': 0.9749,
+              'beta_x': 2.2991, 
+              'beta_y': 14.2583}
 
 # Scan parameters
 ws_names = ['ws02', 'ws20', 'ws21', 'ws23', 'ws24']
 ref_ws_name = 'ws24' 
 steps_per_dim = 5 # number of steps for each dimension
-method = 2
+method = 1
 phase_coverage = 30.0 # [deg]
 beta_lims = (40, 40) # (x, y)
 
@@ -71,7 +63,7 @@ lattice.readMADX(madx_file, madx_seq)
 lattice.set_fringe(False)
 
 # Add space charge nodes
-if intensity > 0:
+if use_space_charge:
     lattice.split(max_solver_spacing)    
     calc2p5d = SpaceChargeCalc2p5D(*gridpts)
     sc_nodes = setSC2p5DAccNodes(lattice, min_solver_spacing, calc2p5d)
@@ -79,7 +71,7 @@ if intensity > 0:
 # Add wire-scanner nodes
 ws_nodes = dict()
 for ws_name in ws_names:
-    ws_node = WireScannerNode()
+    ws_node = WireScannerNode(name=ws_name)
     parent_node = lattice.getNodeForName(ws_name)
     parent_node.addChildNode(ws_node, parent_node.ENTRANCE)
     ws_nodes[ws_name] = ws_node
@@ -104,18 +96,11 @@ np.savetxt('_output/data/ws_positions.dat', ws_positions)
 #------------------------------------------------------------------------------
 print('Loading initial beam coordinates.')
 X0 = np.loadtxt(beam_input_file)
-Sigma0 = np.cov(X0.T)
-Sigma0 = Sigma0[:4, :4]
-print('Initial beam stats:')
-print('Sigma =')
-print(Sigma0)
-print_stats(Sigma0)
-
-# Initialize Bunch.
 bunch, params_dict = hf.initialize_bunch(mass, kin_energy)
 for (x, xp, y, yp, z, dE) in X0:
     bunch.addParticle(x, xp, y, yp, z, dE)
-
+bunch.macroSize(int(intensity / bunch.getSize()))
+    
 def reset_bunch(bunch):
     for i, (x, xp, y, yp, z, dE) in enumerate(X0):
         bunch.x(i, x)
@@ -124,6 +109,22 @@ def reset_bunch(bunch):
         bunch.xp(i, xp)
         bunch.yp(i, yp)
         bunch.dE(i, dE)
+
+Sigma0 = np.cov(X0.T)
+stats0 = analysis.BunchStats(Sigma0)
+print('Initial beam stats:')
+print('Sigma =')
+print(stats0.Sigma)
+stats0.show(mm_mrad=True)
+
+# Estimate the perveance (Maybe the rms length would be better? Or use
+# the other definition of perveance in terms of the beam current?). This
+# tells us whether space charge is relevant.
+bunch_length = np.max(X0[:, 4]) - np.min(X0[:, 4])
+line_density = intensity / bunch_length
+print('perveance =', hf.get_perveance(mass, kin_energy, line_density))
+print('4 * (eps_x / x_rms)**2 =', 4 * (stats0.eps_x**2 / stats0.Sigma[0, 0]))
+print('4 * (eps_y / y_rms)**2 =', 4 * (stats0.eps_y**2 / stats0.Sigma[2, 2]))
 
 
 # Perform scan
@@ -149,27 +150,28 @@ for scan_index, (nux, nuy) in enumerate(scan_phases, start=1):
     for ws_name in ws_names:
         ws_node = ws_nodes[ws_name]
         sig_xx, sig_yy, sig_xy = ws_node.get_moments()
-        transfer_mats[ws_name].append(controller.transfer_matrix(ws_name))
+        rec_node_name = None
+        transfer_mats[ws_name].append(controller.transfer_matrix(rec_node_name, ws_name))
         moments[ws_name].append(ws_node.get_moments())
         phases[ws_name].append(controller.phase_adv(ws_name))
         
 # Reconstruct covariance matrix.
-active_ws_names = ws_names[:]
-max_n_meas = 20
 transfer_mats_list, moments_list = [], []
-for ws_name in active_ws_names:
-    transfer_mats_list.extend(transfer_mats[ws_name][:max_n_meas])
-    moments_list.extend(moments[ws_name][:max_n_meas])
+for ws_name in ws_names:
+    transfer_mats_list.extend(transfer_mats[ws_name])
+    moments_list.extend(moments[ws_name])
     
-Sigma_rec = reconstruct(transfer_mats_list, moments_list)
+Sigma = reconstruct(transfer_mats_list, moments_list)
+stats = analysis.BunchStats(Sigma)
 print('Reconstructed beam stats:')
 print('Sigma =')
-print(Sigma_rec)
-print_stats(Sigma_rec)
+print(stats.Sigma)
+stats.show(mm_mrad=True)
+
     
 # Save data
 #------------------------------------------------------------------------------
-np.savetxt('_output/data/Sigma_rec.dat', Sigma_rec)
+np.savetxt('_output/data/Sigma_rec.dat', Sigma)
 np.savetxt('_output/data/Sigma0.dat', Sigma0)
 np.savetxt('_output/data/X0.dat', X0)
 for ws in ws_names:
