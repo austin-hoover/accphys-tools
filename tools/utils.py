@@ -103,6 +103,15 @@ def merge_dicts(*dictionaries):
     for dictionary in dictionaries:
         result.update(dictionary)
     return result
+
+
+def blacklist(dictionary, exclude):
+    """Remove all keys in `exclude` from the dictionary."""
+    if not exclude:
+        return dictionary
+    if type(exclude) not in [list, dict, set]:
+        exclude = [exclude]
+    return {key: dictionary[key] for key in dictionary if key not in exclude}
     
     
 # Display
