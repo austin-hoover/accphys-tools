@@ -25,12 +25,6 @@ SHARED_POWER = {
     'q18': ['q20', 'q22', 'q24'],
     'q19': ['q21', 'q23', 'q25'],
 }
-
-
-def delete_files_not_folders(path):
-    for root, folders, files in os.walk(path):
-        for file in files:
-            os.remove(os.path.join(root, file))
     
         
 def unpack(tracked_twiss):
@@ -80,7 +74,7 @@ class PhaseController:
         [position, phase_x, phase_y, alpha_x, alpha_y, beta_x, beta_y]. The
         phases are normalized by 2pi.
     """
-    def __init__(self, lattice, init_twiss, mass, kin_energy, ref_ws_name):
+    def __init__(self, lattice, init_twiss, mass, kin_energy, ref_ws_name='ws24'):
         self.lattice = lattice
         self.init_twiss = init_twiss
         self.mass = mass
@@ -143,26 +137,41 @@ class PhaseController:
             self.set_quad_strength(quad_name, quad_strength)
         self.sync_matrix_lattice()
         
-    def transfer_matrix(self, node_name):
-        """Calculate linear transfer matrix up to a certain node."""
-        matrix = Matrix(7, 7)
-        matrix.unit()
-        for node in self.matlat.getNodes():
-            if node.getName().startswith(node_name):
-                break
+    def transfer_matrix(self, start_node_name=None, stop_node_name=None):
+        """Calculate linear transfer matrix between two nodes."""
+        matrix_nodes = self.matlat.getNodes()   
+        
+        if start_node_name is None:
+            start_node_name = matrix_nodes[0].getName()
+        if stop_node_name is None:
+            stop_node_name = self.ref_ws_name
+            
+        def index(node_name):
+            for i, node in enumerate(matrix_nodes):
+                if node.getName().startswith(node_name):
+                    return i        
+        
+        start_index = index(start_node_name)
+        stop_index = index(stop_node_name)
+        reverse = start_index > stop_index
+        
+        M = Matrix(7, 7)
+        M.unit()
+        for node in matrix_nodes[start_index:stop_index]:
             if isinstance(node, BaseMATRIX):
-                matrix = node.getMatrix().mult(matrix)
-        M = np.zeros((4, 4))
-        for i in range(4):
-            for j in range(4):
-                M[i, j] = matrix.get(i, j)
-        return M  
+                M = node.getMatrix().mult(M)
+        M = [[M.get(i, j) for j in range(4)] for i in range(4)]
+        M = np.array(M)
+        if reverse:
+            M = np.linalg.inv(M)
+        return M
     
     def phase_adv(self, node_name):
         """Return phases (divided by 2pi) from lattice entrance to node."""
         return self.tracked_twiss[self.node_index(node_name), [1, 2]]  
     
     def set_phase_adv(self, node_name, nux, nuy, beta_lims=(40., 40.), **lsq_kws):
+        """Set phase advance from lattice entrance to the node."""
         ind_quad_names = ['q18', 'q19']
         target_phases = [nux, nuy]
         
