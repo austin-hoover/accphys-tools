@@ -327,7 +327,7 @@ def setup_corner(
     
 def corner(
     X, env_params=None, moments=False, limits=None, zero_center=True,
-    samples=10000, pad=0.5, figsize=None, dims='all', kind='scatter',
+    samples=None, pad=0.5, figsize=None, dims='all', kind='scatter',
     diag_kind='hist', hist_height=0.6, units='mm-mrad', norm_labels=False,
     text=None, ax=None, diag_kws=None, env_kws=None, text_kws=None, **plt_kws
 ):
@@ -359,7 +359,7 @@ def corner(
         plot window on the projected means of the distribution.
     samples : int
         The number of randomly sampled points to use in the scatter plots. If
-        'all', use all the points.
+        None, use all the points.
     pad : float
         Padding for the axis ranges: umax_new = (1 + pad) * 0.5 * w, where w is
         the width of the distribution (max - min).
@@ -411,7 +411,7 @@ def corner(
     text_kws = dict() if text_kws is None else text_kws
     if kind == 'hist':
         plt_kws.setdefault('bins', 45)
-        samples = 'all'
+        samples = None
     if kind == 'scatter' or kind == 'scatter_density':
         plt_kws.setdefault('s', 3)
         plt_kws.setdefault('c', 'steelblue')
@@ -433,7 +433,7 @@ def corner(
     text_kws.setdefault('horizontalalignment', 'center')
     
     # Get data
-    if samples == 'all':
+    if samples is None:
         X_samp = X
     else:
         X_samp = utils.rand_rows(X, samples)
@@ -688,7 +688,7 @@ def fft(ax, x, y, grid=True, figname=None):
     return ax
 
 
-def scatter_density(ax, x, y, samples='all', sort=True, bins=40,
+def scatter_density(ax, x, y, samples=None, sort=True, bins=40,
                     method='interp', **kws):
     """Scatter plot with colors weighted by local density.
     
@@ -702,7 +702,7 @@ def scatter_density(ax, x, y, samples='all', sort=True, bins=40,
         The data.
     samples : int
         The number of random samples to plot. All points are used in the
-        density estimates. If 'all', plot all the points.
+        density estimates. If None, plot all the points.
     sort : bool
         If True, plot higher-density points on top.
     bins : int
@@ -734,7 +734,7 @@ def scatter_density(ax, x, y, samples='all', sort=True, bins=40,
         idx = z.argsort()
         x, y, z = x[idx], y[idx], z[idx]
         
-    if samples != 'all' and len(z) > samples:
+    if samples is not None and len(z) > samples:
         idx = np.random.choice(len(z), samples, replace=False)
         x, y, z = x[idx], y[idx], z[idx]
         
