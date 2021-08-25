@@ -16,9 +16,7 @@ def ancestor_folder_path(current_path, ancestor_folder_name):
 
 sys.path.append(ancestor_folder_path(os.path.abspath(__file__), 'accphys'))
 from tools import utils
-
-
-DEFAULT_COLORCYCLE = plt.rcParams['axes.prop_cycle'].by_key()['color']
+from tools.plotting import DEFAULT_COLORCYCLE
 
 
 def possible_points(transfer_mats, moments, slopes): 
