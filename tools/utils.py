@@ -175,6 +175,10 @@ def vec2mat(moment_vec):
     for moment, (i, j) in zip(moment_vec, zip(*indices)):
         Sigma[i, j] = moment
     return symmetrize(Sigma)
+
+
+def is_positive_definite(Sigma):
+    return np.all(np.linalg.eigvals(Sigma) > 0)
     
     
 # The following three functions are from Tony Yu's blog post: https://tonysyu.github.io/ragged-arrays.html#.YKVwQy9h3OR
