@@ -83,6 +83,13 @@ def apparent_emittances(Sigma):
     return eps_x, eps_y
 
 
+def emittances(Sigma):
+    """Return apparent and intrinsic emittances from covariance matrix."""
+    eps_x, eps_y = apparent_emittances(Sigma)
+    eps_1, eps_2 = intrinsic_emittances(Sigma)
+    return eps_x, eps_y, eps_1, eps_2
+
+
 def coupling_coefficient(Sigma):
     """This is not the standard definition."""
     eps_1, eps_2 = intrinsic_emittances(Sigma)
