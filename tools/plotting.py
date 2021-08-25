@@ -14,6 +14,9 @@ from .beam_analysis import get_ellipse_coords, rms_ellipse_dims
 from . import utils
 
 
+DEFAULT_COLORCYCLE = plt.rcParams['axes.prop_cycle'].by_key()['color']
+
+
 _labels = [r"$x$", r"$x'$", r"$y$", r"$y'$"]
 _labels_norm = [r"$x_n$", r"$x_n'$", r"$y_n$", r"$y_n'$"]
 var_indices = {'x':0, 'xp':1, 'y':2, 'yp':3}
