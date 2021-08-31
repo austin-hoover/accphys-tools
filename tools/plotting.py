@@ -449,37 +449,33 @@ def corner(
         X_env = get_ellipse_coords(env_params, npts=100)
         
     # Determine axis limits
-    means = np.mean(X, axis=0)
     mins = np.min(X, axis=0)
     maxs = np.max(X, axis=0)
+    means = np.mean(X, axis=0)
     widths = (1 + pad) * np.abs(maxs - mins)
-    maxs = means + 0.5 * widths
-    mins = means - 0.5 * widths
-    umax = max(maxs[0], maxs[2])
-    umin = min(mins[0], mins[2])
-    upmax = max(maxs[1], maxs[3])
-    upmin = min(mins[1], mins[3])
+    width_u = max(widths[0], widths[2])
+    width_up = max(widths[1], widths[3])
+    xmin = means[0] - 0.5 * width_u
+    xmax = means[0] + 0.5 * width_u
+    ymin = means[2] - 0.5 * width_u
+    ymax = means[2] + 0.5 * width_u
+    xpmin = means[1] - 0.5 * width_up
+    xpmax = means[1] + 0.5 * width_up
+    ypmin = means[3] - 0.5 * width_up
+    ypmax = means[3] + 0.5 * width_up
     if zero_center:
-        umax = max(abs(umax), abs(umin))
-        umin = -umax
-        upmax = max(abs(upmax), abs(upmin))
-        upmin = -upmax
-        
-    # If any None is encountered, use the calculated limits. Otherwise, use the
-    # user-supplied limits.
+        xmax = max(abs(xmin), abs(xmax))
+        ymax = max(abs(ymin), abs(ymax))
+        xpmax = max(abs(xpmin), abs(xpmax))
+        ypmax = max(abs(ypmin), abs(ypmax))
+        xmin = -xmax
+        ymin = -ymax
+        xmin = -xmax
+        ypmin = -ypmax
     if limits is None:
-        limits = [(umin, umax), (upmin, upmax)]
-    else:
-        _limits = []
-        if limits[0] is None:
-            _limits.append((umin, umax))
-        else:
-            _limits.append(limits[0])
-        if limits[1] is None:
-            _limits.append((upmin, upmax))
-        else:
-            _limits.append(limits[1])
-        limits = _limits
+        limits = [(xmin, xmax), (xpmin, xpmax), (ymin, ymax), (ypmin, ypmax)]
+    if len(limits) == 2:
+        limits = 2 * limits
         
     # Use 1D histograms to determine number of bins in 2D histogram.
     # There is probably a better way to do this.
