@@ -44,7 +44,7 @@ def skip_frames(frames, skip=1, keep_last=False):
 
 
 def corner(
-    coords, env_params=None, limits=None, zero_center=True, dims='all', samples=2000, 
+    coords, env_params=None, limits=None, zero_center=True, dims='all', samples=None, 
     skip=0, keep_last=False, pad=0.5, space=0.15, figsize=None, kind='scatter',
     diag_kind='hist', hist_height=0.6, units='mm-mrad', norm_labels=False,
     text_fmt='', text_vals=None, fps=1, diag_kws={}, env_kws={}, text_kws={},
@@ -181,84 +181,60 @@ def corner(
     if nparts_is_static:
         nparts = nparts_list[0]
         coords_samp = np.array(coords)
-        if samples < nparts:
+        if samples and samples < nparts:
             idx = np.random.choice(nparts, samples, replace=False)
-        else:
-            idx = np.arange(0, nparts)
-        coords_samp = [X[idx] for X in coords]
+            coords_samp = coords[:, idx, :]
     else:
+        # Note that this section takes a different sample of particles on
+        # each frame.
         coords_samp = coords
         for i, X in enumerate(coords_samp):
-            if X.shape[0] > samples:
+            if samples and X.shape[0] > samples:                
                 coords_samp[i] = rand_rows(X, samples)
-                
-                
-                
+            
     # Axis limits. Please clean up this section.   
-    umin_list = []
-    umax_list = []
-    upmin_list = []
-    upmax_list = []
+    mins_list = np.vstack([np.min(X, axis=0) for X in coords])
+    maxs_list = np.vstack([np.max(X, axis=0) for X in coords])
+    mins = np.min(mins_list, axis=0)[:4]
+    maxs = np.max(maxs_list, axis=0)[:4]
+    means = 0.5 * (mins + maxs)
+    widths = (1 + pad) * np.abs(maxs - mins)
+
+    width_u = max(widths[0], widths[2])
+    width_up = max(widths[1], widths[3])
+    xmin = means[0] - 0.5 * width_u
+    xmax = means[0] + 0.5 * width_u
+    ymin = means[2] - 0.5 * width_u
+    ymax = means[2] + 0.5 * width_u
+    xpmin = means[1] - 0.5 * width_up
+    xpmax = means[1] + 0.5 * width_up
+    ypmin = means[3] - 0.5 * width_up
+    ypmax = means[3] + 0.5 * width_up
     
-    for X in coords:
-        means = np.mean(X, axis=0)
-        maxs = np.max(X, axis=0)
-        mins = np.min(X, axis=0)
-        widths = (1 + pad) * np.abs(maxs - mins)
-        maxs = means + 0.5 * widths
-        mins = means - 0.5 * widths
-        umax = max(maxs[0], maxs[2])
-        umin = min(mins[0], mins[2])
-        upmax = max(maxs[1], maxs[3])
-        upmin = min(mins[1], mins[3])
-        umin_list.append(umin)
-        umax_list.append(umax)
-        upmin_list.append(upmin)
-        upmax_list.append(upmax)
-        
-    umin = min(umin_list)
-    umax = max(umax_list)
-    upmin = min(upmin_list)
-    upmax = max(upmax_list)
     if zero_center:
-        umax = max(abs(umax), abs(umin))
-        umin = -umax
-        upmax = max(abs(upmax), abs(upmin))
-        upmin = -upmax
-        
-    umin *= (1 + pad)
-    umax *= (1 + pad)
-    upmin *= (1 + pad)
-    upmax *= (1 + pad)
-    
+        xmax = max(abs(xmin), abs(xmax))
+        ymax = max(abs(ymin), abs(ymax))
+        xpmax = max(abs(xpmin), abs(xpmax))
+        ypmax = max(abs(ypmin), abs(ypmax))
+        xmin = -xmax
+        ymin = -ymax
+        xmin = -xmax
+        ypmin = -ypmax
+            
     # If any None is encountered, use the calculated limits. Otherwise, use the
     # user-supplied limits.
     if limits is None:
-        limits = [(umin, umax), (upmin, upmax)]
-    else:
-        _limits = []
-        if limits[0] is None:
-            _limits.append((umin, umax))
-        else:
-            _limits.append(limits[0])
-        if limits[1] is None:
-            _limits.append((upmin, upmax))
-        else:
-            _limits.append(limits[1])
-        limits = _limits
-    
-
-    
-#     if limits is None:
-#         limits = max_u_up_global(coords)
-#     limits = [(1 + pad) * limit for limit in limits]
-
+        limits = [(xmin, xmax), (xpmin, xpmax), (ymin, ymax), (ypmin, ypmax)]
+    if len(limits) == 2:
+        limits = 2 * limits
+        
     # Create figure
     fig, axes = setup_corner(
         limits, figsize, norm_labels, units, space, plt_diag, dims=dims,
         label_kws={'fontsize':'medium'}
-    )
+    )    
     plt.close()
+    
     if dims != 'all':
         return _corner_2D(fig, axes, coords_samp, coords_env, dims, texts, fps,
                           env_kws, text_kws, **plt_kws)
@@ -266,14 +242,14 @@ def corner(
     # Create array of Line2D objects
     lines = [[], [], []]
     lines_env = [[], [], []]
-    scatter_axes = axes[1:, :-1] if plt_diag else axes
+    joint_axes = axes[1:, :-1] if plt_diag else axes
     for i in range(3):
         for j in range(i + 1):
             if kind == 'scatter':
-                line, = scatter_axes[i, j].plot([], [], **plt_kws)
+                line, = joint_axes[i, j].plot([], [], **plt_kws)
                 lines[i].append(line)
             if plt_env:
-                line, = scatter_axes[i, j].plot([], [], **env_kws)
+                line, = joint_axes[i, j].plot([], [], **env_kws)
                 lines_env[i].append(line)
 
     # Compute the maximum histogram height among frames to keep ylim fixed.
@@ -283,7 +259,7 @@ def corner(
             for j in range(4):
                 max_heights[i, j] = np.max(np.histogram(X[:, j], bins='auto')[0])
         axes[0, 0].set_ylim(0, np.max(max_heights) / hist_height)
-
+        
     def init():
         """Plot the background of each frame."""
         for i in range(3):
@@ -301,19 +277,12 @@ def corner(
                 if kind == 'scatter':
                     lines[i][j].set_data(X_samp[:, j], X_samp[:, i+1])
                 elif kind == 'hist':
-                    if j in [0, 2]:
-                        xrange = limits[0]
-                    else:
-                        xrange = limits[1]
-                    if i in [0, 2]:
-                        yrange = limits[1]
-                    else:
-                        yrange = limits[0]
-                    brange = (xrange, yrange)
+                    brange = (limits[j], limits[i + 1])
                     bins = plt_kws['bins']
                     plt_kws_temp = copy.deepcopy(plt_kws)
                     del plt_kws_temp['bins']
-                    scatter_axes[i, j].hist2d(X_samp[:, j], X_samp[:, i+1], bins, brange, **plt_kws_temp)
+                    joint_axes[i, j].hist2d(X_samp[:, j], X_samp[:, i+1], 
+                                              bins, brange, **plt_kws_temp)
                     
                 if plt_env:
                     X_env = coords_env[t]
@@ -339,7 +308,7 @@ def corner(
 
         # Display text
         location = (0.35, 0) if plt_diag else (0.35, 0.5)
-        axes[1, 2].annotate(texts[t], xy=location, xycoords='axes fraction',
+        axes[1, 2].annotate(texts[t], xy=location, xycoords='axes fraction', 
                             **text_kws)
 
     # Call animator and possibly save the animation

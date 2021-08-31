@@ -212,7 +212,8 @@ def setup_corner(
         The maximum position (umax) and slope (upmax) in the plot windows. All
         plot windows are made square, so xmax = ymax = -xmin = -ymax = umax, and
         and xpmax = ypmax = -xpmin = -ypmin = upmax. Alternatively, (umin, umax)
-        or (upmin, upmax) can be passed.
+        or (upmin, upmax) can be passed. Or pass [(xmin, xmax), (xpmin, xpmax),
+        (ymin, ymax), (ypmin, ypmax)]. 
     figsize : tuple or int
         Size of the figure (x_size, y_size). If an int is provided, the number
         is used as the size for both dimensions.
@@ -256,9 +257,12 @@ def setup_corner(
         else:
             lo, hi = -item, item
         return lo, hi
-    (umin, umax), (upmin, upmax) = unpack(limits[0]), unpack(limits[1])
-    limits = 2 * [(umin, umax), (upmin, upmax)]
-
+        
+    if len(limits) == 2:
+        umin, umax = unpack(limits[0])
+        upmin, upmax = unpack(limits[1])
+        limits = 2 * [(umin, umax), (upmin, upmax)]
+                
     labels = get_labels(units, norm_labels)
 
     loc_u, loc_up = ticker.MaxNLocator(2), ticker.MaxNLocator(2)
@@ -446,8 +450,8 @@ def corner(
         
     # Determine axis limits
     means = np.mean(X, axis=0)
-    maxs = np.max(X, axis=0)
     mins = np.min(X, axis=0)
+    maxs = np.max(X, axis=0)
     widths = (1 + pad) * np.abs(maxs - mins)
     maxs = means + 0.5 * widths
     mins = means - 0.5 * widths
@@ -476,6 +480,15 @@ def corner(
         else:
             _limits.append(limits[1])
         limits = _limits
+        
+    # Use 1D histograms to determine number of bins in 2D histogram.
+    # There is probably a better way to do this.
+    if kind == 'hist':
+        hx, _ = np.histogram(X[:, 0], range=limits[0], bins='auto')
+        hy, _ = np.histogram(X[:, 2], range=limits[0], bins='auto')
+        hxp, _ = np.histogram(X[:, 1], range=limits[1], bins='auto')
+        hyp, _ = np.histogram(X[:, 3], range=limits[1], bins='auto')
+        plt_kws['bins'] = max(len(hx), len(hy), len(hxp), len(hyp))
         
     # Create figure
     fig, axes = setup_corner(
@@ -534,7 +547,7 @@ def corner(
                 x_env, y_env = X_env[:, j], X_env[:, i + 1]
                 ax.plot(x_env, y_env, **env_kws)
     if moments:
-        rms_ellipses(np.cov(X.T), axes=scatter_axes, **env_kws)
+        rms_ellipses(4 * np.cov(X.T), axes=scatter_axes, **env_kws)
     
     if text:
         text_pos = (0.35, 0) if plt_diag else (0.35, 0.5)
