@@ -17,6 +17,7 @@ from spacecharge import SpaceChargeCalcSliceBySlice2D
 from orbit.collimation import TeapotCollimatorNode, addTeapotCollimatorNode
 from orbit.diagnostics import BunchMonitorNode
 from orbit.diagnostics import BunchStatsNode
+from orbit.diagnostics import analysis
 from orbit.diagnostics import add_analysis_node
 from orbit.diagnostics import addTeapotDiagnosticsNode
 from orbit.diagnostics import StatLats, Moments
@@ -51,21 +52,22 @@ from orbit.utils.general import delete_files_not_folders
 # Local
 from helpers import get_traj
 from helpers import get_part_coords
-from helpers import track_part
+from helpers import InjRegionController
 
 
 # Switches
 #------------------------------------------------------------------------------
 switches = {
-    'collimator': True,
-    'foil scattering': True,
-    'fringe': True,
-    'longitudinal impedence': True,
+    'collimator': False,
+    'foil scattering': False,
+    'fringe': False,
+    'longitudinal impedence': False,
     'pyorbit diagnostics': False,
-    'rf': True,
+    'rf': False,
+    'solenoid': False,
     'skew quads': False,
-    'space charge': True,
-    'uniform longitudinal distribution': False,
+    'space charge': False,
+    'uniform longitudinal distribution': True,
 }
 
 print('Switches:')
@@ -74,64 +76,49 @@ pprint(switches)
 
 # Initial settings
 #------------------------------------------------------------------------------
-print("Removing data in '_output/' folder.")
-delete_files_not_folders('_output/')
+print("Removing data in '_output/data/' folder.")
+delete_files_not_folders('_output/data/')
 
-madx_file = '_input/SNSring_nux6.23_nuy6.20.lat'
+madx_file = '_input/SNSring_nux6.18_nuy6.18.lat'
 madx_seq = 'rnginj'
-x_foil = 0.0492 
-y_foil = 0.0468
-kin_energy = 1.0 # [GeV]
+x_foil = 0.0468
+y_foil = 0.0492 
+kin_energy = 0.5 # [GeV]
 mass = 0.93827231 # [GeV/c^2]
-turns = 1000
+n_inj_turns = 1000
+n_stored_turns = 0
 macros_per_turn = 300
 intensity = 1.5e14
 
 # Initial and final coordinates at injection point
 inj_coords_t0 = np.array([
-    x_foil - 0.010,
+    x_foil,
     0.0,
-    y_foil - 0.009,
-    0.0
+    y_foil,
+    0.0,
 ])
 inj_coords_t1 = np.array([
     x_foil - 0.025,
-    0.0,
-    y_foil - 0.030,
-    0.0
+    -0.0,
+    y_foil,
+    -0.001,
 ])
 
 
 # Lattice setup
 #------------------------------------------------------------------------------
-# Load SNS ring
+# For some reason, calling `node.setParam('B', 0.)` on the solenoid node gives 
+# NAN for the orbit. I don't know the issue. The solution for now is to load 
+# an identical lattice without the solenoid.
+if switches['solenoid']:
+    madx_file = '_input/SNSring_nux6.18_nuy6.18_solenoid.lat'
+print("MADX file = '{}'".format(madx_file))
+
 ring = time_dep.TIME_DEP_Lattice()
 ring.readMADX(madx_file, madx_seq)
 ring.set_fringe(False)
 ring.initialize()
 ring_length = ring.getLength()
-
-# Toggle skew quads. These are skew quad correctors, technically. 
-def get_skew_quad_nodes(ring):
-    skew_quad_nodes = []
-    for node in ring.getNodes():
-        name = node.getName()
-        if name.startswith('qsc'):
-            node.setParam('skews', [0, 1])
-            skew_quad_nodes.append(node)
-    return skew_quad_nodes
-        
-def set_skew_quad_strengths(skew_quad_nodes, skew_quad_strengths):
-    for node, strength in zip(skew_quad_nodes, skew_quad_strengths):
-        node.setParam('kls', [0.0, strength])
-        
-if switches['skew quads']:
-    skew_quad_nodes = get_skew_quad_nodes(ring)
-    env_skew_quad_nodes = get_skew_quad_nodes(env_ring)
-    skew_quad_strengths = np.zeros(len(skew_quad_nodes))
-    skew_quad_strengths[12] = 0.1
-    set_skew_quad_strengths(skew_quad_nodes, skew_quad_strengths)
-    set_skew_quad_strengths(env_skew_quad_nodes, skew_quad_strengths)
 
     
 # Beam setup
@@ -139,7 +126,7 @@ if switches['skew quads']:
 # Initialize bunch_
 bunch = Bunch()
 bunch.mass(mass)
-bunch.macroSize(intensity / turns / macros_per_turn)
+bunch.macroSize(intensity / n_inj_turns / macros_per_turn)
 bunch.getSyncParticle().kinEnergy(kin_energy)
 lostbunch = Bunch()
 lostbunch.addPartAttr('LostParticleAttributes')
@@ -149,21 +136,20 @@ sync_part = bunch.getSyncParticle()
 # Transverse linac distribution
 order = 3.0
 alpha_x = 0.063
-alphay = 0.063
+alpha_y = 0.063
 beta_x = 10.209 
-betay = 10.776
+beta_y = 10.776
 emitlim = 0.152 * 2 * (order + 1) * 1e-6
 
-emittance_reduction_factor = 0.5
+emittance_reduction_factor = 1.0
 emitlim *= emittance_reduction_factor
-print('Decreasing emittance of injected beam by {}'.format(emittance_reduction_factor))
-print('New emitlim = {:.3e}'.format(emitlim))
+print('Multiplied linac beam emittance by factor {}.'.format(emittance_reduction_factor))
 
 xcenterpos = x_foil
 ycenterpos = y_foil
 xcentermom = ycentermom = 0.0
 dist_x = JohoTransverse(order, alpha_x, beta_x, emitlim, xcenterpos, xcentermom)
-dist_y = JohoTransverse(order, alphay, betay, emitlim, ycenterpos, ycentermom)
+dist_y = JohoTransverse(order, alpha_y, beta_y, emitlim, ycenterpos, ycentermom)
 
 # Longitudinal linac distribution
 zlim = (139.68 / 360.0) * ring_length
@@ -182,7 +168,7 @@ ecmax = 0.0035
 ecdrifti = 0.0
 ecdriftf = 0.0
 tturn = ring_length / (sync_part.beta() * 2.9979e8)
-drifttime = 1000.0 * turns * tturn
+drifttime = 1000.0 * n_inj_turns * tturn
 ecparams = (ecmean, ecsigma, ectrunc, ecmin, ecmax, ecdrifti, ecdriftf, drifttime)
 esnu = 100.0
 esphase = 0.0
@@ -196,85 +182,30 @@ if switches['uniform longitudinal distribution']:
     eoffset = 0.0
     deltaEfrac = 0.0
     dist_z = UniformLongDist(zmin, zmax, sync_part, eoffset, deltaEfrac)
-
-
-# Injection kickers
-#------------------------------------------------------------------------------
-kicker_names = ['ikickh_a10', 'ikickv_a10', 'ikickh_a11', 'ikickv_a11',
-                'ikickv_a12', 'ikickh_a12', 'ikickv_a13', 'ikickh_a13']
-kicker_strength_param_names = ['kx', 'ky', 'kx', 'ky', 'ky', 'kx', 'ky', 'kx']
-kicker_nodes = [ring.getNodeForName(name) for name in kicker_names]
-
-# Maximum injection kicker angles at 1 GeV kinetic energy [mrad]
-min_kicker_angles = 1.15 * np.array([0.0, 0.0, -7.13, -7.13, -7.13, -7.13, 0.0, 0.0])
-max_kicker_angles = 1.15 * np.array([12.84, 12.84, 0.0, 0.0, 0.0, 0.0, 12.84, 12.84])
-
-# Scale angles based on actual kinetic energy
-scale_factor = hf.get_pc(mass, 1.0) / hf.get_pc(mass, kin_energy)
-min_kicker_angles *= scale_factor
-max_kicker_angles *= scale_factor
-
-# Convert from mrad to rad
-min_kicker_angles *= 1e-3
-max_kicker_angles *= 1e-3
-
-# ARTIFICIALLY INCREASE KICKER LIMITS. The values above seem to be less than the defaults.
-artificial_increase_factor = 1.5
-min_kicker_angles *= artificial_increase_factor
-max_kicker_angles *= artificial_increase_factor
-
-def set_kicker_angles(kicker_nodes, angles, region='all'):
-    """Set kicker angles in one half of the injection region."""
-    if region == 'left':
-        lo, hi = 0, 4
-    elif region == 'right':
-        lo, hi = 4, 8
-    elif region == 'all':
-        lo, hi = 0, 8
-    for node, param_name, angle in zip(kicker_nodes[lo:hi], kicker_strength_param_names[lo:hi], angles):
-        node.setParam(param_name, angle)
-        
-def get_kicker_angles():
-    return [node.getParam(param) for node, param in zip(kicker_nodes, kicker_strength_param_names)]
-
-def optimize_kickers(inj_coords, **kws):
-    """Ensure closed orbit at s = 0 has [x, x', y, y'] = inj_coords.""" 
-    kicker_angles = []
-    for region in ['right', 'left']:
-        if region == 'right':
-            sublattice = hf.get_sublattice(ring, 'inj_mid', 'inj_end')
-            lb = min_kicker_angles[4:]
-            ub = max_kicker_angles[4:]
-        elif region == 'left':
-            sublattice = hf.get_sublattice(ring, 'inj_start', None)
-            sublattice.reverseOrder() # track backwards from s = 0 
-            inj_coords[[1, 3]] *= -1 # initial slopes therefore change sign
-            lb = min_kicker_angles[:4]
-            ub = max_kicker_angles[:4]
-            
-        def penalty(angles):
-            set_kicker_angles(kicker_nodes, angles, region)
-            coords_outside_inj = track_part(sublattice, inj_coords, mass, kin_energy)
-            return 1e6 * sum(np.square(coords_outside_inj))
-        
-        guess = np.zeros(4)
-        result = opt.least_squares(penalty, guess, bounds=(lb, ub), **kws)
-        kicker_angles[:0] = result.x    
-    return np.array(kicker_angles)
-
+    
+    
 print('Optimizing injection kickers.')
-kws = dict(max_nfev=10000, verbose=1)
-kicker_angles_t0 = optimize_kickers(inj_coords_t0, **kws)  
-kicker_angles_t1 = optimize_kickers(inj_coords_t1, **kws)  
+inj_region_controller = InjRegionController(ring, mass, kin_energy)
+solver_kws = dict(max_nfev=10000, verbose=1)
+print('Optimizing injection kickers (injection start).')
+kicker_angles_t0 = inj_region_controller.set_coords_at_foil(inj_coords_t0, **solver_kws)
+print('Optimizing injection kickers (injection end).')
+kicker_angles_t1 = inj_region_controller.set_coords_at_foil(inj_coords_t1, **solver_kws)
+
+
+# Create waveforms.
 ring.setLatticeOrder()
 t0 = 0.000 # [s]
 t1 = 0.001 # [s]
 amps_t0 = np.ones(8)
-amps_t1 = kicker_angles_t1 / kicker_angles_t0
-for node, amp_t0, amp_t1 in zip(kicker_nodes, amps_t0, amps_t1):
+amps_t1 = np.abs(kicker_angles_t1 / kicker_angles_t0)
+for node, amp_t0, amp_t1 in zip(inj_region_controller.kicker_nodes, amps_t0, amps_t1):
     waveform = SquareRootWaveform(sync_part, t0, t1, amp_t0, amp_t1)
     ring.setTimeDepNode(node.getParam('TPName'), waveform)
-set_kicker_angles(kicker_nodes, kicker_angles_t0)
+
+    
+# Put the kickers to their initial settings.
+inj_region_controller.set_kicker_angles(kicker_angles_t0)
 
 
 # Black absorber collimator which acts as an aperture
@@ -453,7 +384,9 @@ foil_ymax = ycenterpos + 0.100
 foil_boundaries = [foil_xmin, foil_xmax, foil_ymin, foil_ymax]
 
 injection_node = TeapotInjectionNode(macros_per_turn, bunch, lostbunch, 
-                                     foil_boundaries, dist_x, dist_y, dist_z)
+                                     foil_boundaries, dist_x, dist_y, dist_z, 
+                                     nmaxmacroparticles=macros_per_turn*n_inj_turns
+                                    )
 addTeapotInjectionNode(ring, 0.0, injection_node)
 
 if switches['foil scattering']:
@@ -466,8 +399,7 @@ if switches['foil scattering']:
 #------------------------------------------------------------------------------
 if switches['pyorbit diagnostics']:
     tunes = TeapotTuneAnalysisNode("'tune_analysis'")
-    tunes.assignTwiss(9.19025, -1.78574, -0.000143012, -2.26233e-05, \
-                      8.66549, 0.538244)
+    tunes.assignTwiss(9.19025, -1.78574, -0.000143012, -2.26233e-05, 8.66549, 0.538244)
     addTeapotDiagnosticsNode(ring, 51.1921, tunes)
 
     statlat = TeapotStatLatsNode('_output/data/statlats_pyorbit.dat')
@@ -486,13 +418,12 @@ injection_node.addChildNode(bunch_monitor_node, injection_node.EXIT)
 ring.set_fringe(switches['fringe'])
 
 print('Painting...')
-for i in trange(turns):
+for i in trange(50):
     ring.trackBunch(bunch, params_dict)
     
-    if i == 100:
-        print('Saving turn-by-turn coordinates after {} turns'.format(i))
-        coords = bunch_monitor_node.get_data()
-        save_stacked_array('_output/data/coords_t{}.npz'.format(i), coords)
+print('Stored turns...')
+for i in trange(n_stored_turns):
+    ring.trackBunch(bunch, params_dict)
     
 print('Saving turn-by-turn coordinates...')
 coords = bunch_monitor_node.get_data()
@@ -503,13 +434,14 @@ save_stacked_array('_output/data/coords.npz', coords)
 #------------------------------------------------------------------------------
 ring = TEAPOT_Lattice()
 ring.readMADX(madx_file, madx_seq)
+inj_region_controller = InjRegionController(ring, mass, kin_energy)
 ring.set_fringe(False)
-kicker_nodes = [ring.getNodeForName(name) for name in kicker_names]
 ring.split(0.01)
 inj_region1 = hf.get_sublattice(ring, 'inj_start', None)
 inj_region2 = hf.get_sublattice(ring, 'inj_mid', 'inj_end')
 for i, kicker_angles in enumerate([kicker_angles_t0, kicker_angles_t1]):
-    set_kicker_angles(kicker_nodes, kicker_angles)
+    kicker_angles = kicker_angles_t1
+    inj_region_controller.set_kicker_angles(kicker_angles)
     coords1, positions1 = get_traj(inj_region1, [0, 0, 0, 0], mass, kin_energy)
     coords2, positions2 = get_traj(inj_region2, coords1[-1], mass, kin_energy)
     coords = np.vstack([coords1, coords2])
