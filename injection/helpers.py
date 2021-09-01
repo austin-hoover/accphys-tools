@@ -41,7 +41,6 @@ def get_traj(lattice, init_coords, mass, kin_energy):
 
 
 
-
 class InjRegionController:
     
     def __init__(self, ring, mass, kin_energy):
@@ -124,68 +123,49 @@ class InjRegionController:
             node.setParam('kx', angle)
         for angle, node in zip(angles_y, self.kicker_nodes_y):
             node.setParam('ky', angle)
+            
                  
-    def set_coords_at_foil(self, coords, **solver_kws):
+    def set_coords_at_foil(self, coords, correctors=False, **solver_kws):
 
         kicker_angles_x, kicker_angles_y = [], []
-
-        # After foil
-        #--------------------------------------------------------------------------
-        sublattice = hf.get_sublattice(self.ring, 'inj_mid', 'inj_end')
-
-        # Horizontal orbit
-        def cost_func(v):
-            self._set_kicker_angles(angles_x=[0., 0., v[0], v[1]])
-            coords_outside_inj = track_part(sublattice, coords, self.mass, self.kin_energy)
-            return 1e6 * np.sum((coords_outside_inj[:2])**2)
-
-        lb = self.min_kicker_angles_x[2:]
-        ub = self.max_kicker_angles_x[2:]
-        result = opt.least_squares(cost_func, [0, 0], bounds=(lb, ub), **solver_kws)
-        kicker_angles_x[:0] = result.x
-
-        # Vertical orbit
-        def cost_func(v):
-            self._set_kicker_angles(angles_y=[0., 0., v[0], v[1]])
-            coords_outside_inj = track_part(sublattice, coords, self.mass, self.kin_energy)
-            return 1e6 * np.sum((coords_outside_inj[2:])**2)
-
-        lb = self.min_kicker_angles_y[2:]
-        ub = self.max_kicker_angles_y[2:]
-        result = opt.least_squares(cost_func, [0, 0], bounds=(lb, ub), **solver_kws)   
-        kicker_angles_y[:0] = result.x
+        x, xp, y, yp = coords
 
         # Before foil
-        #--------------------------------------------------------------------------
         sublattice = hf.get_sublattice(self.ring, 'inj_start', None)
         sublattice.reverseOrder() # track backwards from foil to injection start
-        coords[[1, 3]] *= -1 # flip sign of transverse slopes
 
-        # Horizontal orbit
         def cost_func(v):
-            self._set_kicker_angles(angles_x=[v[0], v[1], 0., 0.])
-            coords_outside_inj = track_part(sublattice, coords, self.mass, self.kin_energy)
-            return 1e6 * np.sum((coords_outside_inj[:2])**2)
+            self._set_kicker_angles(angles_x=[v[0], v[1], 0., 0.],
+                                    angles_y=[v[2], v[3], 0., 0.])
+            coords_outside_inj = track_part(sublattice, [x, -xp, y, -yp], 
+                                            self.mass, self.kin_energy)
+            return 1e6 * np.sum(coords_outside_inj**2)
 
-        lb = self.min_kicker_angles_x[:2]
-        ub = self.max_kicker_angles_x[:2]
-        result = opt.least_squares(cost_func, [0, 0], bounds=(lb, ub), **solver_kws)
-        kicker_angles_x[:0] = result.x
-
-        # Vertical orbit
-        def cost_func(v):
-            self._set_kicker_angles(angles_y=[v[0], v[1], 0., 0.])
-            coords_outside_inj = track_part(sublattice, coords, self.mass, self.kin_energy)
-            return 1e6 * np.sum((coords_outside_inj[2:])**2)
-
-        lb = self.min_kicker_angles_y[:2]
-        ub = self.max_kicker_angles_y[:2]
-        result = opt.least_squares(cost_func, [0, 0], bounds=(lb, ub), **solver_kws)  
-        kicker_angles_y[:0] = result.x
+        lb = np.append(self.min_kicker_angles_x[:2], self.min_kicker_angles_y[:2])
+        ub = np.append(self.max_kicker_angles_x[:2], self.max_kicker_angles_y[:2])
+        result = opt.least_squares(cost_func, np.zeros(4), bounds=(lb, ub), **solver_kws)
+        kicker_angles_x.extend(result.x[:2])
+        kicker_angles_y.extend(result.x[2:])
+    
+        # After foil
+        sublattice = hf.get_sublattice(self.ring, 'inj_mid', 'inj_end')
         
-        self._set_kicker_angles(angles_x=kicker_angles_x, angles_y=kicker_angles_y)
+        def cost_func(v):
+            self._set_kicker_angles(angles_x=[0., 0., v[0], v[1]],
+                                    angles_y=[0., 0., v[2], v[3]])
+            coords_outside_inj = track_part(sublattice, [x, xp, y, yp], 
+                                            self.mass, self.kin_energy)
+            return 1e6 * np.sum(coords_outside_inj**2)
+
+        lb = np.append(self.min_kicker_angles_x[2:], self.min_kicker_angles_y[2:])
+        ub = np.append(self.max_kicker_angles_x[2:], self.max_kicker_angles_y[2:])
+        result = opt.least_squares(cost_func, np.zeros(4), bounds=(lb, ub), **solver_kws)
+        kicker_angles_x.extend(result.x[:2])
+        kicker_angles_y.extend(result.x[2:])
+        
+        # Set all the correct kicker angles.
+        self._set_kicker_angles(kicker_angles_x, kicker_angles_y)
         return self.get_kicker_angles()
-        
         
     def set_kicker_angles(self, angles):
         for angle, node in zip(angles, self.kicker_nodes):
@@ -193,7 +173,6 @@ class InjRegionController:
                 node.setParam('kx', angle)
             elif node in self.kicker_nodes_y:
                 node.setParam('ky', angle)
-            
             
     def get_kicker_angles(self):
         kicker_angles = []

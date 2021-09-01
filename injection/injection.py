@@ -187,10 +187,14 @@ if switches['uniform longitudinal distribution']:
 print('Optimizing injection kickers.')
 inj_region_controller = InjRegionController(ring, mass, kin_energy)
 solver_kws = dict(max_nfev=10000, verbose=1)
-print('Optimizing injection kickers (injection start).')
-kicker_angles_t0 = inj_region_controller.set_coords_at_foil(inj_coords_t0, **solver_kws)
 print('Optimizing injection kickers (injection end).')
-kicker_angles_t1 = inj_region_controller.set_coords_at_foil(inj_coords_t1, **solver_kws)
+kicker_angles_t1 = inj_region_controller.set_coords_at_foil(inj_coords_t1, 
+                                                            correctors=True, 
+                                                            **solver_kws)
+print('Optimizing injection kickers (injection start).')
+kicker_angles_t0 = inj_region_controller.set_coords_at_foil(inj_coords_t0, 
+                                                            correctors=False,
+                                                            **solver_kws)
 
 
 # Create waveforms.
@@ -434,13 +438,12 @@ save_stacked_array('_output/data/coords.npz', coords)
 #------------------------------------------------------------------------------
 ring = TEAPOT_Lattice()
 ring.readMADX(madx_file, madx_seq)
-inj_region_controller = InjRegionController(ring, mass, kin_energy)
 ring.set_fringe(False)
 ring.split(0.01)
+inj_region_controller = InjRegionController(ring, mass, kin_energy)
 inj_region1 = hf.get_sublattice(ring, 'inj_start', None)
 inj_region2 = hf.get_sublattice(ring, 'inj_mid', 'inj_end')
 for i, kicker_angles in enumerate([kicker_angles_t0, kicker_angles_t1]):
-    kicker_angles = kicker_angles_t1
     inj_region_controller.set_kicker_angles(kicker_angles)
     coords1, positions1 = get_traj(inj_region1, [0, 0, 0, 0], mass, kin_energy)
     coords2, positions2 = get_traj(inj_region2, coords1[-1], mass, kin_energy)
