@@ -20,6 +20,7 @@ from matplotlib.patches import Ellipse, transforms
 from .beam_analysis import get_ellipse_coords
 from .plotting import setup_corner
 from .plotting import max_u_up, max_u_up_global
+from .plotting import get_limits_4D
 from .plotting import remove_annotations
 from .plotting import vector
 from .plotting import var_indices
@@ -546,7 +547,7 @@ def _corner_env_2D(fig, ax, coords_list, dims, clear_history, show_init,
 
 def corner_onepart(
     X, dims='all', vecs=None, show_history=False, skip=0, pad=0.35, space=0.15,
-    figsize=None, units='mm-mrad', norm_labels=False, text_fmt='',
+    figsize=None, units='mm-mrad', norm_labels=False, text_fmt='', limits=None, zero_center=True,
     text_vals=None, fps=1, figname=None, dpi=None, bitrate=-1, text_kws={},
     label_kws={}, tick_kws={}, tickm_kws={}, grid_kws={}, history_kws={},
     **plt_kws
@@ -586,8 +587,13 @@ def corner_onepart(
     texts = texts[::skip+1]
     n_frames = X.shape[0]
     
+    # Determine axis limits.
+    if limits is None:
+        limits = get_limits_4D(X, pad, zero_center)
+    if len(limits) == 2:
+        limits = 2 * limits
+    
     # Create figure
-    limits = (1 + pad) * max_u_up(X)
     fig, axes = setup_corner(
         limits, figsize, norm_labels, units, space, plt_diag=False, dims=dims,
         tick_kws=tick_kws, tickm_kws=tickm_kws, label_kws=label_kws

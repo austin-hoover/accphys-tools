@@ -331,6 +331,33 @@ def setup_corner(
         plt.tight_layout(rect=[0, 0, 1.025, 0.975])
     return fig, axes
 
+
+def get_limits_4D(X, pad=0, zero_center=False):
+    mins = np.min(X, axis=0)
+    maxs = np.max(X, axis=0)
+    means = np.mean(X, axis=0)
+    widths = (1 + pad) * np.abs(maxs - mins)
+    width_u = max(widths[0], widths[2])
+    width_up = max(widths[1], widths[3])
+    xmin = means[0] - 0.5 * width_u
+    xmax = means[0] + 0.5 * width_u
+    ymin = means[2] - 0.5 * width_u
+    ymax = means[2] + 0.5 * width_u
+    xpmin = means[1] - 0.5 * width_up
+    xpmax = means[1] + 0.5 * width_up
+    ypmin = means[3] - 0.5 * width_up
+    ypmax = means[3] + 0.5 * width_up
+    if zero_center:
+        xmax = max(abs(xmin), abs(xmax))
+        ymax = max(abs(ymin), abs(ymax))
+        xpmax = max(abs(xpmin), abs(xpmax))
+        ypmax = max(abs(ypmin), abs(ypmax))
+        xmin = -xmax
+        ymin = -ymax
+        xmin = -xmax
+        ypmin = -ypmax
+    return [(xmin, xmax), (xpmin, xpmax), (ymin, ymax), (ypmin, ypmax)]
+    
     
 def corner(
     X, env_params=None, moments=False, limits=None, zero_center=True,
@@ -447,39 +474,16 @@ def corner(
     X_env = None
     if env_params is not None:
         X_env = get_ellipse_coords(env_params, npts=100)
-        
-    # Determine axis limits
-    mins = np.min(X, axis=0)
-    maxs = np.max(X, axis=0)
-    means = np.mean(X, axis=0)
-    widths = (1 + pad) * np.abs(maxs - mins)
-    width_u = max(widths[0], widths[2])
-    width_up = max(widths[1], widths[3])
-    xmin = means[0] - 0.5 * width_u
-    xmax = means[0] + 0.5 * width_u
-    ymin = means[2] - 0.5 * width_u
-    ymax = means[2] + 0.5 * width_u
-    xpmin = means[1] - 0.5 * width_up
-    xpmax = means[1] + 0.5 * width_up
-    ypmin = means[3] - 0.5 * width_up
-    ypmax = means[3] + 0.5 * width_up
-    if zero_center:
-        xmax = max(abs(xmin), abs(xmax))
-        ymax = max(abs(ymin), abs(ymax))
-        xpmax = max(abs(xpmin), abs(xpmax))
-        ypmax = max(abs(ypmin), abs(ypmax))
-        xmin = -xmax
-        ymin = -ymax
-        xmin = -xmax
-        ypmin = -ypmax
+
+    # Determine axis limits.
     if limits is None:
-        limits = [(xmin, xmax), (xpmin, xpmax), (ymin, ymax), (ypmin, ypmax)]
+        limits = get_limits_4D(X, pad, zero_center)
     if len(limits) == 2:
         limits = 2 * limits
         
     # Use 1D histograms to determine number of bins in 2D histogram.
     # There is probably a better way to do this.
-    if kind == 'hist':
+    if kind == 'hist' and 'bins' not in plt_kws:
         hx, _ = np.histogram(X[:, 0], range=limits[0], bins='auto')
         hy, _ = np.histogram(X[:, 2], range=limits[0], bins='auto')
         hxp, _ = np.histogram(X[:, 1], range=limits[1], bins='auto')
