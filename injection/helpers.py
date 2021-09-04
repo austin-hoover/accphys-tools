@@ -1,4 +1,6 @@
 from __future__ import print_function
+import time
+
 import numpy as np
 from scipy import optimize as opt
 
@@ -40,10 +42,9 @@ def get_traj(lattice, init_coords, mass, kin_energy):
     return np.array(coords), np.array(positions)
 
 
-
 class InjRegionController:
     
-    def __init__(self, ring, mass, kin_energy):
+    def __init__(self, ring, mass, kin_energy, dipole_kickers=False):
         self.ring = ring
         self.mass = mass
         self.kin_energy = kin_energy
@@ -55,20 +56,25 @@ class InjRegionController:
         # Maximum injection kicker angles at 1 GeV kinetic energy [mrad]
         self.min_kicker_angles = 1.15 * np.array([0.0, 0.0, -7.13, -7.13, -7.13, -7.13, 0.0, 0.0])
         self.max_kicker_angles = 1.15 * np.array([12.84, 12.84, 0.0, 0.0, 0.0, 0.0, 12.84, 12.84])
+        
+        if dipole_kickers:
+            self.max_kicker_angles = np.abs(self.min_kicker_angles + self.max_kicker_angles)
+            self.min_kicker_angles = -self.max_kicker_angles
 
         # Scale angles based on actual kinetic energy
-        kin_energy_scale_factor = hf.get_pc(mass, 1.0) / hf.get_pc(self.mass, self.kin_energy)
-        self.min_kicker_angles *= kin_energy_scale_factor
-        self.max_kicker_angles *= kin_energy_scale_factor
+        self.kin_energy_scale_factor = hf.get_pc(mass, 1.0) / hf.get_pc(self.mass, self.kin_energy)
+        self.min_kicker_angles *= self.kin_energy_scale_factor
+        self.max_kicker_angles *= self.kin_energy_scale_factor
 
         # Convert from mrad to rad
         self.min_kicker_angles *= 1e-3
         self.max_kicker_angles *= 1e-3
-
-        # ARTIFICIALLY INCREASE KICKER LIMITS. 
-        artificial_increase_factor = 1.5
-        self.min_kicker_angles *= artificial_increase_factor
-        self.max_kicker_angles *= artificial_increase_factor
+        
+        artificial_kicker_angle_increase_factor = 1.5
+        print('Artificially increasing kicker strength by factor {}'
+              .format(artificial_kicker_angle_increase_factor))
+        self.max_kicker_angles *= artificial_kicker_angle_increase_factor
+        self.min_kicker_angles *= artificial_kicker_angle_increase_factor
 
         # Identify horizontal and vertical kickers. PyORBIT doesn't distinguish 
         # between the two.
@@ -83,90 +89,59 @@ class InjRegionController:
 
         self.corrector_names = ['dmcv_a09', 'dchv_a10', 'dchv_a13', 'dmcv_b01']
         self.corrector_nodes = [self.ring.getNodeForName(name) for name in self.corrector_names]
-        self.max_corrector_angle = 0.005 # [rad]
+        self.max_corrector_angle_1GeV = 0.0015 # [rad]
+        self.max_corrector_angle = self.kin_energy_scale_factor * self.max_corrector_angle_1GeV
         self.min_corrector_angle = -self.max_corrector_angle
-        self.min_corrector_angles_x = np.full(4, self.min_corrector_angle)
-        self.max_corrector_angles_x = np.full(4, self.max_corrector_angle)
         self.min_corrector_angles_y = np.full(4, self.min_corrector_angle)
         self.max_corrector_angles_y = np.full(4, self.max_corrector_angle)
         
-    def _set_corrector_angles(self, angles_x=None, angles_y=None):
-        """Set the kick strengths [rad] of the dipole correctors in the injection region. 
-
-        Parameters
-        ----------
-        angles_x : ndarray, shape (2,)
-            The horizontal kick angles of the of the two inner magnets.
-        angles_y : ndarray, shape (2,)
-            The vertical kick angles of the magnets
-        """  
-        angles_x = np.zeros(2) if angles_x is None else angles_x
-        angles_y = np.zeros(4) if angles_y is None else angles_y
-        for angle, node in zip(angles_y, self.corrector_nodes):
-            node.setParam('ky', angle)
-        for angle, node in zip(angles_x, self.corrector_nodes[2:4]):
-            node.setParam('kx', angle)
+        self.sublattice1 = hf.get_sublattice(self.ring, 'inj_start', None)
+        self.sublattice2 = hf.get_sublattice(self.ring, 'inj_mid', 'inj_end')
         
     def _set_kicker_angles(self, angles_x=None, angles_y=None):
-        """Set kick strengths [rad] of the injection kicker magnets.
+        """Set kick strengths [rad] of injection kicker magnets.
 
-        Parameters
-        ----------
         angles_x : ndarray, shape (4,)
             The kick angle of the four horizontal kicker magnets.
         angles_y : ndarray, shape (4,)
             The kick angle of the four vertical kicker magnets.
         """
-        angles_x = np.zeros(4) if angles_x is None else angles_x
-        angles_y = np.zeros(4) if angles_y is None else angles_y
-        for angle, node in zip(angles_x, self.kicker_nodes_x):
-            node.setParam('kx', angle)
-        for angle, node in zip(angles_y, self.kicker_nodes_y):
-            node.setParam('ky', angle)
-            
-                 
-    def set_coords_at_foil(self, coords, correctors=False, **solver_kws):
-
-        kicker_angles_x, kicker_angles_y = [], []
+        if angles_x is not None:
+            for angle, node in zip(angles_x, self.kicker_nodes_x):
+                node.setParam('kx', angle)
+        if angles_y is not None:
+            for angle, node in zip(angles_y, self.kicker_nodes_y):
+                node.setParam('ky', angle)
+                  
+    def set_coords_at_foil(self, coords, **solver_kws):
+        
+        self.sublattice1.reverseOrder() # track backwards from foil to injection start
         x, xp, y, yp = coords
-
-        # Before foil
-        sublattice = hf.get_sublattice(self.ring, 'inj_start', None)
-        sublattice.reverseOrder() # track backwards from foil to injection start
-
-        def cost_func(v):
-            self._set_kicker_angles(angles_x=[v[0], v[1], 0., 0.],
-                                    angles_y=[v[2], v[3], 0., 0.])
-            coords_outside_inj = track_part(sublattice, [x, -xp, y, -yp], 
-                                            self.mass, self.kin_energy)
-            return 1e6 * np.sum(coords_outside_inj**2)
-
-        lb = np.append(self.min_kicker_angles_x[:2], self.min_kicker_angles_y[:2])
-        ub = np.append(self.max_kicker_angles_x[:2], self.max_kicker_angles_y[:2])
-        result = opt.least_squares(cost_func, np.zeros(4), bounds=(lb, ub), **solver_kws)
-        kicker_angles_x.extend(result.x[:2])
-        kicker_angles_y.extend(result.x[2:])
-    
-        # After foil
-        sublattice = hf.get_sublattice(self.ring, 'inj_mid', 'inj_end')
         
-        def cost_func(v):
-            self._set_kicker_angles(angles_x=[0., 0., v[0], v[1]],
-                                    angles_y=[0., 0., v[2], v[3]])
-            coords_outside_inj = track_part(sublattice, [x, xp, y, yp], 
-                                            self.mass, self.kin_energy)
-            return 1e6 * np.sum(coords_outside_inj**2)
+        def error():
+            coords_start = track_part(self.sublattice1, [x, -xp, y, -yp], self.mass, self.kin_energy)
+            coords_end = track_part(self.sublattice2, [x, +xp, y, +yp], self.mass, self.kin_energy)
+            return 1e6 * (np.sum(coords_start**2) + np.sum(coords_end**2))
 
-        lb = np.append(self.min_kicker_angles_x[2:], self.min_kicker_angles_y[2:])
-        ub = np.append(self.max_kicker_angles_x[2:], self.max_kicker_angles_y[2:])
-        result = opt.least_squares(cost_func, np.zeros(4), bounds=(lb, ub), **solver_kws)
-        kicker_angles_x.extend(result.x[:2])
-        kicker_angles_y.extend(result.x[2:])
+        # Horizontal orbit
+        def cost_func(v):
+            self._set_kicker_angles(angles_x=v)
+            return error()
+        lb = self.min_kicker_angles_x
+        ub = self.max_kicker_angles_x
+        opt.least_squares(cost_func, np.zeros(4), bounds=(lb, ub), verbose=1)
+                    
+        # Vertical orbit
+        def cost_func(v):
+            self._set_kicker_angles(angles_y=v)
+            return error()
+        lb = self.min_kicker_angles_y
+        ub = self.max_kicker_angles_y
+        opt.least_squares(cost_func, np.zeros(4), bounds=(lb, ub), **solver_kws)
         
-        # Set all the correct kicker angles.
-        self._set_kicker_angles(kicker_angles_x, kicker_angles_y)
+        self.sublattice1.reverseOrder()
         return self.get_kicker_angles()
-        
+            
     def set_kicker_angles(self, angles):
         for angle, node in zip(angles, self.kicker_nodes):
             if node in self.kicker_nodes_x:
@@ -182,3 +157,29 @@ class InjRegionController:
             elif node in self.kicker_nodes_y:
                 kicker_angles.append(node.getParam('ky'))
         return np.array(kicker_angles)
+    
+    def set_corrector_angles(self, angles_y):
+        for angle, node in zip(angles_y, self.corrector_nodes):
+            node.setParam('ky', angle)
+        
+    def get_corrector_angles(self):
+        return np.array([node.getParam('ky') for node in self.corrector_nodes])
+    
+    def bump_vertical_orbit(self, frac_max_angle=1.0):        
+        corrector_positions = [self.ring.getNodePositionsDict()[node][0]
+                               for node in self.corrector_nodes]
+        corrector_positions = np.array(corrector_positions)
+        ring_length = self.ring.getLength()
+        corrector_positions[:2] -= ring_length
+        
+        a = corrector_positions[1] - corrector_positions[0]
+        b = 0.5 * (corrector_positions[2] - corrector_positions[1])
+        theta2 = frac_max_angle * self.max_corrector_angle
+        theta1 = theta2 / (1 + (a / b))
+        
+        c = a * np.tan(theta1)
+        slope = abs(c / b)
+        print('slope = {} [rad]'.format(slope))
+        
+        corrector_angles = [theta1, -theta2, theta2, -theta1]
+        self.set_corrector_angles(corrector_angles)
