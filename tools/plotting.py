@@ -666,7 +666,7 @@ def corner_env(
     return axes
     
     
-def fft(ax, x, y, grid=True, figname=None):
+def fft(ax, x, y):
     """Compute and plot the FFT of two signals x and y on the same figure.
     
     Uses scipy.fft package. Particularly useful for plotting the horizontal
@@ -676,31 +676,17 @@ def fft(ax, x, y, grid=True, figname=None):
     and w(f) be the FFT of x. Then w[0] is zero frequency component, w[1:M] 
     are positive frequency components, and w[M:N] are negative frequency 
     components.
-    
-    Parameters
-    ----------
-    ax : Matplotlib Axes object
-        The axis on which to plot
-    x{y} : ndarray, shape (n,):
-        Contains the x{y} coordinate at n time steps.
-    grid : bool
-        Whether to put grid on plot.
-        
-    Returns
-    -------
-    ax: Matplotlib.axes object
     """
     N = len(x)
     M = N // 2
     f = (1/N) * np.arange(M)
-    xf = (1/M) * abs(scipy.fft.fft(x)[:M])
-    yf = (1/M) * abs(scipy.fft.fft(y)[:M])
+    xf = (1/M) * np.abs(scipy.fft.fft(x)[:M])
+    yf = (1/M) * np.abs(scipy.fft.fft(y)[:M])
     ax.set_xlabel('Tune')
     ax.set_ylabel('Amplitude')
     ax.plot(f[1:], xf[1:], label=r'$\nu_x$')
     ax.plot(f[1:], yf[1:], label=r'$\nu_y$')
-    ax.set_xticks(np.arange(0, 0.55, 0.05))
-    ax.grid(grid)
+#     ax.set_xticks(np.arange(0, 0.55, 0.05))
     return ax
 
 
@@ -858,7 +844,8 @@ def ellipse(ax, c1, c2, angle=0.0, **plt_kws):
     return ax
 
 
-def rms_ellipses(Sigmas, figsize=(5, 5), pad=0.5, axes=None, **plt_kws):
+def rms_ellipses(Sigmas, figsize=(5, 5), pad=0.5, axes=None, 
+                 cmap=None, cmap_range=(0, 1), **plt_kws):
     """Plot rms ellipse parameters directly from covariance matrix."""
     Sigmas = np.array(Sigmas)
     if Sigmas.ndim == 2:
@@ -869,11 +856,19 @@ def rms_ellipses(Sigmas, figsize=(5, 5), pad=0.5, axes=None, **plt_kws):
         umax = (1 + pad) * np.sqrt(max(x2_max, y2_max))
         upmax = (1 + pad) * np.sqrt(max(xp2_max, yp2_max))
         fig, axes = setup_corner((umax, upmax), figsize, units='mm-mrad')
+
+    colors = None
+    if len(Sigmas) > 1 and cmap is not None:
+        start, end = cmap_range
+        colors = [cmap(i) for i in np.linspace(start, end, len(Sigmas))]
+    
     dims = {0:'x', 1:'xp', 2:'y', 3:'yp'}
-    for Sigma in Sigmas:
+    for l, Sigma in enumerate(Sigmas):
         for i in range(3):
             for j in range(i + 1):
                 angle, c1, c2 = rms_ellipse_dims(Sigma, dims[j], dims[i + 1])
+                if colors is not None:
+                    plt_kws['color'] = colors[l]
                 ellipse(axes[i, j], c1, c2, angle, **plt_kws)
     return axes
 
