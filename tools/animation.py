@@ -20,7 +20,8 @@ from matplotlib.patches import Ellipse, transforms
 from .beam_analysis import get_ellipse_coords
 from .plotting import setup_corner
 from .plotting import max_u_up, max_u_up_global
-from .plotting import get_limits_4D
+from .plotting import auto_limits_4D
+from .plotting import auto_n_bins_4D
 from .plotting import remove_annotations
 from .plotting import vector
 from .plotting import var_indices
@@ -222,8 +223,7 @@ def corner(
         xmin = -xmax
         ypmin = -ypmax
             
-    # If any None is encountered, use the calculated limits. Otherwise, use the
-    # user-supplied limits.
+    # Determine axis limits.
     if limits is None:
         limits = [(xmin, xmax), (xpmin, xpmax), (ymin, ymax), (ypmin, ypmax)]
     if len(limits) == 2:
@@ -240,9 +240,10 @@ def corner(
         return _corner_2D(fig, axes, coords_samp, coords_env, dims, texts, fps,
                           env_kws, text_kws, **plt_kws)
 
-    # Create array of Line2D objects
+    # Create array of Line2D objects.
     lines = [[], [], []]
     lines_env = [[], [], []]
+    lines_onepart = [[], [], []]
     joint_axes = axes[1:, :-1] if plt_diag else axes
     for i in range(3):
         for j in range(i + 1):
@@ -252,6 +253,9 @@ def corner(
             if plt_env:
                 line, = joint_axes[i, j].plot([], [], **env_kws)
                 lines_env[i].append(line)
+                
+            line, = joint_axes[i, j].plot([], [], marker='.', ms=4, c='red', zorder=999)
+            lines_onepart[i].append(line)    
 
     # Compute the maximum histogram height among frames to keep ylim fixed.
     if plt_diag:
@@ -261,20 +265,26 @@ def corner(
                 max_heights[i, j] = np.max(np.histogram(X[:, j], bins='auto')[0])
         axes[0, 0].set_ylim(0, np.max(max_heights) / hist_height)
         
+    # Auto-select the number of bins for 2D histograms if none is provided.
+    # We should look at how Seaborn does this.
+    if kind == 'hist' and 'bins' not in plt_kws:
+        plt_kws['bins'] = auto_n_bins_4D(coords[-1])
+        
     def init():
         """Plot the background of each frame."""
         for i in range(3):
             for j in range(i):
                 lines[i][j].set_data([], [])
                 if plt_env:
-                    lines_env[i][j].set_data([], [])
-
+                    lines_env[i][j].set_data([], [])  
+    
     def update(t):
         """Animation function to be called sequentially."""
         remove_annotations(axes)
         X, X_samp = coords[t], coords_samp[t]
         for i in range(3):
             for j in range(i + 1):
+#                 lines_onepart[i][j].set_data(X[0, j], X[0, i+1])
                 if kind == 'scatter':
                     lines[i][j].set_data(X_samp[:, j], X_samp[:, i+1])
                 elif kind == 'hist':
@@ -284,7 +294,6 @@ def corner(
                     del plt_kws_temp['bins']
                     joint_axes[i, j].hist2d(X_samp[:, j], X_samp[:, i+1], 
                                               bins, brange, **plt_kws_temp)
-                    
                 if plt_env:
                     X_env = coords_env[t]
                     lines_env[i][j].set_data(X_env[:, j], X_env[:, i+1])
@@ -589,7 +598,7 @@ def corner_onepart(
     
     # Determine axis limits.
     if limits is None:
-        limits = get_limits_4D(X, pad, zero_center)
+        limits = auto_limits_4D(X, pad, zero_center)
     if len(limits) == 2:
         limits = 2 * limits
     

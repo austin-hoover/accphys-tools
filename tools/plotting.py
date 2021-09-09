@@ -332,7 +332,8 @@ def setup_corner(
     return fig, axes
 
 
-def get_limits_4D(X, pad=0, zero_center=False):
+def auto_limits_4D(X, pad=0, zero_center=False):
+    """Determine axis limits from 4D coordinate array."""
     mins = np.min(X, axis=0)
     maxs = np.max(X, axis=0)
     means = np.mean(X, axis=0)
@@ -357,6 +358,16 @@ def get_limits_4D(X, pad=0, zero_center=False):
         xmin = -xmax
         ypmin = -ypmax
     return [(xmin, xmax), (xpmin, xpmax), (ymin, ymax), (ypmin, ypmax)]
+
+
+def auto_n_bins_4D(X):
+    """Try to determine best number of bins to use in 2D histograms in corner plot."""
+    hx, _ = np.histogram(X[:, 0], range=limits[0], bins='auto')
+    hy, _ = np.histogram(X[:, 2], range=limits[0], bins='auto')
+    hxp, _ = np.histogram(X[:, 1], range=limits[1], bins='auto')
+    hyp, _ = np.histogram(X[:, 3], range=limits[1], bins='auto')
+    n_bins = max(len(hx), len(hy), len(hxp), len(hyp))
+    return n_bins
     
     
 def corner(
@@ -477,18 +488,14 @@ def corner(
 
     # Determine axis limits.
     if limits is None:
-        limits = get_limits_4D(X, pad, zero_center)
+        limits = auto_limits_4D(X, pad, zero_center)
     if len(limits) == 2:
         limits = 2 * limits
         
     # Use 1D histograms to determine number of bins in 2D histogram.
     # There is probably a better way to do this.
     if kind == 'hist' and 'bins' not in plt_kws:
-        hx, _ = np.histogram(X[:, 0], range=limits[0], bins='auto')
-        hy, _ = np.histogram(X[:, 2], range=limits[0], bins='auto')
-        hxp, _ = np.histogram(X[:, 1], range=limits[1], bins='auto')
-        hyp, _ = np.histogram(X[:, 3], range=limits[1], bins='auto')
-        plt_kws['bins'] = max(len(hx), len(hy), len(hxp), len(hyp))
+        plt_kws['bins'] = auto_n_bins_4D(X)
         
     # Create figure
     fig, axes = setup_corner(
