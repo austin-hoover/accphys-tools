@@ -1,3 +1,8 @@
+"""
+TO DO
+* Redo `corner` method.
+* Redo `set_corner_axes` method.
+"""
 from cycler import cycler
 import copy
 
@@ -195,372 +200,347 @@ def set_share_axes(axes, sharex=False, sharey=False, type_if_1D='row'):
         hide_axis_labels(axes[:, 1:].flat, 'y')
         
         
-def setup_corner(
-    limits=(1, 1), figsize=None, norm_labels=False, units=None, space=None,
-    plt_diag=False, dims='all', tick_kws={}, tickm_kws={}, label_kws={}
-):
-    """Set up lower left corner of scatter plot matrix. A 4D example:
+# def setup_corner(
+#     limits=(1, 1), figsize=None, norm_labels=False, units=None, space=None,
+#     plt_diag=False, dims='all', tick_kws={}, tickm_kws={}, label_kws={}
+# ):
+#     """Set up lower left corner of scatter plot matrix. A 4D example:
 
-        X O O O
-        X X O O
-        X X X O
-        X X X X
+#         X O O O
+#         X X O O
+#         X X X O
+#         X X X X
     
-    Inputs
-    ------
-    limits : (umax, upmax)
-        The maximum position (umax) and slope (upmax) in the plot windows. All
-        plot windows are made square, so xmax = ymax = -xmin = -ymax = umax, and
-        and xpmax = ypmax = -xpmin = -ypmin = upmax. Alternatively, (umin, umax)
-        or (upmin, upmax) can be passed. Or pass [(xmin, xmax), (xpmin, xpmax),
-        (ymin, ymax), (ypmin, ypmax)]. 
-    figsize : tuple or int
-        Size of the figure (x_size, y_size). If an int is provided, the number
-        is used as the size for both dimensions.
-    norm_labels : boolean
-        If True, add an 'n' subscript to axis labels. E.g. 'x' -> 'x_n'
-    units : str
-        If `m-rad` or `mm-mrad`, the appropriat units are attached to each
-        axis label (such as x [mm] or x' [mrad]). Otherwise no units are
-        displayed.
-    space : float
-        Size of the space between subplots. If None, the `tight_layout`
-        optimizer is used to determined the spacing.
-    plt_diag : bool
-        Whether to include the subplots on the diagonal (4x4 vs. 3x3).
-    dims : str or tuple
-        If 'all', plot all 6 phase space projections. Otherwise provide a tuple
-        like ('x', 'yp') which plots x vs. y'.
-    tick_kws : dict
-        Key word arguments for ax.tick_params.
-    tickm_kws : dict
-        Key word arguments for ax.tick_params (minor ticks).
-    label_kws : dict
-        Key word arguments for axis labels.
+#     Inputs
+#     ------
+#     limits : (umax, upmax)
+#         The maximum position (umax) and slope (upmax) in the plot windows. All
+#         plot windows are made square, so xmax = ymax = -xmin = -ymax = umax, and
+#         and xpmax = ypmax = -xpmin = -ypmin = upmax. Alternatively, (umin, umax)
+#         or (upmin, upmax) can be passed. Or pass [(xmin, xmax), (xpmin, xpmax),
+#         (ymin, ymax), (ypmin, ypmax)]. 
+#     figsize : tuple or int
+#         Size of the figure (x_size, y_size). If an int is provided, the number
+#         is used as the size for both dimensions.
+#     norm_labels : boolean
+#         If True, add an 'n' subscript to axis labels. E.g. 'x' -> 'x_n'
+#     units : str
+#         If `m-rad` or `mm-mrad`, the appropriat units are attached to each
+#         axis label (such as x [mm] or x' [mrad]). Otherwise no units are
+#         displayed.
+#     space : float
+#         Size of the space between subplots. If None, the `tight_layout`
+#         optimizer is used to determined the spacing.
+#     plt_diag : bool
+#         Whether to include the subplots on the diagonal (4x4 vs. 3x3).
+#     dims : str or tuple
+#         If 'all', plot all 6 phase space projections. Otherwise provide a tuple
+#         like ('x', 'yp') which plots x vs. y'.
+#     tick_kws : dict
+#         Key word arguments for ax.tick_params.
+#     tickm_kws : dict
+#         Key word arguments for ax.tick_params (minor ticks).
+#     label_kws : dict
+#         Key word arguments for axis labels.
 
-    Returns
-    -------
-    fig, axes
-    """
-    # Preliminaries
-    if figsize is None:
-        if dims == 'all':
-            figsize = 6.0 if plt_diag else 5.0
-        else:
-            figsize = 3.0
-    if type(figsize) in [float, int]:
-        figsize = (figsize, figsize)
+#     Returns
+#     -------
+#     fig, axes
+#     """
+#     # Preliminaries
+#     if figsize is None:
+#         if dims == 'all':
+#             figsize = 6.0 if plt_diag else 5.0
+#         else:
+#             figsize = 3.0
+#     if type(figsize) in [float, int]:
+#         figsize = (figsize, figsize)
         
-    def unpack(item):
-        if type(item) in [list, tuple, np.ndarray]:
-            lo, hi = item
-        else:
-            lo, hi = -item, item
-        return lo, hi
+#     def unpack(item):
+#         if type(item) in [list, tuple, np.ndarray]:
+#             lo, hi = item
+#         else:
+#             lo, hi = -item, item
+#         return lo, hi
         
-    if len(limits) == 2:
-        umin, umax = unpack(limits[0])
-        upmin, upmax = unpack(limits[1])
-        limits = 2 * [(umin, umax), (upmin, upmax)]
+#     if len(limits) == 2:
+#         umin, umax = unpack(limits[0])
+#         upmin, upmax = unpack(limits[1])
+#         limits = 2 * [(umin, umax), (upmin, upmax)]
                 
-    labels = get_labels(units, norm_labels)
-
-    loc_u, loc_up = ticker.MaxNLocator(2), ticker.MaxNLocator(2)
-    mloc_u, mloc_up = ticker.AutoMinorLocator(4), ticker.AutoMinorLocator(4)
-    locators = 2 * [loc_u, loc_up]
-    mlocators = 2 * [mloc_u, mloc_up]
+#     labels = get_labels(units, norm_labels)
     
-    if dims != 'all': # only 2 variables plotted
-        fig, ax = plt.subplots(figsize=figsize)
-        despine([ax])
-        j, i = [var_indices[dim] for dim in dims]
-        ax.set_xlim(limits[j])
-        ax.set_ylim(limits[i])
-        ax.set_xlabel(labels[j], **label_kws)
-        ax.set_ylabel(labels[i], **label_kws)
-        ax.xaxis.set_major_locator(locators[j])
-        ax.yaxis.set_major_locator(locators[i])
-        ax.xaxis.set_minor_locator(mlocators[j])
-        ax.yaxis.set_minor_locator(mlocators[i])
-        ax.tick_params(**tick_kws)
-        ax.tick_params(which='minor', **tick_kws)
-        return fig, ax
+#     if dims != 'all': # only 2 variables plotted
+#         fig, ax = plt.subplots(figsize=figsize)
+#         despine(ax)
+#         j, i = [var_indices[dim] for dim in dims]
+#         ax.set_xlim(limits[j])
+#         ax.set_ylim(limits[i])
+#         ax.set_xlabel(labels[j], **label_kws)
+#         ax.set_ylabel(labels[i], **label_kws)
+#         ax.tick_params(**tick_kws)
+#         ax.tick_params(which='minor', **tick_kws)
+#         return fig, ax
     
-    nrows = ncols = 4 if plt_diag else 3
-    sharey = False if plt_diag else 'row'
-    fig, axes = plt.subplots(nrows, ncols, figsize=figsize,
-                             sharex='col', sharey=sharey)
-    l_col, b_row, diag = axes[:, 0], axes[-1, :], axes.diagonal()
-    if space is None:
-        fig.subplots_adjust(wspace=space, hspace=space)
-    make_lower_triangular(axes)
-    despine(axes.flat, ('top', 'right'))
+#     nrows = ncols = 4 if plt_diag else 3
+#     sharey = False if plt_diag else 'row'
+#     fig, axes = plt.subplots(nrows, ncols, figsize=figsize,
+#                              sharex='col', sharey=sharey)
+#     l_col, b_row, diag = axes[:, 0], axes[-1, :], axes.diagonal()
+#     if space is None:
+#         fig.subplots_adjust(wspace=space, hspace=space)
+#     make_lower_triangular(axes)
+#     despine(axes.flat, ('top', 'right'))
     
-    # Configure axis sharing
-    if plt_diag:
-        l_col = l_col[1:]
-        for i, row in enumerate(axes[1:, :]): # share scatter plot y axis
-            set_share_axes(row[:i+1], sharey=True)
-        set_share_axes(diag, sharey=True) # share histogram y axis
-        # Don't show y-axis on histogram subplots
-        despine(diag, 'left')
-        toggle_grid(diag, 'off')
-    else:
-        for row in axes:
-            set_share_axes(row, sharey=True)
+#     # Configure axis sharing
+#     if plt_diag:
+#         l_col = l_col[1:]
+#         for i, row in enumerate(axes[1:, :]): # share scatter plot y axis
+#             set_share_axes(row[:i+1], sharey=True)
+#         set_share_axes(diag, sharey=True) # share histogram y axis
+#         # Don't show y-axis on histogram subplots
+#         despine(diag, 'left')
+#         toggle_grid(diag, 'off')
+#     else:
+#         for row in axes:
+#             set_share_axes(row, sharey=True)
 
-    # Set axis limits, labels, and ticks
-    set_labels(b_row, labels, 'xlabel', **label_kws)
-    set_labels(l_col, labels[1:], 'ylabel', **label_kws)
-    fig.align_labels()
-    set_limits(b_row, limits, 'x')
-    set_limits(l_col, limits[1:], 'y')
-#    for i, row in enumerate(axes):
-#        if not plt_diag:
-#            i += 1
-#        for ax in row[:i]:
-#            ax.yaxis.set_major_locator(locators[i])
-#            ax.yaxis.set_minor_locator(mlocators[i])
-#    for col, loc, mloc in zip(axes.T, locators, mlocators):
-#        for ax in col:
-#            ax.xaxis.set_major_locator(loc)
-#            ax.xaxis.set_minor_locator(mloc)
-    for ax in axes.flat:
-        ax.tick_params(**tick_kws)
-    if space is None:
-        plt.tight_layout(rect=[0, 0, 1.025, 0.975])
-    return fig, axes
+#     # Set axis limits, labels, and ticks
+#     set_labels(b_row, labels, 'xlabel', **label_kws)
+#     set_labels(l_col, labels[1:], 'ylabel', **label_kws)
+#     fig.align_labels()
+#     set_limits(b_row, limits, 'x')
+#     set_limits(l_col, limits[1:], 'y')
+#     for ax in axes.flat:
+#         ax.tick_params(**tick_kws)
+#     if space is None:
+#         plt.tight_layout(rect=[0, 0, 1.025, 0.975])
+#     return fig, axes
 
 
-def auto_limits_4D(X, pad=0, zero_center=False):
-    """Determine axis limits from 4D coordinate array."""
+def process_limits(mins, maxs, pad=0., zero_center=False):
+    # Same limits for x/y and x'/y'
+    widths = np.abs(mins - maxs)
+    for (i, j) in zip([0, 1], [2, 3]):
+        delta = 0.5 * (widths[i] - widths[j])
+        if delta < 0.:
+            mins[i] -= delta
+            maxs[i] += delta
+        elif delta > 0.:
+            mins[j] -= delta
+            maxs[j] += delta
+    # Pad the limits.
+    deltas = 0.5 * np.abs(maxs - mins) * pad
+    mins -= deltas
+    maxs += deltas
+    if zero_center:
+        maxs = np.max([np.abs(mins), np.abs(maxs)], axis=0)
+        mins = -maxs
+    return mins, maxs
+    
+
+def auto_limits(X, pad=0., zero_center=False):
+    """Determine axis limits from coordinate array."""
     mins = np.min(X, axis=0)
     maxs = np.max(X, axis=0)
-    means = np.mean(X, axis=0)
-    widths = (1 + pad) * np.abs(maxs - mins)
-    width_u = max(widths[0], widths[2])
-    width_up = max(widths[1], widths[3])
-    xmin = means[0] - 0.5 * width_u
-    xmax = means[0] + 0.5 * width_u
-    ymin = means[2] - 0.5 * width_u
-    ymax = means[2] + 0.5 * width_u
-    xpmin = means[1] - 0.5 * width_up
-    xpmax = means[1] + 0.5 * width_up
-    ypmin = means[3] - 0.5 * width_up
-    ypmax = means[3] + 0.5 * width_up
-    if zero_center:
-        xmax = max(abs(xmin), abs(xmax))
-        ymax = max(abs(ymin), abs(ymax))
-        xpmax = max(abs(xpmin), abs(xpmax))
-        ypmax = max(abs(ypmin), abs(ypmax))
-        xmin = -xmax
-        ymin = -ymax
-        xmin = -xmax
-        ypmin = -ypmax
-    return [(xmin, xmax), (xpmin, xpmax), (ymin, ymax), (ypmin, ypmax)]
+    mins, maxs = process_limits(mins, maxs, pad, zero_center)
+    return [(lo, hi) for lo, hi in zip(mins, maxs)]
 
 
-def auto_n_bins_4D(X):
-    """Try to determine best number of bins to use in 2D histograms in corner plot."""
-    hx, _ = np.histogram(X[:, 0], range=limits[0], bins='auto')
-    hy, _ = np.histogram(X[:, 2], range=limits[0], bins='auto')
-    hxp, _ = np.histogram(X[:, 1], range=limits[1], bins='auto')
-    hyp, _ = np.histogram(X[:, 3], range=limits[1], bins='auto')
-    n_bins = max(len(hx), len(hy), len(hxp), len(hyp))
-    return n_bins
+def auto_n_bins_4D(X, limits=None):
+    """Try to determine best number of bins to use in 2D histograms in corner plot.
     
-    
-def corner(
-    X, env_params=None, moments=False, limits=None, zero_center=True,
-    samples=None, pad=0.5, figsize=None, dims='all', kind='scatter',
-    diag_kind='hist', hist_height=0.6, units='mm-mrad', norm_labels=False,
-    text=None, ax=None, diag_kws=None, env_kws=None, text_kws=None, **plt_kws
-):
-    """Plot the pairwise relationships between the beam phase space coordinates.
-    
-    Of course other routines exist such as `scatter_matrix` in Pandas or
-    `pairplot` in Seaborn; however, I could not find an option to only plot
-    a small sample of the particles in the scatter plots while keeping all
-    the particles for the histogram calculation.
-        
-    Parameters
-    ----------
-    X : ndarray, shape (nparts, 4)
-        The transverse beam coordinate array.
-    env_params : array-like, shape (8,)
-        The beam envelope parameters.
-    moments : bool
-        If True, plot the ellipse defined by the second-order moments of the
-        distribution.
-    limits : (umax, upmax)
-        The maximum position (umax) and slope (upmax) in the plot windows. All
-        plot windows are made square, so xmax = ymax = -xmin = -ymax = umax, and
-        and xpmax = ypmax = -xpmin = -ypmin = upmax. If None, auto-ranging is
-        performed. Alternatively, a list of tuples can be passed: [(umin, umax),
-        (upmin, upmax)]. If either element is None, auto-ranging is performed
-        on those coordinates.
-    zero_center : bool
-        If true, center the plot window on the origin. Otherwise, center the
-        plot window on the projected means of the distribution.
-    samples : int
-        The number of randomly sampled points to use in the scatter plots. If
-        None, use all the points.
-    pad : float
-        Padding for the axis ranges: umax_new = (1 + pad) * 0.5 * w, where w is
-        the width of the distribution (max - min).
-    figsize : tuple or int
-        Size of the figure (x_size, y_size). If an int is provided, the number
-        is used as the size for both dimensions.
-    dims : str or tuple
-        If 'all', plot all 6 phase space projections. Otherwise provide a tuple
-        like ('x', 'yp') which plots x vs. y'.
-    kind : {'scatter', 'scatter_density', 'hist', 'kde'}
-        The kind of plot to make on the off-diagonal subplots. Note: the 'kde'
-        and 'hist' options are not implemented yet.
-    diag_kind : {'hist', 'kde', 'none'}
-        The kind of plot to make on the diagonal subplots. If 'none', these are
-        excluded and a 3x3 grid is produced.
-    hist_height : float in range [0, 1]
-        Reduce the height of the histograms on the diagonal, which normally
-        extend to the top of the plotting window, by this factor.
-    units : str or bool
-        Whether to display units on the axis labels. Options are 'mm-mrad' or
-        'm-rad'. No units are displayed if None.
-    norm_labels : bool
-        Whether to add an 'n' subscript to axis labels. Ex: 'x' --> 'x_n'.
-    text : str
-        If provided, annotate the figure with `text`.
-    ax : matplotlib.pyplot.Axes object
-        If plotting only a 2D projection of the data (for example if
-        dims=('x','y'), the data will be plotted on this axis.)
-    {plt, diag, env, text}_kws : dict
-        Key word arguments. They are passed to the following functions:
-        * plt_kws  : `plt.scatter`. This doesn't need to be passed as a dict.
-                     For example, `s=10` can be added to the function call to
-                     change the marker size.
-        * diag_kws : `plt.hist`. More options will be added in the future like
-                     kde.
-        * env_kws  : `plt.plot`. For plotting the envelope ellipses.
-        * text_kws : `plt.annotate`. For any text displayed on the figure.
-        
-    Returns
-    -------
-    numpy.ndarray
-        The array of subplots.
+    We should be able to find an algorithm to do this nicely.
     """
-    plt_diag = diag_kind not in ('none', None)
+    raise NotImplementedError
     
-    # Set default key word arguments
-    diag_kws = dict() if diag_kws is None else diag_kws
-    env_kws = dict() if env_kws is None else env_kws
-    text_kws = dict() if text_kws is None else text_kws
-    if kind == 'hist':
-        plt_kws.setdefault('bins', 45)
-        samples = None
-    if kind == 'scatter' or kind == 'scatter_density':
-        plt_kws.setdefault('s', 3)
-        plt_kws.setdefault('c', 'steelblue')
-        plt_kws.setdefault('marker', '.')
-        plt_kws.setdefault('ec', 'none')
-        plt_kws.setdefault('zorder', 5)
-        diag_kws.setdefault('color', plt_kws['c'])
-    if kind == 'scatter_density':
-        plt_kws.pop('c', None)
-    if diag_kind == 'hist':
-        diag_kws.setdefault('histtype', 'step')
-        diag_kws.setdefault('bins', 'auto')
-        diag_kws.setdefault('color', 'k')
-    elif diag_kind == 'kde':
-        diag_kws.setdefault('lw', 1)
-    env_kws.setdefault('color', 'k')
-    env_kws.setdefault('lw', 1)
-    env_kws.setdefault('zorder', 6)
-    text_kws.setdefault('horizontalalignment', 'center')
     
-    # Get data
-    if samples is None:
-        X_samp = X
-    else:
-        X_samp = utils.rand_rows(X, samples)
-    X_env = None
-    if env_params is not None:
-        X_env = get_ellipse_coords(env_params, npts=100)
+# def corner(
+#     X, env_params=None, moments=False, limits=None, zero_center=False,
+#     samples=None, pad=0., figsize=None, dims='all', kind='scatter',
+#     diag_kind='hist', hist_height=0.6, units='mm-mrad', norm_labels=False,
+#     text=None, ax=None, diag_kws=None, env_kws=None, text_kws=None, **plt_kws
+# ):
+#     """Plot the pairwise relationships between the beam phase space coordinates.
+    
+#     Of course other routines exist such as `scatter_matrix` in Pandas or
+#     `pairplot` in Seaborn; however, I could not find an option to only plot
+#     a small sample of the particles in the scatter plots while keeping all
+#     the particles for the histogram calculation.
+        
+#     Parameters
+#     ----------
+#     X : ndarray, shape (nparts, 4)
+#         The transverse beam coordinate array.
+#     env_params : array-like, shape (8,)
+#         The beam envelope parameters.
+#     moments : bool
+#         If True, plot the ellipse defined by the second-order moments of the
+#         distribution.
+#     limits : (umax, upmax)
+#         The maximum position (umax) and slope (upmax) in the plot windows. All
+#         plot windows are made square, so xmax = ymax = -xmin = -ymax = umax, and
+#         and xpmax = ypmax = -xpmin = -ypmin = upmax. If None, auto-ranging is
+#         performed. Alternatively, a list of tuples can be passed: [(umin, umax),
+#         (upmin, upmax)]. If either element is None, auto-ranging is performed
+#         on those coordinates.
+#     zero_center : bool
+#         If true, center the plot window on the origin. Otherwise, center the
+#         plot window on the projected means of the distribution.
+#     samples : int
+#         The number of randomly sampled points to use in the scatter plots. If
+#         None, use all the points.
+#     pad : float
+#         Padding for the axis ranges: umax_new = (1 + pad) * 0.5 * w, where w is
+#         the width of the distribution (max - min).
+#     figsize : tuple or int
+#         Size of the figure (x_size, y_size). If an int is provided, the number
+#         is used as the size for both dimensions.
+#     dims : str or tuple
+#         If 'all', plot all 6 phase space projections. Otherwise provide a tuple
+#         like ('x', 'yp') which plots x vs. y'.
+#     kind : {'scatter', 'scatter_density', 'hist', 'kde'}
+#         The kind of plot to make on the off-diagonal subplots. Note: the 'kde'
+#         and 'hist' options are not implemented yet.
+#     diag_kind : {'hist', 'kde', 'none'}
+#         The kind of plot to make on the diagonal subplots. If 'none', these are
+#         excluded and a 3x3 grid is produced.
+#     hist_height : float in range [0, 1]
+#         Reduce the height of the histograms on the diagonal, which normally
+#         extend to the top of the plotting window, by this factor.
+#     units : str or bool
+#         Whether to display units on the axis labels. Options are 'mm-mrad' or
+#         'm-rad'. No units are displayed if None.
+#     norm_labels : bool
+#         Whether to add an 'n' subscript to axis labels. Ex: 'x' --> 'x_n'.
+#     text : str
+#         If provided, annotate the figure with `text`.
+#     ax : matplotlib.pyplot.Axes object
+#         If plotting only a 2D projection of the data (for example if
+#         dims=('x','y'), the data will be plotted on this axis.)
+#     {plt, diag, env, text}_kws : dict
+#         Key word arguments. They are passed to the following functions:
+#         * plt_kws  : `plt.scatter`. This doesn't need to be passed as a dict.
+#                      For example, `s=10` can be added to the function call to
+#                      change the marker size.
+#         * diag_kws : `plt.hist`. More options will be added in the future like
+#                      kde.
+#         * env_kws  : `plt.plot`. For plotting the envelope ellipses.
+#         * text_kws : `plt.annotate`. For any text displayed on the figure.
+        
+#     Returns
+#     -------
+#     numpy.ndarray
+#         The array of subplots.
+#     """
+#     plt_diag = diag_kind not in ('none', None)
+    
+#     # Set default key word arguments
+#     diag_kws = dict() if diag_kws is None else diag_kws
+#     env_kws = dict() if env_kws is None else env_kws
+#     text_kws = dict() if text_kws is None else text_kws
+#     if kind == 'hist':
+#         samples = None
+#         plt_kws.setdefault('bins', 50)
+#     if kind == 'scatter' or kind == 'scatter_density':
+#         plt_kws.setdefault('s', 3)
+#         plt_kws.setdefault('c', 'steelblue')
+#         plt_kws.setdefault('marker', '.')
+#         plt_kws.setdefault('ec', 'none')
+#         plt_kws.setdefault('zorder', 5)
+#         diag_kws.setdefault('color', plt_kws['c'])
+#     if kind == 'scatter_density':
+#         plt_kws.pop('c', None)
+#     if diag_kind == 'hist':
+#         diag_kws.setdefault('histtype', 'step')
+#         diag_kws.setdefault('bins', 'auto')
+#         diag_kws.setdefault('color', 'k')
+#     elif diag_kind == 'kde':
+#         diag_kws.setdefault('lw', 1)
+#     env_kws.setdefault('color', 'k')
+#     env_kws.setdefault('lw', 1)
+#     env_kws.setdefault('zorder', 6)
+#     text_kws.setdefault('horizontalalignment', 'center')
+    
+#     # Get data
+#     if samples is None:
+#         X_samp = X
+#     else:
+#         X_samp = utils.rand_rows(X, samples)
+#     X_env = None
+#     if env_params is not None:
+#         X_env = get_ellipse_coords(env_params, npts=100)
 
-    # Determine axis limits.
-    if limits is None:
-        limits = auto_limits_4D(X, pad, zero_center)
-    if len(limits) == 2:
-        limits = 2 * limits
+#     # Determine axis limits.
+#     if limits is None:
+#         limits = auto_limits(X, pad, zero_center)
+#     if len(limits) == 2:
+#         limits = 2 * limits
         
-    # Use 1D histograms to determine number of bins in 2D histogram.
-    # There is probably a better way to do this.
-    if kind == 'hist' and 'bins' not in plt_kws:
-        plt_kws['bins'] = auto_n_bins_4D(X)
+#     # Create figure
+#     fig, axes = setup_corner(
+#         limits, figsize, norm_labels, units, dims=dims, plt_diag=plt_diag,
+#         label_kws={'fontsize':'medium'}
+#     )
         
-    # Create figure
-    fig, axes = setup_corner(
-        limits, figsize, norm_labels, units, dims=dims, plt_diag=plt_diag,
-        label_kws={'fontsize':'medium'}
-    )
+#     # Plot only one projection
+#     if dims != 'all':
+#         j, i = [var_indices[dim] for dim in dims]
+#         x, y = X[:, j], X[:, i]
+#         x_samp, y_samp = X_samp[:, j], X_samp[:, i]
+#         ax = axes
+#         if kind == 'scatter':
+#             ax.scatter(x_samp, y_samp, **plt_kws)
+#         elif kind == 'scatter_density':
+#             ax = scatter_density(ax, x, y, samples=samples, **plt_kws)
+#         elif kind == 'hist':
+#             ax.hist2d(x, y, **plt_kws)
+#         if X_env is not None:
+#             x_env, y_env = X_env[:, j], X_env[:, i]
+#             ax.plot(x_env, y_env, **env_kws)
+#         return axes
         
-    # Plot only one projection
-    if dims != 'all':
-        j, i = [var_indices[dim] for dim in dims]
-        x, y = X[:, j], X[:, i]
-        x_samp, y_samp = X_samp[:, j], X_samp[:, i]
-        ax = axes
-        if kind == 'scatter':
-            ax.scatter(x_samp, y_samp, **plt_kws)
-        elif kind == 'scatter_density':
-            ax = scatter_density(ax, x, y, samples=samples, **plt_kws)
-        elif kind == 'hist':
-            ax.hist2d(x, y, **plt_kws)
-        if X_env is not None:
-            x_env, y_env = X_env[:, j], X_env[:, i]
-            ax.plot(x_env, y_env, **env_kws)
-        return axes
+#     # Diagonal plots
+#     if plt_diag:
+#         scatter_axes = axes[1:, :-1]
+#         for i, (ax, data) in enumerate(zip(axes.diagonal(), X.T)):
+#             if diag_kind == 'kde':
+#                 gkde = scipy.stats.gaussian_kde(data)
+#                 lim = limits[i % 2]
+#                 ind = np.linspace(-lim, lim, 1000)
+#                 ax.plot(ind, gkde.evaluate(ind), **diag_kws)
+#             elif diag_kind == 'hist':
+#                 g = ax.hist(data, **diag_kws)
+#         # Change height
+#         top_left_ax = axes[0, 0]
+#         new_ylim = (1.0 / hist_height) * top_left_ax.get_ylim()[1]
+#         top_left_ax.set_ylim(0, new_ylim)
+#     else:
+#         scatter_axes = axes
         
-    # Diagonal plots
-    if plt_diag:
-        scatter_axes = axes[1:, :-1]
-        for i, (ax, data) in enumerate(zip(axes.diagonal(), X.T)):
-            if diag_kind == 'kde':
-                gkde = scipy.stats.gaussian_kde(data)
-                lim = limits[i % 2]
-                ind = np.linspace(-lim, lim, 1000)
-                ax.plot(ind, gkde.evaluate(ind), **diag_kws)
-            elif diag_kind == 'hist':
-                g = ax.hist(data, **diag_kws)
-        # Change height
-        top_left_ax = axes[0, 0]
-        new_ylim = (1.0 / hist_height) * top_left_ax.get_ylim()[1]
-        top_left_ax.set_ylim(0, new_ylim)
-    else:
-        scatter_axes = axes
-        
-    # Scatter plots
-    for i in range(3):
-        for j in range(i + 1):
-            ax = scatter_axes[i, j]
-            x, y = X[:, j], X[:, i + 1]
-            x_samp, y_samp = X_samp[:, j], X_samp[:, i + 1]
-            if kind == 'scatter':
-                ax.scatter(x_samp, y_samp, **plt_kws)
-            elif kind == 'scatter_density':
-                scatter_density(ax, x, y, samples=samples, **plt_kws)
-            elif kind == 'hist':
-                ax.hist2d(x, y, range=(ax.get_xlim(), ax.get_ylim()), **plt_kws)
-            if X_env is not None:
-                x_env, y_env = X_env[:, j], X_env[:, i + 1]
-                ax.plot(x_env, y_env, **env_kws)
-    if moments:
-        rms_ellipses(4 * np.cov(X.T), axes=scatter_axes, **env_kws)
+#     # Scatter plots
+#     for i in range(3):
+#         for j in range(i + 1):
+#             ax = scatter_axes[i, j]
+#             x, y = X[:, j], X[:, i + 1]
+#             x_samp, y_samp = X_samp[:, j], X_samp[:, i + 1]
+#             if kind == 'scatter':
+#                 ax.scatter(x_samp, y_samp, **plt_kws)
+#             elif kind == 'scatter_density':
+#                 scatter_density(ax, x, y, samples=samples, **plt_kws)
+#             elif kind == 'hist':
+#                 ax.hist2d(x, y, range=(ax.get_xlim(), ax.get_ylim()), **plt_kws)
+#             if X_env is not None:
+#                 x_env, y_env = X_env[:, j], X_env[:, i + 1]
+#                 ax.plot(x_env, y_env, **env_kws)
+#     if moments:
+#         rms_ellipses(4 * np.cov(X.T), axes=scatter_axes, **env_kws)
     
-    if text:
-        text_pos = (0.35, 0) if plt_diag else (0.35, 0.5)
-        axes[1, 2].annotate(text, xy=text_pos, xycoords='axes fraction',
-                            **text_kws)
-    return axes
+#     if text:
+#         text_pos = (0.35, 0) if plt_diag else (0.35, 0.5)
+#         axes[1, 2].annotate(text, xy=text_pos, xycoords='axes fraction',
+#                             **text_kws)
+#     return axes
     
     
 def corner_env(
@@ -843,11 +823,11 @@ def eigvals_complex_plane(ax, eigvals, colors=('r','b'), legend=True, **kws):
     return ax
     
 
-def ellipse(ax, c1, c2, angle=0.0, **plt_kws):
+def ellipse(ax, c1, c2, angle=0.0, center=(0, 0), **plt_kws):
     """Plot ellipse with semi-axes `c1` and `c2`. Angle is given in radians
     and is measured below the x axis."""
     plt_kws.setdefault('fill', False)
-    ax.add_patch(Ellipse((0, 0), 2*c1, 2*c2, -np.degrees(angle), **plt_kws))
+    ax.add_patch(Ellipse(center, 2*c1, 2*c2, -np.degrees(angle), **plt_kws))
     return ax
 
 
@@ -881,3 +861,119 @@ def rms_ellipses(Sigmas, figsize=(5, 5), pad=0.5, axes=None,
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+def pair_grid(
+    n_dims, figsize=None, limits=None, space=None, spines=False,
+    labels=None, label_kws=None, tick_kws=None, 
+    constrained_layout=True
+):
+    """I realize Seaborn does this with PairGrid. I've had trouble with shared 
+    axes limits between diagonal and non-diagonal subplots. I've also had trouble
+    with plotting 2D histograms with a dark background. So this function is okay
+    for my purposes.
+    """
+    fig, axes = plt.subplots(n_dims, n_dims, figsize=figsize, 
+                             sharex='col', sharey=False, 
+                             constrained_layout=constrained_layout)
+    if not constrained_layout:
+        fig.subplots_adjust(wspace=space, hspace=space)
+    make_lower_triangular(axes)
+    if not spines:
+        despine(axes.flat, ('top', 'right'))
+        despine(axes.diagonal(), 'left')
+        
+    # Configure axis sharing
+    lcol, brow = axes[1:, 0], axes[-1, :]
+    for i, row in enumerate(axes[1:, :]): 
+        set_share_axes(row[:i+1], sharey=True)
+    set_share_axes(axes.diagonal(), sharey=True)
+    toggle_grid(axes.diagonal(), 'off')
+
+    # Limits
+    if limits is not None:
+        set_limits(brow, limits, 'x')
+        set_limits(lcol, limits[1:], 'y')
+
+    # Labels
+    if label_kws is None:
+        label_kws = dict()
+    label_kws.setdefault('fontsize', 'medium')
+    if labels:
+        set_labels(brow, labels, 'xlabel', **label_kws)
+        set_labels(lcol, labels[1:], 'ylabel', **label_kws)
+
+    # Ticks
+    if tick_kws is None:
+        tick_kws  = dict()
+    tick_kws.setdefault('labelsize', 'small')
+    fig.align_labels()
+    for ax in axes.flat:
+        ax.tick_params(**tick_kws)
+        
+    return fig, axes
+    
+
+    
+def corner(X, figsize=None, limits=None):
+
+    n_dims = X.shape[1]
+    
+    if figsize is None:
+        f = n_dims * 7.5 / 6.0
+        figsize = (1.025 * f, f)
+    
+    space = None
+    spines = False
+    labels = ["x [mm]", "x' [mrad]", "y [mm]", "y' [mrad]", "z [m]", "dE [MeV]"]
+    label_kws = None
+    tick_kws = None
+    
+    pad = 0.
+    zero_center = False
+    if limits is None:
+        limits = auto_limits(X, pad, zero_center)
+
+    fig, axes = pair_grid(n_dims, figsize=figsize, limits=limits, 
+                          space=space, spines=spines, labels=labels, 
+                          label_kws=label_kws, tick_kws=tick_kws)
+
+    diag_kws = dict(histtype='step', bins='auto', color='black')
+    for i, ax in enumerate(axes.diagonal()):
+        ax.hist(X[:, i], range=limits[i], **diag_kws)
+        
+    # Reduce height of 1D histograms. These axes already share y axis.
+    hist_height_frac = 0.8
+    ax.set_ylim(ax.get_ylim()[1] / hist_height_frac)
+
+    plot_kws = dict(bins=50, cmap='dusk_r')
+    for i in range(1, len(axes)):
+        for j in range(i):
+            ax = axes[i, j]
+            plot_kws['range'] = (limits[j], limits[i])
+            ax.hist2d(X[:, j], X[:, i], **plot_kws)        
+
+    max_hist_height = 0.
+    for ax in axes.diagonal():
+        max_hist_height = max(max_hist_height, ax.get_ylim()[1])
+    hist_height_fac = 0.8
+    max_hist_height /= hist_height_fac
+    for ax in axes.diagonal():
+        ax.set_ylim(0, max_hist_height)
+        
+    return axes

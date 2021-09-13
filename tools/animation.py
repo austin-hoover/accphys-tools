@@ -1,12 +1,11 @@
 """Various animation functions
 
-TO DO:
-    * Pad axes using the width of the distribution (see plotting.py).
-    * Add option to plotting windows at the projected means of the distribution
-      (see plotting.py).
+TO DO
+* Redo `corner`.
 """
 from cycler import cycler
 import copy
+from tqdm import trange, tqdm
 
 import numpy as np
 import matplotlib
@@ -18,9 +17,11 @@ from matplotlib import animation
 from matplotlib.patches import Ellipse, transforms
 
 from .beam_analysis import get_ellipse_coords
-from .plotting import setup_corner
+# from .plotting import setup_corner
+from .plotting import pair_grid
 from .plotting import max_u_up, max_u_up_global
-from .plotting import auto_limits_4D
+from .plotting import auto_limits
+from .plotting import process_limits
 from .plotting import auto_n_bins_4D
 from .plotting import remove_annotations
 from .plotting import vector
@@ -45,296 +46,303 @@ def skip_frames(frames, skip=1, keep_last=False):
     return frames
 
 
-def corner(
-    coords, env_params=None, limits=None, zero_center=True, dims='all', samples=None, 
-    skip=0, keep_last=False, pad=0.5, space=0.15, figsize=None, kind='scatter',
-    diag_kind='hist', hist_height=0.6, units='mm-mrad', norm_labels=False,
-    text_fmt='', text_vals=None, fps=1, diag_kws={}, env_kws={}, text_kws={},
-    **plt_kws
-):
-    """Frame-by-frame phase space projections of the beam.
+# def corner(
+#     coords, env_params=None, limits=None, zero_center=True, dims='all', samples=None, 
+#     skip=0, keep_last=False, pad=0.5, space=0.15, figsize=None, kind='scatter',
+#     diag_kind='hist', hist_height=0.6, units='mm-mrad', norm_labels=False,
+#     text_fmt='', text_vals=None, fps=1, diag_kws={}, env_kws={}, text_kws={},
+#     **plot_kws
+# ):
+#     """Frame-by-frame phase space projections of the beam.
 
-    Parameters
-    ----------
-    coords : list or ndarray, shape (n_frames, nparts, 4)
-        Each element contains the transverse beam coordinate array at a
-        particular frame. Each frame can have a different number of particles.
-    env_params : ndarray, shape (n_frames, 8)
-        The envelope parameters at each frame. They are not plotted if none
-        are provided.
-    limits : (umax, upmax)
-        Maximum position and angle for plot windows.
-    dims : str or tuple
-        If 'all', plot all 6 phase space projections. Otherwise provide a tuple
-        like ('x', 'yp') which plots x vs. y'.
-    samples : int
-        The number of randomly sampled particles to use in the off-diagonal
-        subplots.
-    skip : int
-        The coordinates will be plotted every skip + 1 frames.
-    keep_last : bool
-        Whether to keep the last frame if skipping frames. Could probably
-        encompass this in the 'skip' parameter somehow.
-    pad : float
-        Padding for the axis ranges. The edge of the plots will be at
-        umax * (1 + pad), where umax is maximum amplitude of any beam particle
-        among all the frames.
-    space : float
-        Width of the space between the subplots.
-    figsize : tuple or int
-        Size of the figure (x_size, y_size). If an int is provided, the number
-        is used as the size for both dimensions. Default (6, 6) with diagonals
-        (5, 5) without diagonals, or (3, 3) if only one subplot.
-    kind : {'scatter', 'hist', 'kde'}
-        The kind of plot to make on the off-diagonal subplots. Note: the 'kde'
-        and 'hist' options are not implemented yet.
-    diag_kind : {'hist', 'kde', 'none'}
-        The kind of plot to make on the diagonal subplots. If 'none', these are
-        excluded and a 3x3 grid is produced. Note: the 'kde' option currently
-        does not work.
-    hist_height : float in range [0, 1]
-        Reduce the height of the histograms on the diagonal, which normally
-        extend to the top of the plotting window, by this factor.
-    units : str or bool
-        Whether to display units on the axis labels. Options are 'mm-mrad' or
-        'm-rad'. No units are displayed if None.
-    norm_labels : bool
-        Whether to add an 'n' subscript to axis labels. Ex: 'x' --> 'x_n'.
-    text_vals, text_fmt: list, str
-        Each new frame will display text indicating the turn, position, etc..
-        For example: 'Turn = 5' or 's = 17.4 m'. The string that will be printed
-        is `text_fmt.format(text_vals[f])`, where f is the frame number. If
-        `text_vals` is None, we use list(range(n_frames)).
-    fps : int
-        Frames per second.
-    {plt, diag, env, text}_kws : dict
-        Key word arguments. They are passed to the following functions:
-        * plt_kws  : `plt.plot`. For the scatter plots. This doesn't need to be
-                     passed as a dict; for example, `ms=10` can be added to the
-                     function call to change the marker size.
-        * diag_kws : `plt.hist`. For the histograms on the diagonal. More
-                     options will be added in the future like kde.
-        * env_kws  : `plt.plot`. For plotting the envelope ellipses.
-        * text_kws : `plt.annotate`. For any text displayed on the figure.
+#     Parameters
+#     ----------
+#     coords : list or ndarray, shape (n_frames, nparts, 4)
+#         Each element contains the transverse beam coordinate array at a
+#         particular frame. Each frame can have a different number of particles.
+#     env_params : ndarray, shape (n_frames, 8)
+#         The envelope parameters at each frame. They are not plotted if none
+#         are provided.
+#     limits : (umax, upmax)
+#         Maximum position and angle for plot windows.
+#     dims : str or tuple
+#         If 'all', plot all 6 phase space projections. Otherwise provide a tuple
+#         like ('x', 'yp') which plots x vs. y'.
+#     samples : int
+#         The number of randomly sampled particles to use in the off-diagonal
+#         subplots.
+#     skip : int
+#         The coordinates will be plotted every skip + 1 frames.
+#     keep_last : bool
+#         Whether to keep the last frame if skipping frames. Could probably
+#         encompass this in the 'skip' parameter somehow.
+#     pad : float
+#         Padding for the axis ranges. The edge of the plots will be at
+#         umax * (1 + pad), where umax is maximum amplitude of any beam particle
+#         among all the frames.
+#     space : float
+#         Width of the space between the subplots.
+#     figsize : tuple or int
+#         Size of the figure (x_size, y_size). If an int is provided, the number
+#         is used as the size for both dimensions. Default (6, 6) with diagonals
+#         (5, 5) without diagonals, or (3, 3) if only one subplot.
+#     kind : {'scatter', 'hist', 'kde'}
+#         The kind of plot to make on the off-diagonal subplots. Note: the 'kde'
+#         and 'hist' options are not implemented yet.
+#     diag_kind : {'hist', 'kde', 'none'}
+#         The kind of plot to make on the diagonal subplots. If 'none', these are
+#         excluded and a 3x3 grid is produced. Note: the 'kde' option currently
+#         does not work.
+#     hist_height : float in range [0, 1]
+#         Reduce the height of the histograms on the diagonal, which normally
+#         extend to the top of the plotting window, by this factor.
+#     units : str or bool
+#         Whether to display units on the axis labels. Options are 'mm-mrad' or
+#         'm-rad'. No units are displayed if None.
+#     norm_labels : bool
+#         Whether to add an 'n' subscript to axis labels. Ex: 'x' --> 'x_n'.
+#     text_vals, text_fmt: list, str
+#         Each new frame will display text indicating the turn, position, etc..
+#         For example: 'Turn = 5' or 's = 17.4 m'. The string that will be printed
+#         is `text_fmt.format(text_vals[f])`, where f is the frame number. If
+#         `text_vals` is None, we use list(range(n_frames)).
+#     fps : int
+#         Frames per second.
+#     {plt, diag, env, text}_kws : dict
+#         Key word arguments. They are passed to the following functions:
+#         * plot_kws  : `plt.plot`. For the scatter plots. This doesn't need to be
+#                      passed as a dict; for example, `ms=10` can be added to the
+#                      function call to change the marker size.
+#         * diag_kws : `plt.hist`. For the histograms on the diagonal. More
+#                      options will be added in the future like kde.
+#         * env_kws  : `plt.plot`. For plotting the envelope ellipses.
+#         * text_kws : `plt.annotate`. For any text displayed on the figure.
 
-    Returns
-    -------
-    matplotlib.animation.FuncAnimation
-    """
-    plt_env = env_params is not None
-    plt_diag = diag_kind not in ['none', None]
+#     Returns
+#     -------
+#     matplotlib.animation.FuncAnimation
+#     """
+#     plt_env = env_params is not None
+#     plt_diag = diag_kind not in ['none', None]
 
-    # Set default key word arguments
-    if kind == 'scatter':
-        if 's' in plt_kws:
-            ms = plt_kws['s']
-            plt_kws.pop('s', None)
-            plt_kws['ms'] = ms
-        if 'c' in plt_kws:
-            color = plt_kws['c']
-            plt_kws.pop('c', None)
-            plt_kws['color'] = color
-        plt_kws.setdefault('ms', 2)
-        plt_kws.setdefault('color', 'steelblue')
-        plt_kws.setdefault('marker', '.')
-        plt_kws.setdefault('zorder', 5)
-        plt_kws.setdefault('lw', 0)
-        plt_kws.setdefault('markeredgewidth', 0)
-        plt_kws.setdefault('fillstyle', 'full')
-        diag_kws.setdefault('color', plt_kws['color'])
-    elif kind == 'hist':
-        plt_kws.setdefault('cmap', 'viridis')
-        plt_kws.setdefault('bins', 40)
-    if diag_kind == 'hist':
-        diag_kws.setdefault('histtype', 'step')
-        diag_kws.setdefault('bins', 'auto')
-    elif diag_kind == 'kde':
-        diag_kws.setdefault('lw', 1)
-    env_kws.setdefault('color', 'k')
-    env_kws.setdefault('lw', 1)
-    env_kws.setdefault('zorder', 6)
+#     # Set default key word arguments
+#     if kind == 'scatter':
+#         if 's' in plot_kws:
+#             ms = plot_kws['s']
+#             plot_kws.pop('s', None)
+#             plot_kws['ms'] = ms
+#         if 'c' in plot_kws:
+#             color = plot_kws['c']
+#             plot_kws.pop('c', None)
+#             plot_kws['color'] = color
+#         plot_kws.setdefault('ms', 2)
+#         plot_kws.setdefault('color', 'steelblue')
+#         plot_kws.setdefault('marker', '.')
+#         plot_kws.setdefault('zorder', 5)
+#         plot_kws.setdefault('lw', 0)
+#         plot_kws.setdefault('markeredgewidth', 0)
+#         plot_kws.setdefault('fillstyle', 'full')
+#         diag_kws.setdefault('color', plot_kws['color'])
+#     elif kind == 'hist':
+#         plot_kws.setdefault('cmap', 'viridis')
+#         plot_kws.setdefault('bins', 50)
+#     if diag_kind == 'hist':
+#         diag_kws.setdefault('histtype', 'step')
+#         diag_kws.setdefault('bins', 'auto')
+#     elif diag_kind == 'kde':
+#         diag_kws.setdefault('lw', 1)
+#     env_kws.setdefault('color', 'k')
+#     env_kws.setdefault('lw', 1)
+#     env_kws.setdefault('zorder', 6)
 
-    # Process particle coordinates
-    nparts_list = np.array([X.shape[0] for X in coords])
-    if type(coords) is np.ndarray:
-        coords = [X for X in coords]
-    n_frames = len(coords)    
-    if plt_env:
-        coords_env = np.array([get_ellipse_coords(p) for p in env_params])
-    else:
-        coords_env = None
+#     # Process particle coordinates
+#     nparts_list = np.array([X.shape[0] for X in coords])
+#     if type(coords) is np.ndarray:
+#         coords = [X for X in coords]
+#     n_frames = len(coords)    
+#     if plt_env:
+#         coords_env = np.array([get_ellipse_coords(p) for p in env_params])
+#     else:
+#         coords_env = None
 
-    # Configure text updates
-    if text_vals is None:
-        text_vals = list(range(n_frames))
-    if text_fmt is None: # display empty text
-        text_fmt = ''
-    texts = np.array([text_fmt.format(val) for val in text_vals])
+#     # Configure text updates
+#     if text_vals is None:
+#         text_vals = list(range(n_frames))
+#     if text_fmt is None: # display empty text
+#         text_fmt = ''
+#     texts = np.array([text_fmt.format(val) for val in text_vals])
     
-    # Skip frames
-    coords = skip_frames(coords, skip, keep_last)
-    if plt_env:
-        coords_env = skip_frames(coords_env, skip, keep_last)
-    texts = skip_frames(texts, skip, keep_last)
-    n_frames = len(coords)
+#     # Skip frames
+#     coords = skip_frames(coords, skip, keep_last)
+#     if plt_env:
+#         coords_env = skip_frames(coords_env, skip, keep_last)
+#     texts = skip_frames(texts, skip, keep_last)
+#     n_frames = len(coords)
         
-    # Take random sample of particles for scatter plots
-    nparts_is_static = all([n == nparts_list[0] for n in nparts_list])
-    if nparts_is_static:
-        nparts = nparts_list[0]
-        coords_samp = np.array(coords)
-        if samples and samples < nparts:
-            idx = np.random.choice(nparts, samples, replace=False)
-            coords_samp = coords[:, idx, :]
-    else:
-        # Note that this section takes a different sample of particles on
-        # each frame.
-        coords_samp = coords
-        for i, X in enumerate(coords_samp):
-            if samples and X.shape[0] > samples:                
-                coords_samp[i] = rand_rows(X, samples)
+#     # Take random sample of particles for scatter plots
+#     nparts_is_static = all([n == nparts_list[0] for n in nparts_list])
+#     if nparts_is_static:
+#         nparts = nparts_list[0]
+#         coords_samp = np.array(coords)
+#         if samples and samples < nparts:
+#             idx = np.random.choice(nparts, samples, replace=False)
+#             coords_samp = coords[:, idx, :]
+#     else:
+#         # Note that this section takes a different sample of particles on
+#         # each frame.
+#         coords_samp = coords
+#         for i, X in enumerate(coords_samp):
+#             if samples and X.shape[0] > samples:                
+#                 coords_samp[i] = rand_rows(X, samples)
             
-    # Axis limits. Please clean up this section.   
-    mins_list = np.vstack([np.min(X, axis=0) for X in coords])
-    maxs_list = np.vstack([np.max(X, axis=0) for X in coords])
-    mins = np.min(mins_list, axis=0)[:4]
-    maxs = np.max(maxs_list, axis=0)[:4]
-    means = 0.5 * (mins + maxs)
-    widths = (1 + pad) * np.abs(maxs - mins)
+#     # Axis limits. Please clean up this section.   
+#     mins_list = np.vstack([np.min(X, axis=0) for X in coords])
+#     maxs_list = np.vstack([np.max(X, axis=0) for X in coords])
+#     mins = np.min(mins_list, axis=0)[:4]
+#     maxs = np.max(maxs_list, axis=0)[:4]
+#     means = 0.5 * (mins + maxs)
+#     widths = (1 + pad) * np.abs(maxs - mins)
 
-    width_u = max(widths[0], widths[2])
-    width_up = max(widths[1], widths[3])
-    xmin = means[0] - 0.5 * width_u
-    xmax = means[0] + 0.5 * width_u
-    ymin = means[2] - 0.5 * width_u
-    ymax = means[2] + 0.5 * width_u
-    xpmin = means[1] - 0.5 * width_up
-    xpmax = means[1] + 0.5 * width_up
-    ypmin = means[3] - 0.5 * width_up
-    ypmax = means[3] + 0.5 * width_up
+#     width_u = max(widths[0], widths[2])
+#     width_up = max(widths[1], widths[3])
+#     xmin = means[0] - 0.5 * width_u
+#     xmax = means[0] + 0.5 * width_u
+#     ymin = means[2] - 0.5 * width_u
+#     ymax = means[2] + 0.5 * width_u
+#     xpmin = means[1] - 0.5 * width_up
+#     xpmax = means[1] + 0.5 * width_up
+#     ypmin = means[3] - 0.5 * width_up
+#     ypmax = means[3] + 0.5 * width_up
     
-    if zero_center:
-        xmax = max(abs(xmin), abs(xmax))
-        ymax = max(abs(ymin), abs(ymax))
-        xpmax = max(abs(xpmin), abs(xpmax))
-        ypmax = max(abs(ypmin), abs(ypmax))
-        xmin = -xmax
-        ymin = -ymax
-        xmin = -xmax
-        ypmin = -ypmax
+#     if zero_center:
+#         xmax = max(abs(xmin), abs(xmax))
+#         ymax = max(abs(ymin), abs(ymax))
+#         xpmax = max(abs(xpmin), abs(xpmax))
+#         ypmax = max(abs(ypmin), abs(ypmax))
+#         xmin = -xmax
+#         ymin = -ymax
+#         xmin = -xmax
+#         ypmin = -ypmax
             
-    # Determine axis limits.
-    if limits is None:
-        limits = [(xmin, xmax), (xpmin, xpmax), (ymin, ymax), (ypmin, ypmax)]
-    if len(limits) == 2:
-        limits = 2 * limits
+#     # Determine axis limits.
+#     if limits is None:
+#         limits = [(xmin, xmax), (xpmin, xpmax), (ymin, ymax), (ypmin, ypmax)]
+#     if len(limits) == 2:
+#         limits = 2 * limits
         
-    # Create figure
-    fig, axes = setup_corner(
-        limits, figsize, norm_labels, units, space, plt_diag, dims=dims,
-        label_kws={'fontsize':'medium'}
-    )    
-    plt.close()
+#     # Create figure
+#     fig, axes = setup_corner(
+#         limits, figsize, norm_labels, units, space, plt_diag, dims=dims,
+#         label_kws={'fontsize':'medium'}
+#     )    
+#     plt.close()
     
-    if dims != 'all':
-        return _corner_2D(fig, axes, coords_samp, coords_env, dims, texts, fps,
-                          env_kws, text_kws, **plt_kws)
+#     if dims != 'all':
+#         return _corner_2D(fig, axes, coords_samp, coords_env, dims, texts, fps,
+#                           env_kws, text_kws, **plot_kws)
 
-    # Create array of Line2D objects.
-    lines = [[], [], []]
-    lines_env = [[], [], []]
-    lines_onepart = [[], [], []]
-    joint_axes = axes[1:, :-1] if plt_diag else axes
-    for i in range(3):
-        for j in range(i + 1):
-            if kind == 'scatter':
-                line, = joint_axes[i, j].plot([], [], **plt_kws)
-                lines[i].append(line)
-            if plt_env:
-                line, = joint_axes[i, j].plot([], [], **env_kws)
-                lines_env[i].append(line)
+#     # Create array of Line2D objects.
+#     lines = [[], [], []]
+#     lines_env = [[], [], []]
+#     lines_onepart = [[], [], []]
+#     joint_axes = axes[1:, :-1] if plt_diag else axes
+#     for i in range(3):
+#         for j in range(i + 1):
+#             if kind == 'scatter':
+#                 line, = joint_axes[i, j].plot([], [], **plot_kws)
+#                 lines[i].append(line)
+#             if plt_env:
+#                 line, = joint_axes[i, j].plot([], [], **env_kws)
+#                 lines_env[i].append(line)
                 
-            line, = joint_axes[i, j].plot([], [], marker='.', ms=4, c='red', zorder=999)
-            lines_onepart[i].append(line)    
+#             line, = joint_axes[i, j].plot([], [], marker='.', ms=4, c='red', zorder=999)
+#             lines_onepart[i].append(line) 
 
-    # Compute the maximum histogram height among frames to keep ylim fixed.
-    if plt_diag:
-        max_heights = np.zeros((n_frames, 4))
-        for i, X in enumerate(coords):
-            for j in range(4):
-                max_heights[i, j] = np.max(np.histogram(X[:, j], bins='auto')[0])
-        axes[0, 0].set_ylim(0, np.max(max_heights) / hist_height)
+#     # Compute maximum 1D histogram height among all frames and 1D projections.
+#     if plt_diag:
+#         max_heights = []
+#         for X in coords:
+#             for j in range(4):
+#                 heights, bin_edges = np.histogram(X[:, j], 'auto', limits[j])
+#                 max_heights.append(np.max(heights))
+#         axes[0, 0].set_ylim(0, np.max(max_heights) / hist_height)
         
-    # Auto-select the number of bins for 2D histograms if none is provided.
-    # We should look at how Seaborn does this.
-    if kind == 'hist' and 'bins' not in plt_kws:
-        plt_kws['bins'] = auto_n_bins_4D(coords[-1])
-        
-    def init():
-        """Plot the background of each frame."""
-        for i in range(3):
-            for j in range(i):
-                lines[i][j].set_data([], [])
-                if plt_env:
-                    lines_env[i][j].set_data([], [])  
+#     # Compute maximum 2D histogram height among all frames and 2D projections.
+#     max_heights = np.zeros((3, 3))
+#     if kind == 'hist':
+#         for X in coords:
+#             for i in range(3):
+#                 for j in range(i + 1):
+#                     H, xedges, yedges = np.histogram2d(X[:, j], X[:, i + 1], plot_kws['bins'],
+#                                                       [limits[j], limits[i + 1]])
+#                     max_heights[i, j] = max(np.max(H), max_heights[i, j])
+                    
+#     def init():
+#         """Plot the background of each frame."""
+#         for i in range(3):
+#             for j in range(i):
+#                 lines[i][j].set_data([], [])
+#                 if plt_env:
+#                     lines_env[i][j].set_data([], [])  
     
-    def update(t):
-        """Animation function to be called sequentially."""
-        remove_annotations(axes)
-        X, X_samp = coords[t], coords_samp[t]
-        for i in range(3):
-            for j in range(i + 1):
-#                 lines_onepart[i][j].set_data(X[0, j], X[0, i+1])
-                if kind == 'scatter':
-                    lines[i][j].set_data(X_samp[:, j], X_samp[:, i+1])
-                elif kind == 'hist':
-                    brange = (limits[j], limits[i + 1])
-                    bins = plt_kws['bins']
-                    plt_kws_temp = copy.deepcopy(plt_kws)
-                    del plt_kws_temp['bins']
-                    joint_axes[i, j].hist2d(X_samp[:, j], X_samp[:, i+1], 
-                                              bins, brange, **plt_kws_temp)
-                if plt_env:
-                    X_env = coords_env[t]
-                    lines_env[i][j].set_data(X_env[:, j], X_env[:, i+1])
-        if plt_diag:
-            if diag_kind == 'hist':
-                global artists_list
-                for artists in artists_list:
-                    for artist in artists:
-                        artist.remove()
-                artists_list = []
-                for i, ax in enumerate(axes.diagonal()):
-                    heights, bin_edges, artists = ax.hist(X[:, i], **diag_kws)
-                    artists_list.append(artists)
-            elif diag_kind == 'kde':
-                for i, ax in enumerate(axes.diagonal()):
-                    for line in ax.lines:
-                        ax.remove()
-                    gkde = scipy.stats.gaussian_kde(X[:, i])
-                    umax = limits[i % 2]
-                    ind = np.linspace(-umax, umax, 1000)
-                    ax.plot(ind, gkde.evaluate(ind), **diag_kws)
+#     def update(t):
+#         """Animation function to be called sequentially."""
+#         remove_annotations(axes)
+#         X, X_samp = coords[t], coords_samp[t]
+#         for i in range(3):
+#             for j in range(i + 1):
+# #                 lines_onepart[i][j].set_data(X[0, j], X[0, i+1])
+#                 if kind == 'scatter':
+#                     lines[i][j].set_data(X_samp[:, j], X_samp[:, i+1])
+#                 elif kind == 'hist':
+#                     brange = (limits[j], limits[i + 1])
+#                     bins = plot_kws['bins']
+#                     plot_kws_temp = copy.deepcopy(plot_kws)
+#                     del plot_kws_temp['bins']
+#                     joint_axes[i, j].hist2d(X_samp[:, j], X_samp[:, i+1], 
+#                                             bins, brange, vmax=max_heights[i, j],
+#                                             **plot_kws_temp)
+#                 if plt_env:
+#                     X_env = coords_env[t]
+#                     lines_env[i][j].set_data(X_env[:, j], X_env[:, i+1])
+#         if plt_diag:
+#             if diag_kind == 'hist':
+#                 global artists_list
+#                 for artists in artists_list:
+#                     for artist in artists:
+#                         artist.remove()
+#                 artists_list = []
+#                 for i, ax in enumerate(axes.diagonal()):
+#                     heights, bin_edges, artists = ax.hist(X[:, i], **diag_kws)
+#                     artists_list.append(artists)
+#             elif diag_kind == 'kde':
+#                 for i, ax in enumerate(axes.diagonal()):
+#                     for line in ax.lines:
+#                         ax.remove()
+#                     gkde = scipy.stats.gaussian_kde(X[:, i])
+#                     umax = limits[i % 2]
+#                     ind = np.linspace(-umax, umax, 1000)
+#                     ax.plot(ind, gkde.evaluate(ind), **diag_kws)
 
-        # Display text
-        location = (0.35, 0) if plt_diag else (0.35, 0.5)
-        axes[1, 2].annotate(texts[t], xy=location, xycoords='axes fraction', 
-                            **text_kws)
+#         # Display text
+#         location = (0.35, 0) if plt_diag else (0.35, 0.5)
+#         axes[1, 2].annotate(texts[t], xy=location, xycoords='axes fraction', 
+#                             **text_kws)
 
-    # Call animator and possibly save the animation
-    anim = animation.FuncAnimation(fig, update, frames=n_frames, blit=False,
-                                   interval=1000/fps)
-    return anim
+#     # Call animator and possibly save the animation
+#     anim = animation.FuncAnimation(fig, update, frames=n_frames, blit=False,
+#                                    interval=1000/fps)
+#     return anim
 
 
 def _corner_2D(fig, ax, coords, coords_env, dims, texts, fps, env_kws,
-               text_kws, **plt_kws):
+               text_kws, **plot_kws):
     """2D scatter plot (helper function for `corner`)."""
     n_frames = coords.shape[0]
     j, i = [var_indices[dim] for dim in dims]
     coords_x, coords_y = coords[:, :, j], coords[:, :, i]
     
-    line, = ax.plot([], [], **plt_kws)
+    line, = ax.plot([], [], **plot_kws)
     line_env, = ax.plot([], [], **env_kws)
     def init():
         line.set_data([], [])
@@ -559,10 +567,10 @@ def corner_onepart(
     figsize=None, units='mm-mrad', norm_labels=False, text_fmt='', limits=None, zero_center=True,
     text_vals=None, fps=1, figname=None, dpi=None, bitrate=-1, text_kws={},
     label_kws={}, tick_kws={}, tickm_kws={}, grid_kws={}, history_kws={},
-    **plt_kws
+    **plot_kws
 ):
     # Set default key word arguments
-    for kws in (plt_kws, history_kws):
+    for kws in (plot_kws, history_kws):
         if 's' in kws:
             ms = kws['s']
             kws.pop('s', None)
@@ -598,7 +606,7 @@ def corner_onepart(
     
     # Determine axis limits.
     if limits is None:
-        limits = auto_limits_4D(X, pad, zero_center)
+        limits = auto_limits(X, pad, zero_center)
     if len(limits) == 2:
         limits = 2 * limits
     
@@ -615,14 +623,14 @@ def corner_onepart(
 
     # Create Line2D objects
     if dims != 'all':
-        line, = axes.plot([], [], **plt_kws)
+        line, = axes.plot([], [], **plot_kws)
         line_history, = axes.plot([], [], **history_kws)
     else:
         lines_history = [[], [], []]
         lines = [[], [], []]
         for i in range(3):
             for j in range(i + 1):
-                line, = axes[i, j].plot([], [], **plt_kws)
+                line, = axes[i, j].plot([], [], **plot_kws)
                 lines[i].append(line)
                 line, = axes[i, j].plot([], [], **history_kws)
                 lines_history[i].append(line)
@@ -669,4 +677,173 @@ def corner_onepart(
     if figname:
         writer = animation.writers['ffmpeg'](fps=fps, bitrate=bitrate)
         anim.save(figname, writer=writer, dpi=dpi)
+    return anim
+
+
+
+
+
+
+
+
+
+
+def get_bin_centers(bin_edges):
+    """Get bin centers assuming evenly spaced bins."""
+    return bin_edges[:-1] + 0.5 * np.diff(bin_edges)
+
+
+
+
+
+def auto_limits_global(coords, pad=0., zero_center=False):
+    mins = np.min([np.min(X, axis=0) for X in coords], axis=0)
+    maxs = np.max([np.max(X, axis=0) for X in coords], axis=0)
+    mins, maxs = process_limits(mins, maxs, pad, zero_center)
+    return [(lo, hi) for lo, hi in zip(mins, maxs)]
+
+
+def corner(
+    coords, dims=None, 
+    kind='hist',
+    limits=None, pad=0., zero_center=False, space=0.1, figsize=None, 
+    skip=0, keep_last=False, hist_height_frac=1.0, 
+    text_fmt='', text_vals=None, fps=1, 
+    diag_kws=None, text_kws=None, **plot_kws
+):        
+    # Set default key word arguments
+    plot_kws.setdefault('cmap', 'dusk_r')
+    plot_kws.setdefault('bins', 50)
+    if diag_kws is None:
+        diag_kws = dict()
+    diag_kws.setdefault('color', 'black')
+    diag_kws.setdefault('histtype', 'step')
+    diag_kws.setdefault('bins', 'auto')
+    if text_kws is None:
+        text_kws = dict()
+
+    # Process particle coordinates
+    if dims is None:
+        n_dims = coords[0].shape[1]
+    else:
+        n_dims = dims
+    n_parts_list = np.array([X.shape[0] for X in coords])
+    coords = [X[:, :n_dims] for X in coords]
+    n_frames = len(coords)    
+
+    # Configure text updates
+    if text_vals is None:
+        text_vals = list(range(n_frames))
+    if text_fmt is None: # display empty text
+        text_fmt = ''
+    texts = np.array([text_fmt.format(val) for val in text_vals])
+    
+    # Skip frames
+    coords = skip_frames(coords, skip, keep_last)
+    texts = skip_frames(texts, skip, keep_last)
+    n_frames = len(coords)
+                    
+    # Create figure
+    if figsize is None:
+        f = n_dims * 7.5 / 6.0
+        figsize = (1.05 * f, f)
+    space = None
+    spines = False
+    labels = ["x [mm]", "x' [mrad]", "y [mm]", "y' [mrad]", "z [m]", "dE [MeV]"]
+    label_kws = None
+    tick_kws = None
+    if limits is None:
+        limits = auto_limits_global(coords, pad, zero_center)
+    fig, axes = pair_grid(n_dims, figsize=figsize, limits=limits, 
+                          space=space, spines=spines, labels=labels, 
+                          label_kws=label_kws, tick_kws=tick_kws)
+    plt.close()
+    
+    # Compute 1D histograms at each frame.
+    heights_list_1D, pos_list_1D = [], []
+    for X in tqdm(coords):
+        pos_list_1D.append([])
+        heights_list_1D.append([])
+        for i in range(n_dims):
+            heights, bin_edges = np.histogram(X[:, i], 'auto', limits[i])
+            heights_list_1D[-1].append(heights)
+            pos_list_1D[-1].append(get_bin_centers(bin_edges))
+            
+    # Keep ylim the same across frames for all 1D histograms.
+    max_height = 0
+    for i in range(n_frames):
+        for j in range(n_dims):
+            max_height = max(max_height, np.max(heights_list_1D[i][j]))
+    axes[0, 0].set_ylim(0, max_height / hist_height_frac)
+        
+    # Compute 2D histograms at each frame. 
+    heights_list_2D, xpos_list_2D, ypos_list_2D = [], [], []
+    n_bins = plot_kws['bins']
+    for X in tqdm(coords):
+        heights = np.zeros((n_dims, n_dims, n_bins, n_bins))
+        xpos = np.zeros((n_dims, n_dims, n_bins))
+        ypos = np.zeros((n_dims, n_dims, n_bins))
+        for i in range(1, n_dims):
+            for j in range(i + 1):  
+                H, xedges, yedges = np.histogram2d(
+                    X[:, j], X[:, i], 
+                    n_bins, 
+                    (limits[j], limits[i])
+                )
+                heights[i, j] = H
+                xpos[i, j] = get_bin_centers(xedges)
+                ypos[i, j] = get_bin_centers(yedges)
+        heights_list_2D.append(heights)
+        xpos_list_2D.append(xpos)
+        ypos_list_2D.append(ypos)
+        
+    # Keep max colormap global max height for each 2D histogram.
+    max_heights = np.zeros((n_dims, n_dims))
+    for frame in range(n_frames):
+        for i in range(1, n_dims):
+            for j in range(i + 1):
+                H = heights_list_2D[frame][i, j]
+                max_heights[i, j] = max(np.max(H), max_heights[i, j])
+              
+    del diag_kws['bins']
+    del plot_kws['bins']
+    plot_kws.setdefault('shading', 'auto')
+                    
+    def update(t):
+        """Animation function to be called sequentially."""
+        global artists_list
+        for artists in artists_list:
+            for artist in artists:
+                artist.remove()
+        artists_list = []
+        remove_annotations(axes)
+                
+        # Off-diagonal plots
+        artists = []
+        for i in range(1, n_dims):
+            for j in range(i + 1):
+                ax = axes[i, j]
+                x = xpos_list_2D[t][i, j]
+                y = ypos_list_2D[t][i, j]
+                H = heights_list_2D[t][i, j]
+                plot_kws['vmax'] = max_heights[i, j]
+                qmesh = ax.pcolormesh(x, y, H.T, **plot_kws)
+                artists.append(qmesh)
+        artists_list.append(artists)
+                    
+        # Diagonal plots
+        for i, ax in enumerate(axes.diagonal()):
+            pos = pos_list_1D[t][i]
+            heights = heights_list_1D[t][i] 
+            _, _, artists = ax.hist(pos, len(pos), weights=heights, **diag_kws)
+            artists_list.append(artists)
+
+        # Display text
+        axes[1, 2].annotate(texts[t], xy=(0.35, 0), xycoords='axes fraction', 
+                            **text_kws)
+        
+    # Call animator
+    interval = 1000. / fps
+    anim = animation.FuncAnimation(fig, update, frames=n_frames, blit=False,
+                                   interval=interval)
     return anim
