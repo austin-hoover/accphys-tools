@@ -172,8 +172,8 @@ class StatsReader:
         The 10 transverse beam correlation coefficents. Columns labels are the
         same as `moments`.
     realspace : pandas DataFrame
-        Dimensions of the beam ellipse in real (x-y) space, where the ellipse
-        is defined beta_y 4 * x^T * Sigma * x, where Sigma is the covariance matrix
+        Dimensions of the rms beam ellipse in real (x-y) space. The ellipse is 
+        defined by x^T * Sigma * x = 1, where Sigma is the covariance matrix
         and x = [x, x', y, y']. The columns are:
             'angle': the tilt angle (in degrees) measured below the x-alpha_xis.
             'cx' : the horizontal radius of the ellipse when `angle` is zero.
@@ -198,7 +198,7 @@ class StatsReader:
         
     def _create_empty_arrays(self, data):
         self._initialized = True
-        self.nframes = data.shape[0]
+        self.nframes = len(data)
         self.env_params_arr = np.zeros((self.nframes, 8))
         self.moments_arr = np.zeros((self.nframes, 10))
         self.corr_arr = np.zeros((self.nframes, 10))
@@ -223,8 +223,6 @@ class StatsReader:
             self.twiss4D_arr[i] = [alpha_lx, alpha_ly, beta_lx, beta_ly, 
                                    u, nu, eps_1, eps_2, eps_4D]
             angle, cx, cy = rms_ellipse_dims(Sigma, 'x', 'y')
-            cx *= 2 # Get real radii instead of rms
-            cy *= 2 # Get real radii instead of rms
             angle = np.degrees(angle)
             area = np.pi * cx * cy
             self.realspace_arr[i] = [angle, cx, cy, area]
