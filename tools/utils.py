@@ -31,8 +31,12 @@ def delete_files_not_folders(path):
             os.remove(os.path.join(root, file))
                 
                 
-def file_exists(file):
-    return os.path.isfile(file)
+def file_exists(path):
+    return os.path.isfile(path)
+
+
+def folder_exists(path):
+    return os.path.isdir(path)
 
 
 def ancestor_folder_path(current_path, ancestor_folder_name):  
