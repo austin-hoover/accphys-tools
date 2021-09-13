@@ -70,7 +70,7 @@ class InjRegionController:
         self.min_kicker_angles *= 1e-3
         self.max_kicker_angles *= 1e-3
         
-        artificial_kicker_angle_increase_factor = 1.5
+        artificial_kicker_angle_increase_factor = 1.0
         print('Artificially increasing kicker strength by factor {}'
               .format(artificial_kicker_angle_increase_factor))
         self.max_kicker_angles *= artificial_kicker_angle_increase_factor
@@ -119,8 +119,10 @@ class InjRegionController:
         x, xp, y, yp = coords
         
         def error():
-            coords_start = track_part(self.sublattice1, [x, -xp, y, -yp], self.mass, self.kin_energy)
-            coords_end = track_part(self.sublattice2, [x, +xp, y, +yp], self.mass, self.kin_energy)
+            coords_start = track_part(self.sublattice1, [x, -xp, y, -yp], 
+                                      self.mass, self.kin_energy)
+            coords_end = track_part(self.sublattice2, [x, xp, y, yp], 
+                                    self.mass, self.kin_energy)
             return 1e6 * (np.sum(coords_start**2) + np.sum(coords_end**2))
 
         # Horizontal orbit
@@ -129,7 +131,7 @@ class InjRegionController:
             return error()
         lb = self.min_kicker_angles_x
         ub = self.max_kicker_angles_x
-        opt.least_squares(cost_func, np.zeros(4), bounds=(lb, ub), verbose=1)
+        opt.least_squares(cost_func, np.zeros(4), bounds=(lb, ub), **solver_kws)
                     
         # Vertical orbit
         def cost_func(v):
@@ -165,21 +167,31 @@ class InjRegionController:
     def get_corrector_angles(self):
         return np.array([node.getParam('ky') for node in self.corrector_nodes])
     
-    def bump_vertical_orbit(self, frac_max_angle=1.0):        
-        corrector_positions = [self.ring.getNodePositionsDict()[node][0]
-                               for node in self.corrector_nodes]
+    def bump_vertical_orbit(self, sign_yp=-1, **solver_kws):     
+        """Create closed bump in y.
+        
+        The goal is to make y as positive as possible at the foil and yp as negative 
+        as possible at the foil.
+        """
+        node_pos_dict = self.ring.getNodePositionsDict()
+        corrector_positions = [node_pos_dict[node][0] for node in self.corrector_nodes]
         corrector_positions = np.array(corrector_positions)
         ring_length = self.ring.getLength()
-        corrector_positions[:2] -= ring_length
-        
-        a = corrector_positions[1] - corrector_positions[0]
-        b = 0.5 * (corrector_positions[2] - corrector_positions[1])
-        theta2 = frac_max_angle * self.max_corrector_angle
-        theta1 = theta2 / (1 + (a / b))
-        
-        c = a * np.tan(theta1)
-        slope = abs(c / b)
-        print('slope = {} [rad]'.format(slope))
-        
-        corrector_angles = [theta1, -theta2, theta2, -theta1]
-        self.set_corrector_angles(corrector_angles)
+       
+        def cost_func(corrector_angles):
+            self.set_corrector_angles(corrector_angles)
+            coords = np.array([0., 0., 0., 0.])
+            coords_mid = track_part(self.sublattice1, coords, self.mass, self.kin_energy)
+            coords_end = track_part(self.sublattice2, coords_mid, self.mass, self.kin_energy)
+            cost = 0.
+            cost += (1.0 / (1.0 + 1e3 * coords_mid[2])) # push y as positive
+            cost += (1.0 / (1.0 + 1e3 * sign_yp * coords_mid[3])) # push yp as negative
+            cost += 1e6 * np.sum(coords_end**2) # enforce closed orbit
+            return cost
+ 
+        lb = -self.max_corrector_angle
+        ub = +self.max_corrector_angle
+        guess = np.zeros(4)
+        solver_kws.setdefault('max_nfev', 5000)
+        solver_kws.setdefault('verbose', 2)
+        opt.least_squares(cost_func, guess, bounds=(lb, ub), **solver_kws)        

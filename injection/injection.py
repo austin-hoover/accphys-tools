@@ -62,17 +62,16 @@ from helpers import InjRegionController
 # Switches
 #------------------------------------------------------------------------------
 switches = {
-    'collimator': False,
-    'foil scattering': False,
-    'fringe': False,
-    'longitudinal impedence': False,
+    'collimator': True,
+    'foil scattering': True,
+    'fringe': True,
+    'longitudinal impedence': True,
     'rf': True,
-    'space charge': False,
-    'uniform longitudinal distribution': False,
+    'space charge': True,
     'solenoid': True,
+    'equal emittances': False,
     'dipole kickers': False,
-    'orbit corrector bump': False,
-    'pyorbit diagnostics': False,
+    'orbit corrector bump': True,
 }
 
 print('Switches:')
@@ -86,18 +85,16 @@ delete_files_not_folders('_output/data/')
 
 madx_file = '_input/SNSring_nux6.18_nuy6.18.lat'
 madx_seq = 'rnginj'
-X_FOIL = 0.0468
-Y_FOIL = 0.0492 
-kin_energy = 0.8 # [GeV]
+X_FOIL = 0.0486 # [m]
+Y_FOIL = 0.0460 # [m]
+kin_energy = 0.6 # [GeV]
 mass = 0.93827231 # [GeV/c^2]
-n_inj_turns_default = 1000
 n_stored_turns = 0
+n_inj_turns = 300
+# intensity = 1.5e14 * float(n_inj_turns) / 1000.
+intensity = 0.35e14
 macros_per_turn = 300
-intensity = 1.5e14
-macro_size = intensity / n_inj_turns_default / macros_per_turn
-t0 = 0.000 # [s]
-t1 = 0.0005 # [s]
-n_inj_turns = int(n_inj_turns_default * (t1 / 0.001))
+macro_size = intensity / n_inj_turns / macros_per_turn
 
 # Initial and final coordinates at injection point
 inj_coords_t0 = np.array([
@@ -107,22 +104,39 @@ inj_coords_t0 = np.array([
     0.0,
 ])
 inj_coords_t1 = np.array([
-    X_FOIL - 0.030,
+    X_FOIL - 0.0344,
     -0.000,
     Y_FOIL - 0.000,
-    -0.001,
+    -0.00158,
 ])
 
 
 # Lattice setup
 #------------------------------------------------------------------------------
+ring = time_dep.TIME_DEP_Lattice()
+ring.readMADX(madx_file, madx_seq)
+ring.set_fringe(False)
+ring.initialize()
+ring_length = ring.getLength()
+
+if switches['equal emittances']:
+    alpha_x, alpha_y, beta_x, beta_y = hf.twiss_at_injection(ring, mass, kin_energy)
+    dx_dyp_ratio = np.sqrt((beta_x * beta_y) / (1 + alpha_y**2))
+    abs_dyp = abs(inj_coords_t1[3])
+    abs_dx = dx_dyp_ratio * abs_dyp
+    inj_coords_t1[0] = X_FOIL - abs_dx
+    print('Setting dx/dyp for equal emittances.')
+    print('  |dyp| = {}'.format(abs_dyp))
+    print('  dx/dyp = {}'.format(dx_dyp_ratio))
+    print('  |dx| = {}'.format(abs_dx))
+    
+    
 # For some reason, calling `node.setParam('B', 0.)` on the solenoid node gives 
 # NAN for the orbit. I don't know the issue. The solution for now is to load 
 # an identical lattice without the solenoid.
 if switches['solenoid']:
     madx_file = '_input/SNSring_nux6.18_nuy6.18_solenoid.lat'
 print("MADX file = '{}'".format(madx_file))
-
 ring = time_dep.TIME_DEP_Lattice()
 ring.readMADX(madx_file, madx_seq)
 ring.set_fringe(False)
@@ -130,43 +144,36 @@ ring.initialize()
 ring_length = ring.getLength()
 print('ring length = {}'.format(ring_length))
 
-alpha_x, alpha_y, beta_x, beta_y = hf.twiss_at_injection(ring, mass, kin_energy)
-x_yp_ratio = np.sqrt((beta_x * beta_y) / (1 + alpha_y**2))
-    
     
 # Beam setup
 #------------------------------------------------------------------------------
-# Initialize bunch_
+# Initialize bunch
 bunch = Bunch()
 bunch.mass(mass)
 bunch.macroSize(macro_size)
-bunch.getSyncParticle().kinEnergy(kin_energy)
+sync_part = bunch.getSyncParticle()
+sync_part.kinEnergy(kin_energy)
 lostbunch = Bunch()
 lostbunch.addPartAttr('LostParticleAttributes')
 params_dict = {'bunch':bunch, 'lostbunch':lostbunch}
-sync_part = bunch.getSyncParticle()
 
 # Transverse linac distribution
+xcenterpos = X_FOIL
+ycenterpos = Y_FOIL
+xcentermom = 0.0
+ycentermom = 0.0
 order = 3.0
 alpha_x = 0.063
 alpha_y = 0.063
 beta_x = 10.209 
 beta_y = 10.776
-emitlim = 0.152 * 2 * (order + 1) * 1e-6
-
-emittance_reduction_factor = 1.0
-emitlim *= emittance_reduction_factor
-print('Multiplied linac beam emittance by factor {}.'.format(emittance_reduction_factor))
-
-xcenterpos = X_FOIL
-ycenterpos = Y_FOIL
-xcentermom = 0.0
-ycentermom = 0.0
+emitrms = 0.152 # [mm mrad]
+emitlim = emitrms * 2 * (order + 1) * 1e-6 # [mm mrad]
 dist_x = JohoTransverse(order, alpha_x, beta_x, emitlim, xcenterpos, xcentermom)
 dist_y = JohoTransverse(order, alpha_y, beta_y, emitlim, ycenterpos, ycentermom)
 
 # Longitudinal linac distribution
-zlim = (120.0 / 360.0) * ring_length
+zlim = (135.0 / 360.0) * ring_length
 zmin, zmax = -zlim, zlim
 tailfraction = 0.0
 emean = sync_part.kinEnergy()
@@ -182,10 +189,23 @@ ecmin = -0.0035 * efac
 ecmax = 0.0035 * efac
 ecdrifti = 0.0
 ecdriftf = 0.0
-turns = 1000.0
-tturn = ring_length / (sync_part.beta() * speed_of_light)
-drifttime= 1000.0 * turns * tturn
-ecparams = (ecmean, ecsigma, ectrunc, ecmin, ecmax, ecdrifti, ecdriftf, drifttime)
+
+
+# From Holmes 2018
+#------------------------------------
+esigma = 0.0005
+emin = sync_part.kinEnergy() - 0.0025
+emax = sync_part.kinEnergy() + 0.0025
+ecmean = 0.0
+ecsigma = 0.000000000001
+ecmin = -0.0035
+ecmax = +0.0035
+#------------------------------------
+
+seconds_per_turn = ring_length / (sync_part.beta() * speed_of_light)
+drifttime = 1000. * n_inj_turns * seconds_per_turn # [ms]
+ecparams = (ecmean, ecsigma, ectrunc, ecmin, ecmax, 
+            ecdrifti, ecdriftf, drifttime)
 esnu = 100.0
 esphase = 0.0
 esmax = 0.0
@@ -194,19 +214,17 @@ esparams = (esnu, esphase, esmax, nulltime)
 dist_z = SNSESpreadDist(ring_length, zmin, zmax, tailfraction, sync_part, emean, 
                         esigma, etrunc, emin, emax, ecparams, esparams)
 
-if switches['uniform longitudinal distribution']:
-    eoffset = 0.0
-    deltaEfrac = 0.0
-    dist_z = UniformLongDist(zmin, zmax, sync_part, eoffset, deltaEfrac)
-    
-    
+
 # Injection kickers
 #-------------------------------------------------------------------------------
+t0 = 0.000 # injection start time [s]
+t1 = n_inj_turns * seconds_per_turn # injection stop time [s]
+
 inj_controller = InjRegionController(ring, mass, kin_energy, 
                                      dipole_kickers=switches['dipole kickers'])
 
 if switches['orbit corrector bump']:
-    inj_controller.bump_vertical_orbit(frac_max_angle=1.0)
+    inj_controller.bump_vertical_orbit(max_nfev=5000, verbose=2)
     
 corrector_angles = inj_controller.get_corrector_angles()
 solver_kws = dict(max_nfev=1000, verbose=2)
@@ -241,8 +259,7 @@ addTeapotInjectionNode(ring, 0.0, injection_node)
 if switches['foil scattering']:
     foil_node = TeapotFoilNode(foil_xmin, foil_xmax, foil_ymin, foil_ymax, thickness)
     foil_node.setScatterChoice(0)
-    addTeapotFoilNode(ring, 0.000001, foil)
-
+    addTeapotFoilNode(ring, 0.000001, foil_node)
 
 
 # Black absorber collimator to act as an aperture
@@ -265,10 +282,10 @@ if switches['rf']:
     ZtoPhi = 2.0 * math.pi / ring_length;
     dESync = 0.0
     RF1HNum = 1.0
-    RF1Voltage = 0.000016
+    RF1Voltage = +0.000004 # [GV]
     RF1Phase = 0.0
     RF2HNum = 2.0
-    RF2Voltage = -0.000003
+    RF2Voltage = -0.000004 # [GV]
     RF2Phase = 0.0
     length = 0.0
     rf1_node = RFNode.Harmonic_RFNode(ZtoPhi, dESync, RF1HNum, RF1Voltage, 
@@ -399,7 +416,7 @@ if switches['space charge']:
     n_boundary_pts = 128
     n_free_space_modes = 32
     r_boundary = 0.22
-    boundary = Boundary2D(n_boundary_pts, n_free_space_modes,
+    boundary = Boundary2D(n_boundary_pts, n_free_space_modes, 
                           'Circle', r_boundary, r_boundary)
     grid_size = (128, 128, 128) 
     sc_path_length_min = 0.00000001
@@ -410,19 +427,6 @@ if switches['space charge']:
 
 # Diagnostics
 #------------------------------------------------------------------------------
-if switches['pyorbit diagnostics']:
-    tune_node = TeapotTuneAnalysisNode("'tune_analysis'")
-    tune_node.assignTwiss(9.33531, -1.82639, -0.00122, -0.0066, 8.08892, 0.49711)
-    addTeapotDiagnosticsNode(ring, 51.1921, tune_node)
-
-    statlats_node = TeapotStatLatsNode('_output/data/statlats_pyorbit.dat')
-    addTeapotDiagnosticsNode(ring, 0.000002, statlats_node)
-
-    order = 4
-    moments_node = TeapotMomentsNode('_output/data/moments_pyorbit', order)
-    addTeapotDiagnosticsNode(ring, 0.000002, moments_node)
-
-# This node stores a list of ndarrays of the bunch coordinates.
 bunch_monitor_node = BunchMonitorNode(mm_mrad=True, transverse_only=False)
 injection_node.addChildNode(bunch_monitor_node, injection_node.EXIT)
 
