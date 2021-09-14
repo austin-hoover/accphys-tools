@@ -54,30 +54,30 @@ class InjRegionController:
         self.kicker_nodes = [ring.getNodeForName(name) for name in self.kicker_names]
 
         # Maximum injection kicker angles at 1 GeV kinetic energy [mrad]
-        self.min_kicker_angles = 1.15 * np.array([0.0, 0.0, -7.13, -7.13, -7.13, -7.13, 0.0, 0.0])
-        self.max_kicker_angles = 1.15 * np.array([12.84, 12.84, 0.0, 0.0, 0.0, 0.0, 12.84, 12.84])
+        self.min_kicker_angles = 1e-3 * np.array([0.0, 0.0, -7.13, -7.13, -7.13, -7.13, 0.0, 0.0])
+        self.max_kicker_angles = 1e-3 * np.array([12.84, 12.84, 0.0, 0.0, 0.0, 0.0, 12.84, 12.84])
+        
+        # 15% kicker upgrade (from Nick Evans)
+        self.min_kicker_angles *= 1.15
+        self.max_kicker_angles *= 1.15
         
         if dipole_kickers:
-            self.max_kicker_angles = np.abs(self.min_kicker_angles + self.max_kicker_angles)
             self.min_kicker_angles = -self.max_kicker_angles
 
-        # Scale angles based on actual kinetic energy
+        # Scale angles based on actual kinetic energy.
         self.kin_energy_scale_factor = hf.get_pc(mass, 1.0) / hf.get_pc(self.mass, self.kin_energy)
         self.min_kicker_angles *= self.kin_energy_scale_factor
         self.max_kicker_angles *= self.kin_energy_scale_factor
-
-        # Convert from mrad to rad
-        self.min_kicker_angles *= 1e-3
-        self.max_kicker_angles *= 1e-3
         
         artificial_kicker_angle_increase_factor = 1.0
-        print('Artificially increasing kicker strength by factor {}'
-              .format(artificial_kicker_angle_increase_factor))
-        self.max_kicker_angles *= artificial_kicker_angle_increase_factor
-        self.min_kicker_angles *= artificial_kicker_angle_increase_factor
+        if artificial_kicker_angle_increase_factor != 1.0:
+            print('Artificially increasing kicker strength by factor {}'
+                  .format(artificial_kicker_angle_increase_factor))
+            self.max_kicker_angles *= artificial_kicker_angle_increase_factor
+            self.min_kicker_angles *= artificial_kicker_angle_increase_factor
 
-        # Identify horizontal and vertical kickers. PyORBIT doesn't distinguish 
-        # between the two.
+        # Identify horizontal and vertical kickers (PyORBIT doesn't distinguish 
+        # between the two).
         self.kicker_idx_x = [0, 2, 5, 7]
         self.kicker_idx_y = [1, 3, 4, 6]
         self.kicker_nodes_x = [self.kicker_nodes[i] for i in self.kicker_idx_x]
@@ -87,6 +87,7 @@ class InjRegionController:
         self.max_kicker_angles_x = self.max_kicker_angles[self.kicker_idx_x]
         self.max_kicker_angles_y = self.max_kicker_angles[self.kicker_idx_y]
 
+        # Identify corrector dipoles.
         self.corrector_names = ['dmcv_a09', 'dchv_a10', 'dchv_a13', 'dmcv_b01']
         self.corrector_nodes = [self.ring.getNodeForName(name) for name in self.corrector_names]
         self.max_corrector_angle_1GeV = 0.0015 # [rad]
@@ -95,6 +96,9 @@ class InjRegionController:
         self.min_corrector_angles_y = np.full(4, self.min_corrector_angle)
         self.max_corrector_angles_y = np.full(4, self.max_corrector_angle)
         
+        # Create one sublattice for first half of injection region (before the foil), 
+        # and another sublattice for the second half of the injection region (after
+        # the foil).
         self.sublattice1 = hf.get_sublattice(self.ring, 'inj_start', None)
         self.sublattice2 = hf.get_sublattice(self.ring, 'inj_mid', 'inj_end')
         
@@ -194,4 +198,14 @@ class InjRegionController:
         guess = np.zeros(4)
         solver_kws.setdefault('max_nfev', 5000)
         solver_kws.setdefault('verbose', 2)
-        opt.least_squares(cost_func, guess, bounds=(lb, ub), **solver_kws)        
+        result = opt.least_squares(cost_func, guess, bounds=(lb, ub), **solver_kws)    
+        
+        coords = np.array([0., 0., 0., 0.])
+        coords_mid = track_part(self.sublattice1, coords, self.mass, self.kin_energy)
+        coords_end = track_part(self.sublattice2, coords_mid, self.mass, self.kin_energy)
+        
+        coords_mid *= 1000.
+        coords_end *= 1000.
+        print('Coords at foil with vertical closed bump: ({}, {}, {}, {})'.format(*coords_mid))
+        print('Coords at end of injection with vertical closed bump: ({}, {}, {}, {})'.format(*coords_end))
+        return result
