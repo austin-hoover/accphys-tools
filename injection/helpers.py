@@ -54,8 +54,10 @@ class InjRegionController:
         self.kicker_nodes = [ring.getNodeForName(name) for name in self.kicker_names]
 
         # Maximum injection kicker angles at 1 GeV kinetic energy [mrad]
-        self.min_kicker_angles = 1e-3 * np.array([0.0, 0.0, -7.13, -7.13, -7.13, -7.13, 0.0, 0.0])
-        self.max_kicker_angles = 1e-3 * np.array([12.84, 12.84, 0.0, 0.0, 0.0, 0.0, 12.84, 12.84])
+        self.min_kicker_angles = 1e-3 * np.array([0.0, 0.0, -7.13, -7.13,
+                                                  -7.13, -7.13, 0.0, 0.0])
+        self.max_kicker_angles = 1e-3 * np.array([12.84, 12.84, 0.0, 0.0, 
+                                                  0.0, 0.0, 12.84, 12.84])
         
         # 15% kicker upgrade (from Nick Evans)
         self.min_kicker_angles *= 1.15
@@ -144,7 +146,7 @@ class InjRegionController:
         lb = self.min_kicker_angles_y
         ub = self.max_kicker_angles_y
         opt.least_squares(cost_func, np.zeros(4), bounds=(lb, ub), **solver_kws)
-        
+                
         self.sublattice1.reverseOrder()
         return self.get_kicker_angles()
             
