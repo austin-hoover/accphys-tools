@@ -1,12 +1,23 @@
-"""This script simulates full injection in the SNS ring."""
+"""Simulation of injection in the SNS ring.
+
+NOTES
+--------------------------------------------------------------------------------
+1. Do not use transverse impedance calculation unless a sliced space charge 
+   model is used. 
+2. If fringe fields are to be turned on in the simulation, then they must be
+   turned on when optimizing the injection region magnets to obtain certain
+3. Need to be careful about space charge model when RF voltages are changed. 
+   If longitudinal profile has two peaks, the horizontal distribution becomes
+   hollow at certain points along the beam line when using the 2.5D solver.
+""" 
 from __future__ import print_function
 import sys
-import math
 from pprint import pprint
 
 import numpy as np
 import scipy.optimize as opt
-from tqdm import tqdm, trange
+from tqdm import tqdm
+from tqdm import trange
 
 from bunch import Bunch
 from foil import Foil
@@ -78,8 +89,9 @@ switches = {
     'equal emittances': True,
     'solenoid': True,
     'fringe': True,
-    'space charge': '2.5D', # {'2.5D', 'sliced', False}
-    'transverse impedance': True,
+    'transverse space charge': '2.5D', # {'2.5D', 'sliced', False}
+    'longitudinal space charge': True,
+    'transverse impedance': False,
     'longitudinal impedance': True,
     'foil scattering': True,
     'rf': True,
@@ -93,7 +105,7 @@ pprint(switches)
 # Initial settings
 #------------------------------------------------------------------------------
 print("Removing data in '_output/data/' folder.")
-delete_files_not_folders('_output/data/')
+# delete_files_not_folders('_output/data/')
 
 madx_file = '_input/SNSring_nux6.18_nuy6.18_foilinbend.lat'
 madx_seq = 'rnginj'
@@ -104,7 +116,7 @@ mass = 0.93827231 # [GeV/c^2]
 n_stored_turns = 0
 n_inj_turns = 500
 intensity = 1.5e14 * float(n_inj_turns) / 1000.
-macros_per_turn = int(600000 / n_inj_turns)
+macros_per_turn = int(300000 / n_inj_turns)
 macro_size = intensity / n_inj_turns / macros_per_turn
 
 # Initial and final coordinates at injection point
@@ -126,7 +138,7 @@ inj_coords_t1 = np.array([
 #------------------------------------------------------------------------------
 ring = time_dep.TIME_DEP_Lattice()
 ring.readMADX(madx_file, madx_seq)
-ring.set_fringe(False)
+ring.set_fringe(switches['fringe'])
 ring.initialize()
 ring_length = ring.getLength()
 print('ring length = {}'.format(ring_length))
@@ -154,9 +166,17 @@ if switches['solenoid']:
     madx_file = ''.join([prefix, '_solenoid', '.lat'])
     ring = time_dep.TIME_DEP_Lattice()
     ring.readMADX(madx_file, madx_seq)
-    ring.set_fringe(False)
+    ring.set_fringe(switches['fringe'])
     ring.initialize()
     ring_length = ring.getLength()
+    
+# The foil splits dh_a11 in two parts at the lattice entrance/exit. Thus, 
+# the fringe fields should not be calculated at the exit of the last node
+# or the entrance of the first node.
+dh_a11a = ring.getNodeForName('dh_a11a')
+dh_a11b = ring.getNodeForName('dh_a11b')
+dh_a11a.setUsageFringeFieldOUT(False)
+dh_a11b.setUsageFringeFieldIN(False)
     
     
 # print('Matching envelope.')
@@ -211,7 +231,6 @@ if switches['solenoid']:
         
         
         
-    
 # Beam setup
 #------------------------------------------------------------------------------
 # Initialize bunch
@@ -223,10 +242,6 @@ sync_part.kinEnergy(kin_energy)
 lostbunch = Bunch()
 lostbunch.addPartAttr('LostParticleAttributes')
 params_dict = {'bunch':bunch, 'lostbunch':lostbunch}
-
-
-np.save('twiss.npy', hf.twiss_throughout(ring, bunch))
-
 
 # Transverse linac distribution
 inj_center_x = X_FOIL
@@ -243,38 +258,27 @@ dist_x = JohoTransverse(order_x, alpha_x, beta_x, eps_x_lim, inj_center_x, inj_c
 dist_y = JohoTransverse(order_y, alpha_y, beta_y, eps_y_lim, inj_center_y, inj_center_yp)
 
 # Longitudinal linac distribution
-zlim = (135.0 / 360.0) * ring_length
+zlim = (139.68 / 360.0) * ring_length
 zmin, zmax = -zlim, zlim
 tailfraction = 0.0
 emean = sync_part.kinEnergy()
-efac = 0.784
-esigma = 0.0015 * efac
+esigma = 0.0005
 etrunc = 1.0
-emin = sync_part.kinEnergy() - 0.0025 * efac
-emax = sync_part.kinEnergy() + 0.0025 * efac
+emin = sync_part.kinEnergy() - 0.0025
+emax = sync_part.kinEnergy() + 0.0025
+## Centroid energy parameters
 ecmean = 0.0
-ecsigma = 0.0015 * efac
+ecsigma = 0.000000001
 ectrunc = 1.0
-ecmin = -0.0035 * efac
-ecmax = 0.0035 * efac
+ecmin = -0.0035
+ecmax = +0.0035
 ecdrifti = 0.0
 ecdriftf = 0.0
-
-# From Holmes 2018
-#------------------------------------
-# esigma = 0.0005
-# emin = sync_part.kinEnergy() - 0.0025
-# emax = sync_part.kinEnergy() + 0.0025
-# ecmean = 0.0
-# ecsigma = 0.000000000001
-# ecmin = -0.0035
-# ecmax = +0.0035
-#------------------------------------
-
 seconds_per_turn = ring_length / (sync_part.beta() * speed_of_light)
 drifttime = 1000. * n_inj_turns * seconds_per_turn # [ms]
 ecparams = (ecmean, ecsigma, ectrunc, ecmin, ecmax, 
             ecdrifti, ecdriftf, drifttime)
+## Sinusoidal energy spread parameters
 esnu = 100.0
 esphase = 0.0
 esmax = 0.0
@@ -291,25 +295,19 @@ dist_z = SNSESpreadDist(ring_length, zmin, zmax, tailfraction,
 t0 = 0.000 # injection start time [s]
 t1 = n_inj_turns * seconds_per_turn # injection stop time [s]
 
-
-ring.set_fringe(switches['fringe'])
-dh_a11a = ring.getNodeForName('dh_a11a')
-dh_a11a.setUsageFringeFieldOUT(False)
-dh_a11b = ring.getNodeForName('dh_a11b')
-dh_a11b.setUsageFringeFieldIN(False)
-
-
+# Create vertical closed orbit bump.
 inj_controller = InjRegionController(ring, mass, kin_energy)
-
 if switches['orbit corrector bump']:
     inj_controller.bump_vertical_orbit(max_nfev=5000, verbose=2)
     
+# Set initial/final phase space coordinates at the foil.
 corrector_angles = inj_controller.get_corrector_angles()
 solver_kws = dict(max_nfev=2500, verbose=2)
 kicker_angles_t0 = inj_controller.set_coords_at_foil(inj_coords_t0, **solver_kws)
 kicker_angles_t1 = inj_controller.set_coords_at_foil(inj_coords_t1, **solver_kws)
 inj_controller.set_kicker_angles(kicker_angles_t0)
 
+# Create kicker waveforms
 ring.setLatticeOrder()
 amps_t0 = np.ones(8)
 amps_t1 = np.abs(kicker_angles_t1 / kicker_angles_t0)
@@ -361,15 +359,15 @@ if switches['collimator']:
 # RF cavities
 #------------------------------------------------------------------------------
 if switches['rf']:
-    ZtoPhi = 2.0 * math.pi / ring_length;
-    dESync = 0.0
-    RF1HNum = 1.0
-    RF1Voltage = +0.0000040 # [GV]
-    RF1Phase = 0.0
-    RF2HNum = 2.0
-    RF2Voltage = -0.0000040 # [GV]
-    RF2Phase = 0.0
-    length = 0.0
+    ZtoPhi = 2. * np.pi / ring_length;
+    dESync = 0.
+    RF1HNum = 1.
+    RF1Voltage = +0.000004 # [GV]
+    RF1Phase = 0.
+    RF2HNum = 2.
+    RF2Voltage = -0.000004 # [GV]
+    RF2Phase = 0.
+    length = 0.
     rf1_node = RFNode.Harmonic_RFNode(ZtoPhi, dESync, RF1HNum, RF1Voltage, 
                                       RF1Phase, length, "RF1")
     rf2_node = RFNode.Harmonic_RFNode(ZtoPhi, dESync, RF2HNum, RF2Voltage, 
@@ -468,9 +466,9 @@ if switches['longitudinal impedance']:
         zimag = zk.imag / 1.75 + zrf.imag
         Z.append(complex(zreal, zimag))
 
-    impedancenode = LImpedance_Node(length, min_n_macros, n_bins)
-    impedancenode.assignImpedance(Z)
-    addImpedanceNode(ring, position, impedancenode)
+    long_imp_node = LImpedance_Node(length, min_n_macros, n_bins)
+    long_imp_node.assignImpedance(Z)
+    addImpedanceNode(ring, position, long_imp_node)
     
     
 # Transverse impedance
@@ -489,7 +487,7 @@ if switches['transverse impedance']:
     betaY = 10.447
 
     Hahn_in = open("_input/HahnImpedance.dat", "r")
-    Hahn_out = open("Hahn_Imp", "w")
+    Hahn_out = open("_output/data/Hahn_Imp.dat", "w")
 
     INDEX = []
     ZP = []
@@ -517,20 +515,21 @@ if switches['transverse impedance']:
 
     useX = 1
     useY = 1
-    impedancenode = TImpedance_Node(length, nMacrosMin, nBins, useX, useY)
-    impedancenode.assignLatFuncs(qX, alphaX, betaX, qY, alphaY, betaY)
+    trans_imp_node = TImpedance_Node(length, nMacrosMin, nBins, useX, useY)
+    trans_imp_node.assignLatFuncs(qX, alphaX, betaX, qY, alphaY, betaY)
     if useX != 0:
-        impedancenode.assignImpedance('X', ZP, ZM)
+        trans_imp_node.assignImpedance('X', ZP, ZM)
     if useY != 0:
-        impedancenode.assignImpedance('Y', ZP, ZM)
-    addImpedanceNode(ring, position, impedancenode)
+        trans_imp_node.assignImpedance('Y', ZP, ZM)
+    addImpedanceNode(ring, position, trans_imp_node)
+    
+    Hahn_out.close()
+    Hahn_in.close()
 
     
 # Space charge
 #------------------------------------------------------------------------------
-if switches['space charge']:
-    
-    # Longitudinal
+if switches['longitudinal space charge']:
     b_a = 10.0 / 3.0
     length = ring_length
     use_spacecharge = 1
@@ -545,21 +544,22 @@ if switches['space charge']:
     sc_node_long.assignImpedance(Z)
     addLongitudinalSpaceChargeNode(ring, position, sc_node_long)
 
-    # Transverse
+if switches['transverse space charge']:
     ring.split(1.0) # at most 1 meter separation between calculations
     n_boundary_pts = 128
     n_free_space_modes = 32
     r_boundary = 0.22
+    geometry = 'Circle'
     boundary = Boundary2D(n_boundary_pts, n_free_space_modes, 
-                          'Circle', r_boundary, r_boundary)
+                          geometry, r_boundary, r_boundary)
     sc_path_length_min = 0.00000001
-    if switches['space charge'] == '2.5D':
-        grid_size = (128, 128, 128) 
+    if switches['transverse space charge'] == '2.5D':
+        grid_size = (128, 128, 64) 
         sc_calc = SpaceChargeCalc2p5D(*grid_size)
         sc_nodes_trans = sc2p5d.scLatticeModifications.setSC2p5DAccNodes(
             ring, sc_path_length_min, sc_calc, boundary
         )
-    elif switches['space charge'] == 'sliced':
+    elif switches['transverse space charge'] == 'sliced':
         grid_size = (128, 128, 64) 
         sc_calc = SpaceChargeCalcSliceBySlice2D(*grid_size)
         sc_nodes_trans = sc2dslicebyslice.scLatticeModifications.setSC2DSliceBySliceAccNodes(
@@ -583,28 +583,9 @@ tunes.assignTwiss(9.19025, -1.78574, -0.000143012, -2.26233e-05, 8.66549, 0.5382
 addTeapotDiagnosticsNode(ring, 51.1921, tunes)
 print('hi')
 
+
 # Run simulation
 #------------------------------------------------------------------------------
-ring.set_fringe(switches['fringe'])
-dh_a11a = ring.getNodeForName('dh_a11a')
-dh_a11a.setUsageFringeFieldOUT(False)
-dh_a11b = ring.getNodeForName('dh_a11b')
-dh_a11b.setUsageFringeFieldIN(False)
-
-# Turn off fringe fields in injection region.
-# if switches['turn off injection fringe']:
-#     inj_quad_names = ['qtv_a12', 'qth_a13', 'qth_a10', 'qtv_a11']
-#     inj_bend_names = ['dh_a12', 'dh_a13', 'dh_a10', 'dh_a11b', 'dh_a11a']
-#     for quad_name in inj_quad_names:
-#         quad_node = ring.getNodeForName(quad_name)
-#         quad_node.setUsageFringeFieldIN(False)
-#         quad_node.setUsageFringeFieldOUT(False)
-#     for name in inj_bend_names:
-#         node = ring.getNodeForName(name)
-#         node.setUsageFringeFieldIN(False)
-#         node.setUsageFringeFieldOUT(False)
-
-
 print('Painting...')
 for _ in trange(n_inj_turns):
     ring.trackBunch(bunch, params_dict)
@@ -635,8 +616,8 @@ ring = TEAPOT_Lattice()
 ring.readMADX(madx_file, madx_seq)
 ring.set_fringe(switches['fringe'])
 dh_a11a = ring.getNodeForName('dh_a11a')
-dh_a11a.setUsageFringeFieldOUT(False)
 dh_a11b = ring.getNodeForName('dh_a11b')
+dh_a11a.setUsageFringeFieldOUT(False)
 dh_a11b.setUsageFringeFieldIN(False)
 ring.split(0.01)
 inj_controller = InjRegionController(ring, mass, kin_energy)
@@ -671,8 +652,9 @@ file.write('inj_coords_t0 = ({}, {}, {}, {})\n'.format(*inj_coords_t0))
 file.write('inj_coords_t1 = ({}, {}, {}, {})\n'.format(*inj_coords_t1))
 file.write('X_FOIL = {}\n'.format(X_FOIL))
 file.write('Y_FOIL = {}\n'.format(X_FOIL))
-file.write('n_long_slices = {}\n'.format(n_long_slices))
-file.write('grid_size = ({}, {}, {})\n'.format(*grid_size))
+if switches['longitudinal space charge']:
+    file.write('n_long_slices_1D = {}\n'.format(n_long_slices))
+    file.write('grid_size = ({}, {}, {})\n'.format(*grid_size))
 file.write('RF1Voltage = {} [GV]\n'.format(RF1Voltage))
 file.write('RF2Voltage = {} [GV]\n'.format(RF2Voltage))
 file.close()
