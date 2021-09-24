@@ -199,136 +199,18 @@ def set_share_axes(axes, sharex=False, sharey=False, type_if_1D='row'):
     if sharey:
         hide_axis_labels(axes[:, 1:].flat, 'y')
         
-        
-# def setup_corner(
-#     limits=(1, 1), figsize=None, norm_labels=False, units=None, space=None,
-#     plt_diag=False, dims='all', tick_kws={}, tickm_kws={}, label_kws={}
-# ):
-#     """Set up lower left corner of scatter plot matrix. A 4D example:
-
-#         X O O O
-#         X X O O
-#         X X X O
-#         X X X X
-    
-#     Inputs
-#     ------
-#     limits : (umax, upmax)
-#         The maximum position (umax) and slope (upmax) in the plot windows. All
-#         plot windows are made square, so xmax = ymax = -xmin = -ymax = umax, and
-#         and xpmax = ypmax = -xpmin = -ypmin = upmax. Alternatively, (umin, umax)
-#         or (upmin, upmax) can be passed. Or pass [(xmin, xmax), (xpmin, xpmax),
-#         (ymin, ymax), (ypmin, ypmax)]. 
-#     figsize : tuple or int
-#         Size of the figure (x_size, y_size). If an int is provided, the number
-#         is used as the size for both dimensions.
-#     norm_labels : boolean
-#         If True, add an 'n' subscript to axis labels. E.g. 'x' -> 'x_n'
-#     units : str
-#         If `m-rad` or `mm-mrad`, the appropriat units are attached to each
-#         axis label (such as x [mm] or x' [mrad]). Otherwise no units are
-#         displayed.
-#     space : float
-#         Size of the space between subplots. If None, the `tight_layout`
-#         optimizer is used to determined the spacing.
-#     plt_diag : bool
-#         Whether to include the subplots on the diagonal (4x4 vs. 3x3).
-#     dims : str or tuple
-#         If 'all', plot all 6 phase space projections. Otherwise provide a tuple
-#         like ('x', 'yp') which plots x vs. y'.
-#     tick_kws : dict
-#         Key word arguments for ax.tick_params.
-#     tickm_kws : dict
-#         Key word arguments for ax.tick_params (minor ticks).
-#     label_kws : dict
-#         Key word arguments for axis labels.
-
-#     Returns
-#     -------
-#     fig, axes
-#     """
-#     # Preliminaries
-#     if figsize is None:
-#         if dims == 'all':
-#             figsize = 6.0 if plt_diag else 5.0
-#         else:
-#             figsize = 3.0
-#     if type(figsize) in [float, int]:
-#         figsize = (figsize, figsize)
-        
-#     def unpack(item):
-#         if type(item) in [list, tuple, np.ndarray]:
-#             lo, hi = item
-#         else:
-#             lo, hi = -item, item
-#         return lo, hi
-        
-#     if len(limits) == 2:
-#         umin, umax = unpack(limits[0])
-#         upmin, upmax = unpack(limits[1])
-#         limits = 2 * [(umin, umax), (upmin, upmax)]
-                
-#     labels = get_labels(units, norm_labels)
-    
-#     if dims != 'all': # only 2 variables plotted
-#         fig, ax = plt.subplots(figsize=figsize)
-#         despine(ax)
-#         j, i = [var_indices[dim] for dim in dims]
-#         ax.set_xlim(limits[j])
-#         ax.set_ylim(limits[i])
-#         ax.set_xlabel(labels[j], **label_kws)
-#         ax.set_ylabel(labels[i], **label_kws)
-#         ax.tick_params(**tick_kws)
-#         ax.tick_params(which='minor', **tick_kws)
-#         return fig, ax
-    
-#     nrows = ncols = 4 if plt_diag else 3
-#     sharey = False if plt_diag else 'row'
-#     fig, axes = plt.subplots(nrows, ncols, figsize=figsize,
-#                              sharex='col', sharey=sharey)
-#     l_col, b_row, diag = axes[:, 0], axes[-1, :], axes.diagonal()
-#     if space is None:
-#         fig.subplots_adjust(wspace=space, hspace=space)
-#     make_lower_triangular(axes)
-#     despine(axes.flat, ('top', 'right'))
-    
-#     # Configure axis sharing
-#     if plt_diag:
-#         l_col = l_col[1:]
-#         for i, row in enumerate(axes[1:, :]): # share scatter plot y axis
-#             set_share_axes(row[:i+1], sharey=True)
-#         set_share_axes(diag, sharey=True) # share histogram y axis
-#         # Don't show y-axis on histogram subplots
-#         despine(diag, 'left')
-#         toggle_grid(diag, 'off')
-#     else:
-#         for row in axes:
-#             set_share_axes(row, sharey=True)
-
-#     # Set axis limits, labels, and ticks
-#     set_labels(b_row, labels, 'xlabel', **label_kws)
-#     set_labels(l_col, labels[1:], 'ylabel', **label_kws)
-#     fig.align_labels()
-#     set_limits(b_row, limits, 'x')
-#     set_limits(l_col, limits[1:], 'y')
-#     for ax in axes.flat:
-#         ax.tick_params(**tick_kws)
-#     if space is None:
-#         plt.tight_layout(rect=[0, 0, 1.025, 0.975])
-#     return fig, axes
-
 
 def process_limits(mins, maxs, pad=0., zero_center=False):
     # Same limits for x/y and x'/y'
     widths = np.abs(mins - maxs)
-    for (i, j) in zip([0, 1], [2, 3]):
+    for (i, j) in [[0, 2], [1, 3]]:
         delta = 0.5 * (widths[i] - widths[j])
         if delta < 0.:
-            mins[i] -= delta
-            maxs[i] += delta
+            mins[i] -= abs(delta)
+            maxs[i] += abs(delta)
         elif delta > 0.:
-            mins[j] -= delta
-            maxs[j] += delta
+            mins[j] -= abs(delta)
+            maxs[j] += abs(delta)
     # Pad the limits.
     deltas = 0.5 * np.abs(maxs - mins) * pad
     mins -= deltas
@@ -842,7 +724,8 @@ def rms_ellipses(Sigmas, figsize=(5, 5), pad=0.5, axes=None,
         xp2_max, yp2_max = np.max(Sigmas[:, 1, 1]), np.max(Sigmas[:, 3, 3])
         umax = (1 + pad) * np.sqrt(max(x2_max, y2_max))
         upmax = (1 + pad) * np.sqrt(max(xp2_max, yp2_max))
-        fig, axes = setup_corner((umax, upmax), figsize, units='mm-mrad')
+        limits = 2 * [(-umax, umax), (-upmax, upmax)]
+        fig, axes = pair_grid_nodiag(4, figsize, limits, constrained_layout=False)
 
     colors = None
     if len(Sigmas) > 1 and cmap is not None:
@@ -927,10 +810,71 @@ def pair_grid(
         ax.tick_params(**tick_kws)
         
     return fig, axes
-    
 
+
+
+def pair_grid_nodiag(
+    n_dims, figsize=None, limits=None, space=None, spines=False,
+    labels=None, label_kws=None, tick_kws=None, 
+    constrained_layout=True
+):
+    fig, axes = plt.subplots(n_dims - 1, n_dims - 1, figsize=figsize, 
+                             sharex='col', sharey='row', 
+                             constrained_layout=constrained_layout)
+    if not constrained_layout:
+        fig.subplots_adjust(wspace=space, hspace=space)
+    make_lower_triangular(axes)
+    if not spines:
+        despine(axes.flat, ('top', 'right'))
+        
+    lcol, brow = axes[:, 0], axes[-1, :]
+
+    # Limits
+    if limits is not None:
+        set_limits(brow, limits, 'x')
+        set_limits(lcol, limits[1:], 'y')
+
+    # Labels
+    if label_kws is None:
+        label_kws = dict()
+    label_kws.setdefault('fontsize', 'medium')
+    if labels:
+        set_labels(brow, labels, 'xlabel', **label_kws)
+        set_labels(lcol, labels[1:], 'ylabel', **label_kws)
+
+    # Ticks
+    if tick_kws is None:
+        tick_kws  = dict()
+    tick_kws.setdefault('labelsize', 'small')
+    fig.align_labels()
+    for ax in axes.flat:
+        ax.tick_params(**tick_kws)
+        
+    return fig, axes
+
+
+
+def get_bin_centers(bin_edges):
+    """Get bin centers assuming evenly spaced bins."""
+    return bin_edges[:-1] + 0.5 * np.diff(bin_edges)
     
-def corner(X, figsize=None, limits=None):
+    
+def corner(X, figsize=None, kind='hist', limits=None, pad=0., bins=50, hist_height_frac=0.6, 
+           diag_kws=None, **plot_kws):
+    
+    if kind =='scatter' or kind == 'scatter_density':
+        plot_kws.setdefault('s', 3)
+        plot_kws.setdefault('c', 'black')
+        plot_kws.setdefault('marker', '.')
+        plot_kws.setdefault('ec', 'none')
+        plot_kws.setdefault('zorder', 5)
+    elif kind == 'hist':
+        plot_kws.setdefault('cmap', 'dusk_r')
+    if diag_kws is None:
+        diag_kws = dict()
+    diag_kws.setdefault('histtype', 'step')
+    diag_kws.setdefault('bins', 'auto')
+    diag_kws.setdefault('color', 'black')
 
     n_dims = X.shape[1]
     
@@ -944,7 +888,6 @@ def corner(X, figsize=None, limits=None):
     label_kws = None
     tick_kws = None
     
-    pad = 0.
     zero_center = False
     if limits is None:
         limits = auto_limits(X, pad, zero_center)
@@ -953,26 +896,23 @@ def corner(X, figsize=None, limits=None):
                           space=space, spines=spines, labels=labels, 
                           label_kws=label_kws, tick_kws=tick_kws)
 
-    diag_kws = dict(histtype='step', bins='auto', color='black')
     for i, ax in enumerate(axes.diagonal()):
         ax.hist(X[:, i], range=limits[i], **diag_kws)
         
-    # Reduce height of 1D histograms. These axes already share y axis.
-    hist_height_frac = 0.8
-    ax.set_ylim(ax.get_ylim()[1] / hist_height_frac)
-
-    plot_kws = dict(bins=50, cmap='dusk_r')
     for i in range(1, len(axes)):
         for j in range(i):
             ax = axes[i, j]
-            plot_kws['range'] = (limits[j], limits[i])
-            ax.hist2d(X[:, j], X[:, i], **plot_kws)        
-
+            x, y = X[:, j], X[:, i]
+            if kind == 'scatter':
+                ax.scatter(x, y, **plot_kws)
+            elif kind == 'hist':
+                ax.hist2d(x, y, bins, (limits[j], limits[i]), **plot_kws)                
+           
+    # Reduce height of 1D histograms. 
     max_hist_height = 0.
     for ax in axes.diagonal():
         max_hist_height = max(max_hist_height, ax.get_ylim()[1])
-    hist_height_fac = 0.8
-    max_hist_height /= hist_height_fac
+    max_hist_height /= hist_height_frac
     for ax in axes.diagonal():
         ax.set_ylim(0, max_hist_height)
         

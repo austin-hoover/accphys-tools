@@ -26,6 +26,7 @@ from .plotting import auto_n_bins_4D
 from .plotting import remove_annotations
 from .plotting import vector
 from .plotting import var_indices
+from .plotting import get_bin_centers
 from .utils import rand_rows
 
 
@@ -688,13 +689,6 @@ def corner_onepart(
 
 
 
-def get_bin_centers(bin_edges):
-    """Get bin centers assuming evenly spaced bins."""
-    return bin_edges[:-1] + 0.5 * np.diff(bin_edges)
-
-
-
-
 
 def auto_limits_global(coords, pad=0., zero_center=False):
     mins = np.min([np.min(X, axis=0) for X in coords], axis=0)
@@ -797,14 +791,14 @@ def corner(
         xpos_list_2D.append(xpos)
         ypos_list_2D.append(ypos)
         
-    # Keep max colormap global max height for each 2D histogram.
+    # Compute global max height for each 2D histogram.
     max_heights = np.zeros((n_dims, n_dims))
     for frame in range(n_frames):
         for i in range(1, n_dims):
             for j in range(i + 1):
                 H = heights_list_2D[frame][i, j]
                 max_heights[i, j] = max(np.max(H), max_heights[i, j])
-              
+                              
     del diag_kws['bins']
     del plot_kws['bins']
     plot_kws.setdefault('shading', 'auto')
@@ -821,7 +815,7 @@ def corner(
         # Off-diagonal plots
         artists = []
         for i in range(1, n_dims):
-            for j in range(i + 1):
+            for j in range(i):
                 ax = axes[i, j]
                 x = xpos_list_2D[t][i, j]
                 y = ypos_list_2D[t][i, j]
