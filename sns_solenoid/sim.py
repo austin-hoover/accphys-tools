@@ -39,8 +39,8 @@ n_parts = 10000
 
 # Lattice
 madx_file = '_input/SNSring_nux6.18_nuy6.18_solenoid.lat'
-madx_file_nosolenoid = '_input/SNSring_nux6.24_nuy6.15.lat'
-# madx_file_nosolenoid = '_input/SNSring_nux6.18_nuy6.18.lat'
+# madx_file_nosolenoid = '_input/SNSring_nux6.24_nuy6.15.lat'
+madx_file_nosolenoid = '_input/SNSring_nux6.18_nuy6.18.lat'
 madx_seq = 'rnginj'
 
 switches = {
@@ -50,8 +50,9 @@ switches = {
 
 # Initial beam
 mode = 1
-eps_l = 50e-6 # nonzero intrinsic emittance = eps_x + eps_y
-eps_x_frac = 0.5 # eps_x / eps_l
+eps_l = 20e-6 # nonzero intrinsic emittance = eps_x + eps_y
+eps_linac = 0.2e-6
+eps_x_frac = 1.0 - (eps_linac / (0.5 * eps_l)) # eps_x / eps_l
 nu = np.radians(90) # x-y phase difference
 
 # Space charge solver
