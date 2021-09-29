@@ -802,6 +802,14 @@ def corner(
     del diag_kws['bins']
     del plot_kws['bins']
     plot_kws.setdefault('shading', 'auto')
+    
+#     # Create array of Line2D objects.
+#     plot_kws = dict(marker='o', markeredgecolor='none', color='black', ms=0.02)
+#     lines = [[] for _ in range(n_dims)]
+#     for i in range(n_dims):
+#         for j in range(i):
+#             line, = axes[i, j].plot([], [], **plot_kws)
+#             lines[i].append(line)    
                     
     def update(t):
         """Animation function to be called sequentially."""
@@ -824,6 +832,12 @@ def corner(
                 qmesh = ax.pcolormesh(x, y, H.T, **plot_kws)
                 artists.append(qmesh)
         artists_list.append(artists)
+        
+#         # Off-diagonal plots
+#         X = coords[t]
+#         for i in range(1, n_dims):
+#             for j in range(i):
+#                 lines[i][j].set_data(X[:, j], X[:, i])
                     
         # Diagonal plots
         for i, ax in enumerate(axes.diagonal()):
