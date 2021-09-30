@@ -804,12 +804,16 @@ def corner(
     plot_kws.setdefault('shading', 'auto')
     
 #     # Create array of Line2D objects.
-#     plot_kws = dict(marker='o', markeredgecolor='none', color='black', ms=0.02)
+#     plot_kws = dict(marker='o', lw=0, markeredgecolor='none', color='black', ms=0.3)
 #     lines = [[] for _ in range(n_dims)]
 #     for i in range(n_dims):
 #         for j in range(i):
 #             line, = axes[i, j].plot([], [], **plot_kws)
-#             lines[i].append(line)    
+#             lines[i].append(line)  
+#     histlines = []
+#     for i in range(4):
+#         line, = axes[i, i].plot([], [], color='black')
+#         histlines.append(line)
                     
     def update(t):
         """Animation function to be called sequentially."""
@@ -843,6 +847,7 @@ def corner(
         for i, ax in enumerate(axes.diagonal()):
             pos = pos_list_1D[t][i]
             heights = heights_list_1D[t][i] 
+#             histlines[i].set_data(pos, heights)
             _, _, artists = ax.hist(pos, len(pos), weights=heights, **diag_kws)
             artists_list.append(artists)
 

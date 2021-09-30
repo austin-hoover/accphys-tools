@@ -714,7 +714,7 @@ def ellipse(ax, c1, c2, angle=0.0, center=(0, 0), **plt_kws):
 
 
 def rms_ellipses(Sigmas, figsize=(5, 5), pad=0.5, axes=None, 
-                 cmap=None, cmap_range=(0, 1), **plt_kws):
+                 cmap=None, cmap_range=(0, 1), centers=None, **plt_kws):
     """Plot rms ellipse parameters directly from covariance matrix."""
     Sigmas = np.array(Sigmas)
     if Sigmas.ndim == 2:
@@ -731,6 +731,9 @@ def rms_ellipses(Sigmas, figsize=(5, 5), pad=0.5, axes=None,
     if len(Sigmas) > 1 and cmap is not None:
         start, end = cmap_range
         colors = [cmap(i) for i in np.linspace(start, end, len(Sigmas))]
+        
+    if centers is None:
+        centers = 4 * [0.0]
     
     dims = {0:'x', 1:'xp', 2:'y', 3:'yp'}
     for l, Sigma in enumerate(Sigmas):
@@ -739,7 +742,9 @@ def rms_ellipses(Sigmas, figsize=(5, 5), pad=0.5, axes=None,
                 angle, c1, c2 = rms_ellipse_dims(Sigma, dims[j], dims[i + 1])
                 if colors is not None:
                     plt_kws['color'] = colors[l]
-                ellipse(axes[i, j], c1, c2, angle, **plt_kws)
+                xcenter = centers[j]
+                ycenter = centers[i + 1]
+                ellipse(axes[i, j], c1, c2, angle, center=(xcenter, ycenter), **plt_kws)
     return axes
 
 
@@ -856,7 +861,7 @@ def pair_grid_nodiag(
 
 def get_bin_centers(bin_edges):
     """Get bin centers assuming evenly spaced bins."""
-    return bin_edges[:-1] + 0.5 * np.diff(bin_edges)
+    return 0.5 * (bin_edges[:-1] + bin_edges[1:])
     
     
 def corner(X, figsize=None, kind='hist', limits=None, pad=0., bins=50, hist_height_frac=0.6, 
@@ -870,6 +875,7 @@ def corner(X, figsize=None, kind='hist', limits=None, pad=0., bins=50, hist_heig
         plot_kws.setdefault('zorder', 5)
     elif kind == 'hist':
         plot_kws.setdefault('cmap', 'dusk_r')
+        plot_kws.setdefault('shading', 'auto')
     if diag_kws is None:
         diag_kws = dict()
     diag_kws.setdefault('histtype', 'step')
@@ -906,7 +912,10 @@ def corner(X, figsize=None, kind='hist', limits=None, pad=0., bins=50, hist_heig
             if kind == 'scatter':
                 ax.scatter(x, y, **plot_kws)
             elif kind == 'hist':
-                ax.hist2d(x, y, bins, (limits[j], limits[i]), **plot_kws)                
+                H, xedges, yedges = np.histogram2d(X[:, j], X[:, i], bins, (limits[j], limits[i]))
+                xcenters = get_bin_centers(xedges)
+                ycenters = get_bin_centers(yedges)
+                ax.pcolormesh(xcenters, ycenters, H.T, **plot_kws)                
            
     # Reduce height of 1D histograms. 
     max_hist_height = 0.
