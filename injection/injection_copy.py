@@ -1,4 +1,15 @@
-"""Transport a beam through the RTBT and store the coordinates at the wire-scanners/target."""
+"""Simulation of injection in the SNS ring.
+
+NOTES
+--------------------------------------------------------------------------------
+1. Do not use transverse impedance calculation unless a sliced space charge 
+   model is used. 
+2. If fringe fields are to be turned on in the simulation, then they must be
+   turned on when optimizing the injection region magnets to obtain certain
+3. Need to be careful about space charge model when RF voltages are changed. 
+   If longitudinal profile has two peaks, the horizontal distribution becomes
+   hollow at certain points along the beam line when using the 2.5D solver.
+""" 
 from __future__ import print_function
 import sys
 from pprint import pprint
@@ -62,7 +73,6 @@ from orbit.time_dep.waveforms import ConstantWaveform
 from orbit.time_dep.waveforms import LinearWaveform
 from orbit.utils import helper_funcs as hf
 from orbit.utils.consts import speed_of_light
-from orbit.utils.general import load_stacked_arrays
 from orbit.utils.general import save_stacked_array
 from orbit.utils.general import delete_files_not_folders
 
@@ -72,40 +82,66 @@ from helpers import get_part_coords
 from helpers import InjRegionController
 
 
-# Settings
+# Switches
+#------------------------------------------------------------------------------
+switches = {
+    'orbit corrector bump': True,
+    'equal emittances': False,
+    'solenoid': False,
+    'fringe': True,
+    'transverse space charge': 'sliced', # {'2.5D', 'sliced', False}
+    'longitudinal space charge': True,
+    'transverse impedance': True,
+    'longitudinal impedance': True,
+    'foil scattering': True,
+    'rf': True,
+    'collimator': True,
+}
+
+print('Switches:')
+pprint(switches)
+
+
 madx_file = '_input/SNSring_nux6.18_nuy6.18_foilinbend.lat'
 madx_seq = 'rnginj'
+X_FOIL = 0.0486 # [m]
+Y_FOIL = 0.0460 # [m]
 kin_energy = 0.8 # [GeV]
 mass = 0.93827231 # [GeV/c^2]
+bunch_length_frac = (30.0 / 64.0) 
 
 
-# Lattice setup
-ring = time_dep.TIME_DEP_Lattice()
-ring.readMADX(madx_file, madx_seq)
-ring.set_fringe(False)
-ring.initialize()
-ring = hf.get_sublattice(ring, None, 'rtbt_start')
-        
-        
-print('Loading bunch coordinates.')
-coords = load_stacked_arrays('_saved/fringe_included/init(0,0,0,0)_final(21,0,0,1.1)_500turns_intensityperturn=1.5e11_fringe=ON_sol=OFF_lsc=ON_tsc=sliced_timp=OFF_limp=ON_rf=5.03kV-6.07kV_E=0.8GeV_bleng=30-64_500Kparts/data/coords.npz')
+    
+eps_l = 20e-6 # nonzero intrinsic emittance [m rad]
 
-turns = [0, 99, 199, 299, 399, 499]
+for n_inj_turns in [300, 400, 500]:
+    
+    
+    default_minipulse_intensity = 1.5e14 / 1000.
+    default_bunch_length_frac = (50.0 / 64.0)
+    minipulse_intensity = default_minipulse_intensity * (bunch_length_frac / default_bunch_length_frac)
+    intensity = minipulse_intensity * n_inj_turns
+    
+    
+    ring = TEAPOT_Lattice() # for envelope tracking
+    ring.readMADX(madx_file, madx_seq)
+    ring.set_fringe(False)
+    ring_length = ring.getLength()
 
-coords_new = []
-for turn in turns:
-    X = coords[turn]
-    X[:, :4] *= 0.001
-    bunch, params_dict = hf.initialize_bunch(mass, kin_energy)
-    for (x, xp, y, yp, z, dE) in X:
-        bunch.addParticle(x, xp, y, yp, z, dE)
-
-    print('Tracking bunch at turn {} to RTBT entrance.'.format(turn))
-    ring.trackBunch(bunch, params_dict)
-
-    X = analysis.bunch_coord_array(bunch)
-    coords_new.append(np.copy(X))
-
-print('Saving bunch coordinates.')
-save_stacked_array('_output/scratch/coords_new.npz', coords_new)
-
+    mode = 1
+    eps_x_frac = 0.5
+    ring_length = ring.getLength()
+    bunch_length = bunch_length_frac * ring_length
+    bunch_length = (bunch_length / ring_length) * ring_length
+    env = DanilovEnvelope(eps_l, mode, eps_x_frac, mass, kin_energy, bunch_length)
+    env.set_intensity(intensity)
+    
+    bunch_length = bunch_length_frac * ring_length
+    max_solver_spacing = 1.0
+    env_solver_nodes = set_env_solver_nodes(ring, env.perveance, max_solver_spacing)
+    
+    env.match(ring, env_solver_nodes, method='lsq', verbose=2)
+    print('n_inj_turns = {}'.format(n_inj_turns))
+    env.print_twiss2D()
+    env.print_twiss4D()
+    print()

@@ -20,6 +20,7 @@ def get_part_coords(bunch):
 def track_part(lattice, init_coords, mass, kin_energy):
     """Return coords after tracking single particle through lattice."""
     bunch, params_dict = hf.initialize_bunch(mass, kin_energy)
+    params_dict['lostbunch'] = Bunch() # for apertures
     x, xp, y, yp = init_coords
     bunch.addParticle(x, xp, y, yp, 0.0, 0.0)
     lattice.trackBunch(bunch, params_dict)
@@ -29,6 +30,7 @@ def track_part(lattice, init_coords, mass, kin_energy):
 def get_traj(lattice, init_coords, mass, kin_energy):
     """Return single particle trajectory through lattice."""
     bunch_, params_dict_ = hf.initialize_bunch(mass, kin_energy)
+    params_dict_['lostbunch'] = Bunch() # for apertures
     x, xp, y, yp = init_coords
     bunch_.addParticle(x, xp, y, yp, 0.0, 0.0)
     monitor_nodes = add_analysis_nodes(BunchMonitorNode, lattice, dense=True, 
@@ -71,7 +73,7 @@ class InjRegionController:
         self.min_kicker_angles *= self.kin_energy_scale_factor
         self.max_kicker_angles *= self.kin_energy_scale_factor
         
-        artificial_kicker_angle_increase_factor = 1.0
+        artificial_kicker_angle_increase_factor = 2.0
         if artificial_kicker_angle_increase_factor != 1.0:
             print('Artificially increasing kicker strength by factor {}'
                   .format(artificial_kicker_angle_increase_factor))
