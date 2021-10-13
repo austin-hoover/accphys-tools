@@ -1265,7 +1265,7 @@ addTeapotDiagnosticsNode(ring, 51.1921, tunes)
 print('Painting...')
 for t in trange(n_inj_turns):
     ring.trackBunch(bunch, params_dict)
-    if (t % 100 == 0) or (t == len(n_inj_turns) - 1):
+    if (t % 100 == 0) or (t == n_inj_turns - 1):
         bunch.dumpBunch('_output/data/bunch_turn={}.dat'.format(t)) 
 
 print('Stored turns...')
