@@ -6,6 +6,7 @@ angles to skimage.
 from tqdm import trange
 from tqdm import tqdm
 import numpy as np
+from scipy.interpolate import griddata
 from skimage.transform import iradon
 from skimage.transform import iradon_sart
 
@@ -113,3 +114,44 @@ def rec4D(S, muxx, muyy, n_bins, method='SART', keep_positive=False,
             Z[r, s, :, :] = rfunc(D[:, :, r, s], muyy, **kws)
             
     return process(Z, keep_positive, density, limits)
+
+
+def transform(Z, V, *xi):
+    """Apply a linear transformation to a distribution.
+    
+    Parameters
+    ----------
+    Z : ndarray, shape (len(x1), ..., len(xn))
+         The distribution function in the original space.
+    V : ndarray, shape (len(xi),)
+        Matrix to transform the coordinates.
+    x1, x2,..., xn : array_like
+        1D arrays representing the coordinates in the original space.
+        
+    Returns
+    -------
+    Z : ndarray, shape (len(x1), ..., len(xn))
+        The distribution function in the original space. Linear interpolation
+        is used to fill in the gaps.
+    [x1, x2,..., xn] : array_like
+        1D arrays representing the coordinates in the transformed space.
+    """
+    def get_grid_coords(*xi):
+        return np.vstack([X.ravel() for X in np.meshgrid(*xi)]).T
+        
+    # Transform the grid coordinates.
+    coords = get_grid_coords(*xi)
+    coords_new = np.apply_along_axis(lambda row: np.matmul(V, row), 1, coords)
+    
+    # Define the interpolation coordinates.
+    mins = np.min(coords_new, axis=0)
+    maxs = np.max(coords_new, axis=0)
+    xi = [np.linspace(mins[i], maxs[i], Z.shape[i]) for i in range(len(mins))]
+    coords_int = get_grid_coords(*xi)
+    
+    # Interpolate Z on the new grid.
+    shape = Z.shape
+    Z = griddata(coords_new, Z.ravel(), coords_int, method='linear')
+    Z[np.isnan(Z)] = 0.0
+    Z = Z.reshape(shape)
+    return Z, xi
