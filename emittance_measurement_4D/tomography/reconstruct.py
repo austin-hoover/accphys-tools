@@ -67,7 +67,7 @@ def ment(projections, angles, **kws):
     raise NotImplementedError
 
 
-def rec4D(S, muxx, muyy, n_bins, method='SART', keep_positive=False, 
+def rec4D(S, muxx, muyy, method='SART', keep_positive=False, 
           density=False, limits=None, **kws):
     """4D reconstruction using method from Hock (2013).
     
@@ -86,28 +86,13 @@ def rec4D(S, muxx, muyy, n_bins, method='SART', keep_positive=False,
     
     K = len(muxx)
     L = len(muyy)
-    
-    # We first reconstruct a 3D projection of the 4D phase space. Consider one
-    # row of the beam image; the intensity along the row gives a 1D projection
-    # onto the $x$ plane for a vertical slice of the distribution. We have a 
-    # set of these 1D projections at different $\theta_k$, and we can use this 
-    # set to reconstruct the $x$-$x'$ distribution at this vertical slice. 
-    # This is then repeated at each slice to give $f(x, x', y) = 
-    # \int{f(x, x', y, y'}dy'$. We store this as an array $D$ such that 
-    # $D_{j,l,r,s}$ gives the density at $x = x_r$, $x' = x'_s$ for 
-    # $y = y_j$ and $\theta_y = \pi l / K$.         
+    n_bins = n_bins = S.shape[0]
+           
     D = np.zeros((n_bins, L, n_bins, n_bins))
     for j in trange(n_bins):
         for l in range(L):
             D[j, l, :, :] = rfunc(S[:, j, :, l], muxx, **kws)
-            
-    # We now do a similar thing in the vertical plane. Choose one bin in 
-    # reconstructed x-x' grid — (x_r, x'_s). At this bin, there is a set of 
-    # numbers that define a 1D projection onto the y axis. And we have one 
-    # such projection for each theta_y_l. Thus, the y-y' distribution can be 
-    # reconstruted at each bin in the reconstructed x-x' grid. We store this 
-    # as an array Z such that Z_{r,s,t,u} gives the density at x_r, x'_s,
-    # y_t, y'_u.
+
     Z = np.zeros((n_bins, n_bins, n_bins, n_bins))
     for r in trange(n_bins):
         for s in range(n_bins):
@@ -116,7 +101,13 @@ def rec4D(S, muxx, muyy, n_bins, method='SART', keep_positive=False,
     return process(Z, keep_positive, density, limits)
 
 
-def transform(Z, V, *xi):
+def get_grid_coords(*xi, indexing='ij'):
+    """Return array of shape (N, D), where N is the number of points on 
+    the grid and D is the number of dimensions."""
+    return np.vstack([X.ravel() for X in np.meshgrid(*xi, indexing='ij')]).T
+
+
+def transform(Z, V, grid, new_grid=None):
     """Apply a linear transformation to a distribution.
     
     Parameters
@@ -125,33 +116,35 @@ def transform(Z, V, *xi):
          The distribution function in the original space.
     V : ndarray, shape (len(xi),)
         Matrix to transform the coordinates.
-    x1, x2,..., xn : array_like
-        1D arrays representing the coordinates in the original space.
+    grid : list[array_like]
+        List of 1D arrays [x1, x2, ...] representing the bin centers in the 
+        original space.
+    new_grid : list[array_like] (optional)
+        List of 1D arrays [x1, x2, ...] representing the bin centers in the 
+        transformed space.
         
     Returns
     -------
     Z : ndarray, shape (len(x1), ..., len(xn))
         The distribution function in the original space. Linear interpolation
         is used to fill in the gaps.
-    [x1, x2,..., xn] : array_like
-        1D arrays representing the coordinates in the transformed space.
-    """
-    def get_grid_coords(*xi):
-        return np.vstack([X.ravel() for X in np.meshgrid(*xi)]).T
-        
+    new_grid : list[array_like] (optional)
+        List of 1D arrays [x1, x2, ...] representing the bin centers in the 
+        transformed space.
+    """        
     # Transform the grid coordinates.
-    coords = get_grid_coords(*xi)
+    coords = get_grid_coords(*grid)
     coords_new = np.apply_along_axis(lambda row: np.matmul(V, row), 1, coords)
-    
+        
     # Define the interpolation coordinates.
-    mins = np.min(coords_new, axis=0)
-    maxs = np.max(coords_new, axis=0)
-    xi = [np.linspace(mins[i], maxs[i], Z.shape[i]) for i in range(len(mins))]
-    coords_int = get_grid_coords(*xi)
+    if new_grid is None:
+        mins = np.min(coords_new, axis=0)
+        maxs = np.max(coords_new, axis=0)
+        new_grid = [np.linspace(mins[i], maxs[i], Z.shape[i]) for i in range(len(mins))]    
+    coords_int = get_grid_coords(*new_grid)
     
-    # Interpolate Z on the new grid.
-    shape = Z.shape
+    # Interpolate.
     Z = griddata(coords_new, Z.ravel(), coords_int, method='linear')
     Z[np.isnan(Z)] = 0.0
-    Z = Z.reshape(shape)
-    return Z, xi
+    Z = Z.reshape([len(xi) for xi in new_grid])
+    return Z, new_grid
