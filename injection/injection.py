@@ -1,3 +1,4 @@
+"""This module provides control of the SNS injection region."""
 from __future__ import print_function
 import time
 
