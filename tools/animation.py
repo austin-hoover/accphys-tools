@@ -15,6 +15,7 @@ import scipy
 from matplotlib import pyplot as plt, ticker
 from matplotlib import animation
 from matplotlib.patches import Ellipse, transforms
+from skimage import filters
 
 from .beam_analysis import get_ellipse_coords
 # from .plotting import setup_corner
@@ -690,9 +691,16 @@ def corner_onepart(
 
 
 
-def auto_limits_global(coords, pad=0., zero_center=False):
-    mins = np.min([np.min(X, axis=0) for X in coords], axis=0)
-    maxs = np.max([np.max(X, axis=0) for X in coords], axis=0)
+def auto_limits_global(coords, pad=0., zero_center=False, sigma=None):
+    if sigma is None:
+        mins = np.min([np.min(X, axis=0) for X in coords], axis=0)
+        maxs = np.max([np.max(X, axis=0) for X in coords], axis=0)
+    else:
+        means = np.mean([np.mean(X, axis=0) for X in coords], axis=0)
+        stds = np.max([np.std(X, axis=0) for X in coords], axis=0)
+        widths = 2.0 * sigma * stds
+        mins = means - 0.5 * widths
+        maxs = means + 0.5 * widths
     mins, maxs = process_limits(mins, maxs, pad, zero_center)
     return [(lo, hi) for lo, hi in zip(mins, maxs)]
 
@@ -701,13 +709,27 @@ def corner(
     coords, dims=None, 
     kind='hist',
     limits=None, pad=0., zero_center=False, space=0.1, figsize=None, 
-    skip=0, keep_last=False, hist_height_frac=1.0, 
+    skip=0, keep_last=False, 
+    hist_height_frac=1.0, 
+    sigma=None,
+    blur=None, 
+    global_cmap_norm=True,
+    static_n_bins=True,
     text_fmt='', text_vals=None, fps=1, 
-    diag_kws=None, text_kws=None, **plot_kws
-):        
+    diag_kws=None, text_kws=None, 
+    **plot_kws
+):     
     # Set default key word arguments
-    plot_kws.setdefault('cmap', 'dusk_r')
-    plot_kws.setdefault('bins', 50)
+    if kind == 'hist':
+        plot_kws.setdefault('cmap', 'mono_r')
+        plot_kws.setdefault('bins', 'auto')
+        plot_kws.setdefault('shading', 'auto')
+    elif kind == 'scatter':
+        plot_kws.setdefault('marker', 'o')
+        plot_kws.setdefault('lw', 0.)
+        plot_kws.setdefault('markeredgecolor', 'none')
+        plot_kws.setdefault('color', 'black')
+        plot_kws.setdefault('ms', 0.3)
     if diag_kws is None:
         diag_kws = dict()
     diag_kws.setdefault('color', 'black')
@@ -747,113 +769,113 @@ def corner(
     label_kws = None
     tick_kws = None
     if limits is None:
-        limits = auto_limits_global(coords, pad, zero_center)
+        limits = auto_limits_global(coords, pad, zero_center, sigma)
     fig, axes = pair_grid(n_dims, figsize=figsize, limits=limits, 
                           space=space, spines=spines, labels=labels, 
                           label_kws=label_kws, tick_kws=tick_kws)
     plt.close()
-    
-    # Compute 1D histograms at each frame.
-    heights_list_1D, pos_list_1D = [], []
-    for X in tqdm(coords):
-        pos_list_1D.append([])
-        heights_list_1D.append([])
+        
+    # Compute 1D projections at each frame.
+    n_frames = len(coords)    
+    heights_list_1D = [[] for _ in range(n_frames)]
+    n_bins_list_1D = [[] for _ in range(n_frames)]
+    for frame in trange(n_frames):
+        X = coords[frame]
         for i in range(n_dims):
-            heights, bin_edges = np.histogram(X[:, i], 'auto', limits[i])
-            heights_list_1D[-1].append(heights)
-            pos_list_1D[-1].append(get_bin_centers(bin_edges))
-            
-    # Keep ylim the same across frames for all 1D histograms.
-    max_height = 0
-    for i in range(n_frames):
-        for j in range(n_dims):
-            max_height = max(max_height, np.max(heights_list_1D[i][j]))
-    axes[0, 0].set_ylim(0, max_height / hist_height_frac)
-        
-    # Compute 2D histograms at each frame. 
-    heights_list_2D, xpos_list_2D, ypos_list_2D = [], [], []
-    n_bins = plot_kws['bins']
-    for X in tqdm(coords):
-        heights = np.zeros((n_dims, n_dims, n_bins, n_bins))
-        xpos = np.zeros((n_dims, n_dims, n_bins))
-        ypos = np.zeros((n_dims, n_dims, n_bins))
-        for i in range(1, n_dims):
-            for j in range(i + 1):  
-                H, xedges, yedges = np.histogram2d(
-                    X[:, j], X[:, i], 
-                    n_bins, 
-                    (limits[j], limits[i])
-                )
-                heights[i, j] = H
-                xpos[i, j] = get_bin_centers(xedges)
-                ypos[i, j] = get_bin_centers(yedges)
-        heights_list_2D.append(heights)
-        xpos_list_2D.append(xpos)
-        ypos_list_2D.append(ypos)
-        
-    # Compute global max height for each 2D histogram.
-    max_heights = np.zeros((n_dims, n_dims))
-    for frame in range(n_frames):
-        for i in range(1, n_dims):
-            for j in range(i + 1):
-                H = heights_list_2D[frame][i, j]
-                max_heights[i, j] = max(np.max(H), max_heights[i, j])
-                              
-    del diag_kws['bins']
-    del plot_kws['bins']
-    plot_kws.setdefault('shading', 'auto')
+            heights, edges = np.histogram(X[:, i], diag_kws['bins'], limits[i])
+            heights_list_1D[frame].append(heights)
+            n_bins_list_1D[frame].append(len(edges) - 1)
+    diag_kws.pop('bins')   
     
-#     # Create array of Line2D objects.
-#     plot_kws = dict(marker='o', lw=0, markeredgecolor='none', color='black', ms=0.3)
-#     lines = [[] for _ in range(n_dims)]
-#     for i in range(n_dims):
-#         for j in range(i):
-#             line, = axes[i, j].plot([], [], **plot_kws)
-#             lines[i].append(line)  
-#     histlines = []
-#     for i in range(4):
-#         line, = axes[i, i].plot([], [], color='black')
-#         histlines.append(line)
-                    
-    def update(t):
-        """Animation function to be called sequentially."""
+    # Option to keep the number of bins fixed.
+    n_bins_list_1D = np.array(n_bins_list_1D)
+    if static_n_bins is not None:
+        for j in range(n_dims):
+            if static_n_bins == 'mean':
+                n_bins_list_1D[:, j] = np.max(n_bins_list_1D[:, j])
+            elif static_n_bins == 'max':
+                n_bins_list_1D[:, j] = np.mean(n_bins_list_1D[:, j])
+            elif type(static_n_bins) in [int, float]:
+                n_bins_list_1D[:, j] = static_n_bins * np.max(n_bins_list_1D[:, j])
+                      
+    # Keep ylim the same across frames for all 1D projections.
+    max_height = 0
+    for frame in range(n_frames):
+        for i in range(n_dims):
+            max_height = max(max_height, np.max(heights_list_1D[frame][i]))
+    axes[0, 0].set_ylim(0, max_height / hist_height_frac)
+    
+    # Setup for 2D plots
+    if kind == 'hist':  
+        _bins = plot_kws.pop('bins')
+        # Compute 2D projections at each frame.
+        heights_list = [[[] for j in range(n_dims)] for i in range(n_dims)]
+        xcenters_list = [[[] for j in range(n_dims)] for i in range(n_dims)]
+        ycenters_list = [[[] for j in range(n_dims)] for i in range(n_dims)]       
+        for frame in trange(n_frames):
+            X = coords[frame]
+            for i in range(n_dims):
+                for j in range(n_dims):
+                    if _bins == 'auto':
+                        bins = (n_bins_list_1D[frame, j], n_bins_list_1D[frame, i])
+                    else:
+                        bins = _bins
+                    heights, xedges, yedges = np.histogram2d(X[:, j], X[:, i], bins, (limits[j], limits[i]))
+                    heights_list[i][j].append(heights)
+                    xcenters_list[i][j].append(get_bin_centers(xedges))
+                    ycenters_list[i][j].append(get_bin_centers(yedges))                    
+        # Compute global max height for each 2D projection.
+        max_heights = np.zeros((n_dims, n_dims))
+        for frame in range(n_frames):
+            for i in range(1, n_dims):
+                for j in range(i + 1):
+                    Z = heights_list[i][j][frame]
+                    max_heights[i, j] = max(np.max(Z), max_heights[i, j])   
+    elif kind == 'scatter':
+        lines = [[] for _ in range(n_dims)]
+        for i in range(n_dims):
+            for j in range(i):
+                line, = axes[i, j].plot([], [], **plot_kws)
+                lines[i].append(line)  
+
+    def update(frame):
         global artists_list
         for artists in artists_list:
             for artist in artists:
                 artist.remove()
         artists_list = []
-        remove_annotations(axes)
-                
-        # Off-diagonal plots
-        artists = []
-        for i in range(1, n_dims):
-            for j in range(i):
-                ax = axes[i, j]
-                x = xpos_list_2D[t][i, j]
-                y = ypos_list_2D[t][i, j]
-                H = heights_list_2D[t][i, j]
-                plot_kws['vmax'] = max_heights[i, j]
-                qmesh = ax.pcolormesh(x, y, H.T, **plot_kws)
-                artists.append(qmesh)
-        artists_list.append(artists)
+        remove_annotations(axes)  
         
-#         # Off-diagonal plots
-#         X = coords[t]
-#         for i in range(1, n_dims):
-#             for j in range(i):
-#                 lines[i][j].set_data(X[:, j], X[:, i])
-                    
+        X = coords[frame]
+                
         # Diagonal plots
         for i, ax in enumerate(axes.diagonal()):
-            pos = pos_list_1D[t][i]
-            heights = heights_list_1D[t][i] 
-#             histlines[i].set_data(pos, heights)
-            _, _, artists = ax.hist(pos, len(pos), weights=heights, **diag_kws)
+            heights, edges, artists = ax.hist(X[:, i], n_bins_list_1D[frame][i], **diag_kws)
             artists_list.append(artists)
+            
+        # Off-diagonal plots
+        if kind == 'hist':
+            artists = []
+            for i in range(1, n_dims):
+                for j in range(i):
+                    ax = axes[i, j]
+                    x = xcenters_list[i][j][frame]
+                    y = ycenters_list[i][j][frame]
+                    Z = heights_list[i][j][frame]
+                    if blur:
+                        Z = filters.gaussian(Z, sigma=blur)
+                    if global_cmap_norm:
+                        plot_kws['vmax'] = max_heights[i, j]
+                    qmesh = ax.pcolormesh(x, y, Z.T, **plot_kws)
+                    artists.append(qmesh)
+            artists_list.append(artists)
+        elif kind == 'scatter':
+            for i in range(1, n_dims):
+                for j in range(i):
+                    lines[i][j].set_data(X[:, j], X[:, i])
 
         # Display text
-        axes[1, 2].annotate(texts[t], xy=(0.35, 0), xycoords='axes fraction', 
-                            **text_kws)
+        axes[1, 2].annotate(texts[frame], xy=(0.35, 0), xycoords='axes fraction', **text_kws)
         
     # Call animator
     interval = 1000. / fps
