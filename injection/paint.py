@@ -23,9 +23,7 @@ NOTES
 2. If fringe fields are to be turned on in the simulation, then they must be
    turned on when optimizing the injection region magnets. 
    
-3. Need to be careful about space charge model when RF voltages are changed. 
-   If longitudinal profile has two peaks, the horizontal distribution becomes
-   hollow at certain points along the beam line when using the 2.5D solver.
+3. I've had trouble with the 2.5D solver.
 """ 
 from __future__ import print_function
 import sys
@@ -108,17 +106,18 @@ import injection as inj
 # Switches
 #------------------------------------------------------------------------------
 switches = {
-    'orbit corrector bump': False,
+    'energy spread': True,
+    'orbit corrector bump': True,
     'equal emittances': False,
     'solenoid': False,
-    'fringe': False,
-    'transverse space charge': False, # {'2.5D', 'sliced', False}
-    'longitudinal space charge': False,
-    'transverse impedance': False,
-    'longitudinal impedance': False,
-    'foil scattering': False,
+    'fringe': True,
+    'transverse space charge': 'sliced', # {'2.5D', 'sliced', False}
+    'longitudinal space charge': True,
+    'transverse impedance': True,
+    'longitudinal impedance': True,
+    'foil scattering': True,
     'rf': True,
-    'collimator': False,
+    'collimator': True,
 }
 
 print('Switches:')
@@ -133,11 +132,10 @@ X_FOIL = 0.0486 # [m]
 Y_FOIL = 0.0460 # [m]
 kin_energy = 0.8 # [GeV]
 mass = 0.93827231 # [GeV/c^2]
-n_inj_turns = 150
+n_inj_turns = 400
 n_stored_turns = 0
-bunch_length_frac = (43.0 / 64.0) 
-# macros_per_turn = int(500000 / n_inj_turns)
-macros_per_turn = 50
+bunch_length_frac = (45.0 / 64.0) 
+macros_per_turn = int(500000 / n_inj_turns)
 
 # Determine which turns to store the phase space coordinates. We can save
 # at two locations: the injection point (foil) and the RTBT entrance. 
@@ -155,10 +153,10 @@ inj_coords_t1 = np.array([
     X_FOIL - 0.031, # will be overridden if switches['equal emittances']
     0.0,
     Y_FOIL - 0.000,
-    -0.000,
+    -0.0011,
 ])
 
-# Assuming a minipulse intensity of 1.5e11, compute out the beam intensity.
+# Assuming a minipulse intensity of 1.5e11, compute the beam intensity.
 default_minipulse_intensity = 1.5e14 / 1000.
 default_bunch_length_frac = (50.0 / 64.0)
 minipulse_intensity = default_minipulse_intensity * (bunch_length_frac / default_bunch_length_frac)
@@ -166,6 +164,7 @@ intensity = minipulse_intensity * n_inj_turns
 macro_size = intensity / n_inj_turns / macros_per_turn
 print('Intensity = {:.3e}'.format(intensity))
 
+# Clear the output data folder.
 print("Removing data in '_output/data/' folder.")
 delete_files_not_folders('_output/data/')
 
@@ -228,8 +227,15 @@ inj_center_xp = 0.0
 inj_center_yp = 0.0
 order_x = 9.
 order_y = 9.
-eps_x_rms = 0.270e-6 # [m rad]
-eps_y_rms = 0.270e-6 # [m rad]
+# eps_x_rms = 0.270e-6 # [m rad]
+# eps_y_rms = 0.270e-6 # [m rad]
+eps_x_rms = 0.467e-6 # [m rad]
+eps_y_rms = 0.300e-6 # [m rad]
+alpha_x = -0.924 # [rad]
+# alpha_y = -0.5 # [rad]
+alpha_y = -1.0
+beta_x = 3.71 # [m/rad]
+beta_y = 4.86 # [m/rad]
 eps_x_lim = eps_x_rms * 2. * (order_x + 1.)
 eps_y_lim = eps_y_rms * 2. * (order_y + 1.)
 dist_x = JohoTransverse(order_x, alpha_x, beta_x, eps_x_lim, inj_center_x, inj_center_xp)
@@ -262,10 +268,16 @@ esphase = 0.0
 esmax = 0.0
 nulltime = 0.0
 esparams = (esnu, esphase, esmax, nulltime)
-dist_z = SNSESpreadDist(ring_length, zmin, zmax, tailfraction, 
-                        sync_part, 
-                        emean, esigma, etrunc, emin, emax, 
-                        ecparams, esparams)
+
+if switches['energy spread']:
+    dist_z = SNSESpreadDist(ring_length, zmin, zmax, tailfraction, 
+                            sync_part, 
+                            emean, esigma, etrunc, emin, emax, 
+                            ecparams, esparams)
+else:
+    eoffset = 0.0
+    deltaEfrac = 0.0
+    dist_z = UniformLongDist(zmin, zmax, sync_part, eoffset, deltaEfrac)
 
     
 # Apertures and displacements - injection chicane
@@ -1268,6 +1280,12 @@ file.write('inj_coords_t0 = ({}, {}, {}, {})\n'.format(*inj_coords_t0))
 file.write('inj_coords_t1 = ({}, {}, {}, {})\n'.format(*inj_coords_t1))
 file.write('X_FOIL = {}\n'.format(X_FOIL))
 file.write('Y_FOIL = {}\n'.format(Y_FOIL))
+file.write('inj beta_x = {} [m/rad]\n'.format(beta_x))
+file.write('inj beta_y = {} [m/rad]\n'.format(beta_y))
+file.write('inj alpha_x = {} [rad]\n'.format(alpha_x))
+file.write('inj alpha_y = {} [rad]\n'.format(alpha_y))
+file.write('inj eps_x_rms = {} [mm mrad]\n'.format(eps_x_rms / 1e6))
+file.write('inj eps_y_rms = {} [mm mrad]\n'.format(eps_y_rms / 1e6))
 if switches['longitudinal space charge']:
     file.write('n_long_slices_1D = {}\n'.format(n_long_slices))
     file.write('grid_size = ({}, {}, {})\n'.format(*grid_size))
