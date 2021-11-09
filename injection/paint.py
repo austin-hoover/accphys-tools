@@ -132,10 +132,12 @@ X_FOIL = 0.0486 # [m]
 Y_FOIL = 0.0460 # [m]
 kin_energy = 0.8 # [GeV]
 mass = 0.93827231 # [GeV/c^2]
-n_inj_turns = 400
+n_inj_turns = 1
 n_stored_turns = 0
-bunch_length_frac = (45.0 / 64.0) 
+bunch_length_frac = (43.0 / 64.0) 
 macros_per_turn = int(500000 / n_inj_turns)
+default_minipulse_intensity = 1.5e14 / 1000.
+default_bunch_length_frac = (50.0 / 64.0)
 
 # Determine which turns to store the phase space coordinates. We can save
 # at two locations: the injection point (foil) and the RTBT entrance. 
@@ -144,21 +146,19 @@ skip_rtbt = 49
 
 # Initial and final coordinates of closed orbit at injection point.
 inj_coords_t0 = np.array([
-    X_FOIL - 0.,
-    0.0,
-    Y_FOIL - 0.,
-    0.0,
+    X_FOIL - 0.0005,
+    0.0 + 0.00006,
+    Y_FOIL - 0.00018,
+    0.0 + 0.00007,
 ])
 inj_coords_t1 = np.array([
     X_FOIL - 0.031, # will be overridden if switches['equal emittances']
-    0.0,
-    Y_FOIL - 0.000,
-    -0.0011,
+    0.0 + 0.00006,
+    Y_FOIL - 0.00015,
+    -0.0012,
 ])
 
 # Assuming a minipulse intensity of 1.5e11, compute the beam intensity.
-default_minipulse_intensity = 1.5e14 / 1000.
-default_bunch_length_frac = (50.0 / 64.0)
 minipulse_intensity = default_minipulse_intensity * (bunch_length_frac / default_bunch_length_frac)
 intensity = minipulse_intensity * n_inj_turns
 macro_size = intensity / n_inj_turns / macros_per_turn
@@ -232,8 +232,7 @@ order_y = 9.
 eps_x_rms = 0.467e-6 # [m rad]
 eps_y_rms = 0.300e-6 # [m rad]
 alpha_x = -0.924 # [rad]
-# alpha_y = -0.5 # [rad]
-alpha_y = -1.0
+alpha_y = -0.5 # [rad]
 beta_x = 3.71 # [m/rad]
 beta_y = 4.86 # [m/rad]
 eps_x_lim = eps_x_rms * 2. * (order_x + 1.)
@@ -994,7 +993,8 @@ start_node.addChildNode(injection_node, AccNode.ENTRANCE)
 if switches['foil scattering']:
     thickness = 390.0
     foil_node = TeapotFoilNode(foil_xmin, foil_xmax, foil_ymin, foil_ymax, thickness)
-    foil_node.setScatterChoice(2)
+    foil_scatter_choice = 0 # {0: full scatter, 1: simple scatter}
+    foil_node.setScatterChoice(foil_scatter_choice)
     start_node.addChildNode(foil_node, AccNode.ENTRANCE)
 
 
@@ -1021,18 +1021,23 @@ if switches['rf']:
     RF2Phase = 0.
     RF1HNum = 1.
     RF2HNum = 2.
-    RF1Voltage_kV = 5.03
-    RF2Voltage_kV = -6.07
-    RF1Voltage = RF1Voltage_kV * 1e-6
-    RF2Voltage = RF2Voltage_kV * 1e-6
-    length = 0.
-    rf1_nodea = RFNode.Harmonic_RFNode(ZtoPhi, dESync, RF1HNum, RF1Voltage, RF1Phase, length, "RF1")
-    rf1_nodeb = RFNode.Harmonic_RFNode(ZtoPhi, dESync, RF1HNum, 0.0, RF1Phase, length, "RF1")
-    rf1_nodec = RFNode.Harmonic_RFNode(ZtoPhi, dESync, RF1HNum, 0.0, RF1Phase, length, "RF1")
+    RF1aVoltage_kV = 5.03
+    RF1bVoltage_kV = 0.0
+    RF1cVoltage_kV = 0.0
+#     RF2Voltage_kV = -6.07
+    RF2Voltage_kV = -5.03
+    RF1aVoltage = RF1aVoltage_kV * 1e-6 # convert to GV
+    RF1bVoltage = RF1bVoltage_kV * 1e-6 # convert to GV
+    RF1cVoltage = RF1cVoltage_kV * 1e-6 # convert to GV
+    RF2Voltage = RF2Voltage_kV * 1e-6 # convert to GV
+    length = 0.0
+    rf1a_node = RFNode.Harmonic_RFNode(ZtoPhi, dESync, RF1HNum, RF1aVoltage, RF1Phase, length, "RF1a")
+    rf1b_node = RFNode.Harmonic_RFNode(ZtoPhi, dESync, RF1HNum, RF1bVoltage, RF1Phase, length, "RF1b")
+    rf1c_node = RFNode.Harmonic_RFNode(ZtoPhi, dESync, RF1HNum, RF1cVoltage, RF1Phase, length, "RF1c")
     rf2_node  = RFNode.Harmonic_RFNode(ZtoPhi, dESync, RF2HNum, RF2Voltage, RF2Phase, length, "RF2")
-    RFLatticeModifications.addRFNode(ring, 184.273, rf1_nodea)
-    RFLatticeModifications.addRFNode(ring, 186.571, rf1_nodeb)
-    RFLatticeModifications.addRFNode(ring, 188.868, rf1_nodec)
+    RFLatticeModifications.addRFNode(ring, 184.273, rf1a_node)
+    RFLatticeModifications.addRFNode(ring, 186.571, rf1b_node)
+    RFLatticeModifications.addRFNode(ring, 188.868, rf1c_node)
     RFLatticeModifications.addRFNode(ring, 191.165,  rf2_node)
 
     
@@ -1286,6 +1291,8 @@ file.write('inj alpha_x = {} [rad]\n'.format(alpha_x))
 file.write('inj alpha_y = {} [rad]\n'.format(alpha_y))
 file.write('inj eps_x_rms = {} [mm mrad]\n'.format(eps_x_rms / 1e6))
 file.write('inj eps_y_rms = {} [mm mrad]\n'.format(eps_y_rms / 1e6))
+if switches('foil scattering'):
+    file.write('foil scatter choice = {}\n'.format(foil_scatter_choice))
 if switches['longitudinal space charge']:
     file.write('n_long_slices_1D = {}\n'.format(n_long_slices))
     file.write('grid_size = ({}, {}, {})\n'.format(*grid_size))
