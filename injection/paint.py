@@ -119,7 +119,6 @@ switches = {
     'rf': True,
     'collimator': True,
 }
-
 print('Switches:')
 pprint(switches)
 
@@ -132,7 +131,7 @@ X_FOIL = 0.0486 # [m]
 Y_FOIL = 0.0460 # [m]
 kin_energy = 0.8 # [GeV]
 mass = 0.93827231 # [GeV/c^2]
-n_inj_turns = 1
+n_inj_turns = 401
 n_stored_turns = 0
 bunch_length_frac = (43.0 / 64.0) 
 macros_per_turn = int(500000 / n_inj_turns)
@@ -1247,7 +1246,7 @@ addTeapotDiagnosticsNode(ring, 51.1921, tunes)
 
 # Run simulation
 #------------------------------------------------------------------------------
-print('Simulating.')
+print('Tracking.')
 for turn in trange(n_inj_turns + n_stored_turns):
     ring.trackBunch(bunch, params_dict)
     if (turn % 100 == 0) or (turn == n_inj_turns + n_stored_turns - 1):
@@ -1291,13 +1290,15 @@ file.write('inj alpha_x = {} [rad]\n'.format(alpha_x))
 file.write('inj alpha_y = {} [rad]\n'.format(alpha_y))
 file.write('inj eps_x_rms = {} [mm mrad]\n'.format(eps_x_rms / 1e6))
 file.write('inj eps_y_rms = {} [mm mrad]\n'.format(eps_y_rms / 1e6))
-if switches('foil scattering'):
+if switches['foil scattering']:
     file.write('foil scatter choice = {}\n'.format(foil_scatter_choice))
 if switches['longitudinal space charge']:
     file.write('n_long_slices_1D = {}\n'.format(n_long_slices))
     file.write('grid_size = ({}, {}, {})\n'.format(*grid_size))
 if switches['rf']:
-    file.write('RF1Voltage = {} [kV]\n'.format(RF1Voltage_kV))
+    file.write('RF1aVoltage = {} [kV]\n'.format(RF1aVoltage_kV))
+    file.write('RF1bVoltage = {} [kV]\n'.format(RF1bVoltage_kV))
+    file.write('RF1cVoltage = {} [kV]\n'.format(RF1cVoltage_kV))
     file.write('RF2Voltage = {} [kV]\n'.format(RF2Voltage_kV))
 file.close()
 

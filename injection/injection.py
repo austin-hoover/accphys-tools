@@ -74,7 +74,7 @@ class InjRegionController:
         self.min_kicker_angles *= self.kin_energy_scale_factor
         self.max_kicker_angles *= self.kin_energy_scale_factor
         
-        artificial_kicker_angle_increase_factor = 2.0
+        artificial_kicker_angle_increase_factor = 1.0
         if artificial_kicker_angle_increase_factor != 1.0:
             print('Artificially increasing kicker strength by factor {}'
                   .format(artificial_kicker_angle_increase_factor))
