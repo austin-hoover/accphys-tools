@@ -14,9 +14,12 @@ from orbit.utils import helper_funcs as hf
 
 # Global variables
 IND_QUAD_NAMES = ['q02', 'q03', 'q04', 'q05', 'q06', 'q12', 'q13',
-                  'q14', 'q15', 'q16', 'q17', 'q18', 'q19']
-IND_QUAD_FIELD_LB = np.array([0, -4.35, 0, -7.95, 0, 0, -5.53, 0, -4.35, 0, -4.35, 0, -5.53])
-IND_QUAD_FIELD_UB = np.array([5.5, 0, 5.5, 0, 7.95, 5.53, 0, 4.35, 0, 4.35, 0, 5.53, 0])
+                  'q14', 'q15', 'q16', 'q17', 'q18', 'q19',
+                  'q26', 'q27', 'q28', 'q29', 'q30']
+IND_QUAD_FIELD_LB = np.array([0, -4.35, 0, -7.95, 0, 0, -5.53, 0, -4.35, 0, -4.35, 0, -5.53,
+                              0, -5.5, 0, -5.5, 0])
+IND_QUAD_FIELD_UB = np.array([5.5, 0, 5.5, 0, 7.95, 5.53, 0, 4.35, 0, 4.35, 0, 5.53, 0,
+                              5.5, 0, 5.5, 0, 5.5])
 SHARED_POWER = {
     'q05': ['q07', 'q09', 'q11'],
     'q06': ['q08', 'q10'],
@@ -162,7 +165,6 @@ class PhaseController:
         
         start_index = index(start_node_name)
         stop_index = index(stop_node_name)
-        reverse = start_index > stop_index
         
         M = Matrix(7, 7)
         M.unit()
@@ -171,7 +173,7 @@ class PhaseController:
                 M = node.getMatrix().mult(M)
         M = [[M.get(i, j) for j in range(4)] for i in range(4)]
         M = np.array(M)
-        if reverse:
+        if start_index > stop_index:
             M = np.linalg.inv(M)
         return M
     
@@ -179,14 +181,12 @@ class PhaseController:
         """Return phases (divided by 2pi) from lattice entrance to node."""
         return self.tracked_twiss[self.node_index(node_name), [1, 2]]  
     
-    def twiss(self, node_name):
-        i = self.node_index(node_name)
-        s, mu_x, mu_y, alpha_x, alpha_y, beta_x, beta_y = self.tracked_twiss[i]
-        return np.array([alpha_x, alpha_y, beta_x, beta_y])
-    
-    def set_phase_adv(self, node_name, nux, nuy, beta_lims=(40., 40.), **lsq_kws):
+    def set_phase_adv(self, node_name, nux, nuy, beta_lims=(35.0, 35.0), 
+                      quads_to_vary=None,
+                      **lsq_kws):
         """Set phase advance from lattice entrance to the node."""
-        quads_to_vary = ['q18', 'q19']
+        if quads_to_vary is None:
+            quads_to_vary = ['q18', 'q19']
         target_phases = [nux, nuy]
         
         def cost_func(quad_strengths):
@@ -195,7 +195,8 @@ class PhaseController:
             calc_phases = self.phase_adv(node_name)
             residuals = np.subtract(target_phases, calc_phases)
             cost = np.sum((residuals)**2)
-            cost += np.sum(np.clip(self.max_betas()  - beta_lims, 0., None)**2)
+            if beta_lims is not None:
+                cost += np.sum(np.clip(self.max_betas()  - beta_lims, 0., None)**2)
             return cost
 
         idx = [self.ind_quad_names.index(name) for name in quads_to_vary]
@@ -210,10 +211,18 @@ class PhaseController:
             print('WARNING: maximum beta functions exceed limit.')
             print('Max betas =', self.max_betas())
         return result.x
+    
+    def twiss(self, node_name):
+        i = self.node_index(node_name)
+        s, mu_x, mu_y, alpha_x, alpha_y, beta_x, beta_y = self.tracked_twiss[i]
+        return np.array([alpha_x, alpha_y, beta_x, beta_y])
         
     def max_betas(self):
         """Get maximum (beta_x, beta_y) between s=0 and reference wire-scanner."""
         return np.max(self.tracked_twiss[:self.ref_ws_index, 5:], axis=0)
+    
+    def max_betas_anywhere(self):
+        return np.max(self.tracked_twiss[:, 5:], axis=0)
     
     def get_phases_for_scan(self, phase_coverage, steps_per_dim, method=2):
         """Return list of phases for scan. 

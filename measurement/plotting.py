@@ -43,6 +43,7 @@ def rec_lines(ax, transfer_mats, moments, plane='x-xp',
         V = np.identity(4)
     Vinv = np.linalg.inv(V)
     
+    i = 0
     for coords in possible_points(transfer_mats, moments, slopes):
         coords = utils.apply(Vinv, coords)
         if plane == 'x-xp':
@@ -62,9 +63,11 @@ def reconstruction_lines(ax, transfer_mats_dict, moments_dict, plane='x-xp', nor
     legend_kws.setdefault('fontsize', 'small')
     legend_kws.setdefault('loc', (1.03, 0.0))
     legend_kws.setdefault('ncol', 1)
-    
+        
     ws_ids = sorted(list(transfer_mats_dict))
-    colors = DEFAULT_COLORCYCLE[:len(ws_ids)]
+#     colors = DEFAULT_COLORCYCLE[:len(ws_ids)]
+    colors = ['#008fd5ff', '#fc4f30ff', '#e5ae38ff', '#6d904fff'] 
+    
     for ws_id, color in zip(ws_ids, colors):
         rec_lines(ax, transfer_mats_dict[ws_id], moments_dict[ws_id], 
                   plane, norm_mat, slopes, color=color, **plt_kws)

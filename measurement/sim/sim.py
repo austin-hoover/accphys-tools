@@ -22,6 +22,12 @@ measurement:
 Since the initial bunch energy, mass, and intensity need to be hard-coded,
 it might be easier to put this at the end of the painting script. Or we 
 could make it read a file that is output from the painting script. 
+
+
+To do
+-----
+You should only track the beam once when saving the "real" moments throughout
+the lattice. 
 """
 from __future__ import print_function
 import sys
@@ -54,7 +60,7 @@ from emittance_measurement.analysis import reconstruct
 
 # Settings
 #------------------------------------------------------------------------------
-n_trials = 1
+n_trials = 100
 beam_input_file = '_input/coords_rtbt.npz'
 kin_energy = 0.8 # [GeV]
 mass = 0.93827231 # [GeV/c^2]
@@ -88,13 +94,13 @@ rms_kin_energy_err = 0.005 # [GeV]
 max_ws_angle_err = np.radians(1.0) # [rad]
 rms_frac_ws_count_err = 0.05
 errors = {
-    'energy spread': False,
-    'kinetic energy': False,
-    'fringe fields': False,
-    'quad strengths': False,
+    'energy spread': True,
+    'kinetic energy': True,
+    'fringe fields': True,
+    'quad strengths': True,
     'space charge': True,
-    'wire-scanner noise': False,
-    'wire-scanner angle': False,
+    'wire-scanner noise': True,
+    'wire-scanner angle': True,
 }
 
 # Initialization
@@ -212,9 +218,10 @@ def set_bunch_coords(bunch, X):
         
 # Simulate the measurement for each bunch in `coords`.
 #------------------------------------------------------------------------------
-for frame, X in enumerate(coords):
+for frame in range(len(turns)):
     
     # Initialize the bunch.
+    X = coords[frame]
     set_bunch_coords(bunch, X)
     intensity = intensities[frame]
     turn = turns[frame]
@@ -223,26 +230,32 @@ for frame, X in enumerate(coords):
     print('Bunch {}/{}'.format(frame + 1, len(coords)))
     print('Intensity = {:.3e}'.format(intensity))
     print('Turn = {}'.format(turn))
-                    
-    # For the reconstructed covariance matrices. 
+        
+    print('Simulating the measurement.')
+    # Store the true (simulated) covariance matrix at every node.
+    controller.set_quad_strengths(controller.ind_quad_names, default_quad_strengths)
+    for node_name in rec_node_names:
+        bunch_stats_node = bunch_stats_nodes[node_name]
+        bunch_stats_node.clear_data()
+        bunch_stats_node.set_active(True)
+    set_bunch_coords(bunch, X)
+    controller.lattice.trackBunch(bunch, params_dict)
+    Sigmas_sim_dict = dict()
+    for node_name in rec_node_names:
+        bunch_stats_node = bunch_stats_nodes[node_name]
+        bunch_stats = bunch_stats_node.get_data(-1)
+        Sigmas_sim_dict[node_name] = bunch_stats.Sigma
+        bunch_stats_node.set_active(False)
+        
+    # Reconstruct with random errors.
     Sigmas_rec_dict = dict()
     for node_name in rec_node_names:
         Sigmas_rec_dict[node_name] = []
         
-    # For the true (simulated) covariance matrices. 
-    Sigmas_sim_dict = dict()
-    for node_name in rec_node_names:
-        Sigmas_sim_dict[node_name] = []
-
-        
-    print('Simulating measurement.')
-    
     for trial_number in trange(n_trials):
         
         # Reset the lattice to its initial state.
         quad_strengths = np.copy(default_quad_strengths)
-        for node_name in rec_node_names:
-            bunch_stats_nodes[node_name].clear_data()
 
         # Add errors.
         if errors['kinetic energy']:
@@ -279,20 +292,12 @@ for frame, X in enumerate(coords):
             tmats = tmats_dict[node_name]
             Sigma, C = reconstruct(tmats, moments)        
             Sigmas_rec_dict[node_name].append(Sigma)
-            
-        # Store the actual covariance matrix at every node.
-        for node_name in rec_node_names:
-            bunch_stats_node = bunch_stats_nodes[node_name]
-            bunch_stats = bunch_stats_node.get_data(0)
-            Sigma = bunch_stats.Sigma
-            Sigmas_sim_dict[node_name].append(Sigma)
-            
 
     # Save the reconstructed covariance matrices.
     np.save('_output/data/Sigmas_rec_{}.npy'.format(frame), 
             [Sigmas_rec_dict[node_name] for node_name in rec_node_names])
 
-    # Save the actual covariance matrices.
+    # Save the simulated covariance matrices.
     np.save('_output/data/Sigmas_sim_{}.npy'.format(frame), 
             [Sigmas_sim_dict[node_name] for node_name in rec_node_names])
     

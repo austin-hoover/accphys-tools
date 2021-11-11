@@ -1,5 +1,33 @@
+from __future__ import print_function
+import sys
+import os
+
 import numpy as np
 import scipy.optimize as opt
+
+
+def ancestor_folder_path(current_path, ancestor_folder_name):  
+    parent_path = os.path.dirname(current_path)
+    if parent_path == current_path:
+        raise ValueError("Couldn't find ancestor folder.")
+    if parent_path.split('/')[-1] == ancestor_folder_name:
+        return parent_path
+    return ancestor_folder_path(parent_path, ancestor_folder_name)
+
+sys.path.append(ancestor_folder_path(os.path.abspath(__file__), 'accphys'))
+from tools import beam_analysis as ba
+from tools import utils
+
+
+
+def is_physical_cov(Sigma):
+    """Return True if the covariance matrix is physical."""
+    if not utils.is_positive_definite or np.linalg.det(Sigma) < 0:
+        return False
+    eps_x, eps_y, eps_1, eps_2 = ba.emittances(Sigma)
+    if (eps_x * eps_y < eps_1 * eps_2):
+        return False
+    return True
 
 
 def to_mat(sigma):
