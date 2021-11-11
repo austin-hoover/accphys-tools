@@ -28,14 +28,6 @@ _labels_norm = [r"$x_n$", r"$x_n'$", r"$y_n$", r"$y_n'$"]
 var_indices = {'x':0, 'xp':1, 'y':2, 'yp':3}
 
 
-def save(figname, dir, **kwargs):
-    """Save figure to directory `dir`."""
-    if not dir.endswith('/'):
-        dir += '/'
-    filename = ''.join([dir, figname, '.png'])
-    plt.savefig(filename, facecolor='white', **kwargs)
-
-
 def max_u_up(X):
     """Get maximum position (u) and slope (u') in coordinate array.
 
@@ -434,95 +426,120 @@ def auto_n_bins_4D(X, limits=None):
     
     
 def corner_env(
-    params, fill=False, pad=0.5, space=None, figsize=None, dims='all',
-    cmap=None, cmap_range=(0, 1), units='mm-mrad', norm_labels=False, ax=None,
-    legend_kws=None, fill_kws={}, label_kws={}, **plt_kws
+    env_params, axes=None, figsize=None,
+    limits=None, pad=0.5, space=None, constrained_layout=True, 
+    dims='all', fill=False, cmap=None, cmap_range=(0, 1), 
+    units='mm-mrad', norm_labels=False, 
+    fill_kws=None, **plt_kws
 ):
-    """Plot the 6 transverse phase space ellipses of the beam.
+    """Plot the 6 transverse phase space ellipses from the envelope parameters.
     
     Inputs
     ------
-    params : ndarray, shape (8,) or (n, 8)
+    env_params : ndarray, shape (8,) or (n, 8)
         Envelope parameters [a, b, a', b', e, f, e', f']. If multiple rows are
         provided, each will be plotted as different ellipse.
+    axes : matplotlib.pyplot.Axes object
+        If plotting onto existing axes.
+    figsize : tuple or int
+        Size of the figure (x_size, y_size). If an int is provided, the number
+        is used as the size for both dimensions.
+    limits : list
+        List of (min, max) for each dimension.
     pad : float
         Fraction of umax and upmax to pad the axis ranges with. The edge of the 
         plot will be at umax * (1 + pad).
     space : float
-        Size of the space between subplots. If None, the `tight_layout`
+        Size of the space between subplots. If None, the `constrained_layout`
         optimizer is used to determined the spacing.
-    figsize : tuple or int
-        Size of the figure (x_size, y_size). If an int is provided, the number
-        is used as the size for both dimensions.
+    constrained_layout : bool
+        Whether to use the constrained_layout option when creating the figure.
     dims : str or tuple
         If 'all', plot all 6 phase space projections. Otherwise provide a tuple
-        like ('x', 'yp') which plots x vs. y'.
-    ec, fc : str
-        Color of the ellipse boundary (ec) and interior (fc). If either are
-        None,
-    cmap : Matplotlib colormap
-        If plotting a sequence of envelopes, this sets the color cycle. If
-        None, it will use the default color cycle. If we provide something
-        like plt.cm.viridis, the different envelopes will be perceptually
-        uniform from blue to yellow.
+        like ("x", "yp") or (0, 3).
+    fill : bool
+        Whether to fill the ellipses.
+    cmap : list of colors or Matplotlib colormap
+        Determines the color cycle if plotting multiple envelopes.
     cmap_range : (min, max)
         The locations for the color cycle to to start and end in the color map.
         (0, 1) would use the entire color map, while (0.5, 1) would start at
         the midpoint and go until the end.
-    units : str or bool
+    units : str, bool, or None
         Whether to display units on the axis labels. Options are 'mm-mrad' or
-        'm-rad'. No units are displayed if None.
-    norm_labels : boolean
-        If True, add '_n' to the axis labels. E.g. 'x' -> 'x_n'.
-    ax : matplotlib.pyplot.Axes object
-        If plotting only a 2D projection of the data (for example if
-        dims=('x','y'), the data will be plotted on this axis.)
-    legend_kws : dict
-        Key word arguments for the legend.
-    label_kws : dict
-        Key word arguments for the axis labels.
+        'm-rad'. 
+    norm_labels : bool
+        Whether to add '_n' to the axis labels ('x' -> 'x_n').
+    fill_kws : dict
+        Key word arguments for ax.fill if filling the ellipses.
+    **plt_kws
+        Kew word arguments for ax.plot if plotting ellipse boundaries.
         
     Returns
     -------
-    axes : Matplotlib axes object
-        3x3 array of Axes objects.
-    """    
-    # Get ellipse boundary data
-    if type(params) is not np.ndarray:
-        params = np.array(params)
-    if params.ndim == 1:
-        params = params[np.newaxis, :]
-    coords = [get_ellipse_coords(p, npts=100) for p in params]
-    limits = (1 + pad) * max_u_up_global(coords)
-    
-    # Set default key word arguments
-    color = None if len(params) > 1 else 'k'
+    axes
+    """   
+    # Get ellipse boundary data.
+    if type(env_params) is not np.ndarray:
+        env_params = np.array(env_params)
+    if env_params.ndim == 1:
+        env_params = env_params[np.newaxis, :]
+    coords = [get_ellipse_coords(p, npts=100) for p in env_params]
+    labels = get_labels(units, norm_labels)
+    if limits is None:
+        umax, upmax = (1.0 + pad) * max_u_up_global(coords)
+        limits = 2 * [(-umax, umax), (-upmax, upmax)]
+    elif len(limits) == 2:
+        limits = 2 * limits
+        
+    # Set default key word arguments.
+    n_env = len(env_params)
+    color = None if n_env > 1 else 'black'
     plt_kws.setdefault('lw', None)
     plt_kws.setdefault('color', color)
     plt_kws.setdefault('zorder', 10)
+    if fill_kws is None:
+        fill_kws = dict()
     fill_kws.setdefault('lw', 1)
     fill_kws.setdefault('fc', 'lightsteelblue')
     fill_kws.setdefault('ec', 'k')
     fill_kws.setdefault('zorder', 10)
             
-    # Create figure
-    fig, axes = setup_corner(limits, figsize, norm_labels, units, space,
-                             dims=dims, label_kws={'fontsize':'medium'})
-    if dims != 'all':
-        ax = axes
-        
-    # Set color cycle
-    if len(params) > 1 and cmap is not None:
+    # Create figure.
+    if dims == 'all':
+        if axes is None:
+            n_dims = 4
+            fig, axes = pair_grid_nodiag(
+                n_dims, figsize=figsize, limits=limits, space=space,
+                labels=labels,constrained_layout=constrained_layout
+            )
+    else:
+        if axes is None:
+            fig, ax = plt.subplots(figsize=figsize, constrained_layout=constrained_layout)
+            i, j = dims
+            if type(i) is str:
+                i = var_indices[i]
+            if type(j) is str:
+                j = var_indices[j]
+            ax.set_xlabel(labels[i], **label_kws)
+            ax.set_ylabel(labels[j], **label_kws)
+            ax.set_xlim(limits[i])
+            ax.set_ylim(limits[j])
+        else:
+            ax = axes
+    
+    # Set the color cycle.
+    if n_env > 1 and cmap is not None:
         start, end = cmap_range
-        colors = [cmap(i) for i in np.linspace(start, end, len(params))]
+        colors = [cmap(i) for i in np.linspace(start, end, n_env)]
         color_cycle = cycler('color', colors)
         if dims != 'all':
             ax.set_prop_cycle(color_cycle)
         else:
             for ax in axes.flat:
                 ax.set_prop_cycle(color_cycle)
-            
-    # Plot data
+                
+    # Plot.
     for X in coords:
         if dims != 'all':
             j, i = [var_indices[dim] for dim in dims]
@@ -538,8 +555,6 @@ def corner_env(
                         ax.fill(X[:, j], X[:, i+1], **fill_kws)
                     else:
                         ax.plot(X[:, j], X[:, i+1], **plt_kws)
-    if legend_kws:
-        axes[1, 1].legend(**legend_kws)
     return axes
     
     
