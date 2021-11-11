@@ -785,9 +785,16 @@ def corner(
             heights, edges = np.histogram(X[:, i], diag_kws['bins'], limits[i])
             heights_list_1D[frame].append(heights)
             n_bins_list_1D[frame].append(len(edges) - 1)
-    diag_kws.pop('bins')   
+    diag_kws.pop('bins') 
     
-    # Option to keep the number of bins fixed.
+    # Keep ylim the same across frames for all 1D projections.
+    max_height = 0
+    for frame in range(n_frames):
+        for i in range(n_dims):
+            max_height = max(max_height, np.max(heights_list_1D[frame][i]))
+    axes[0, 0].set_ylim(0, max_height / hist_height_frac)
+    
+    # Option to keep the number of bins fixed in 2D histograms.
     n_bins_list_1D = np.array(n_bins_list_1D)
     if static_n_bins is not None:
         for j in range(n_dims):
@@ -795,15 +802,10 @@ def corner(
                 n_bins_list_1D[:, j] = np.max(n_bins_list_1D[:, j])
             elif static_n_bins == 'max':
                 n_bins_list_1D[:, j] = np.mean(n_bins_list_1D[:, j])
+            elif static_n_bins == 'final':
+                n_bins_list_1D[:, j] = n_bins_list_1D[-1, j]
             elif type(static_n_bins) in [int, float]:
                 n_bins_list_1D[:, j] = static_n_bins * np.max(n_bins_list_1D[:, j])
-                      
-    # Keep ylim the same across frames for all 1D projections.
-    max_height = 0
-    for frame in range(n_frames):
-        for i in range(n_dims):
-            max_height = max(max_height, np.max(heights_list_1D[frame][i]))
-    axes[0, 0].set_ylim(0, max_height / hist_height_frac)
     
     # Setup for 2D plots
     if kind == 'hist':  
@@ -850,7 +852,12 @@ def corner(
                 
         # Diagonal plots
         for i, ax in enumerate(axes.diagonal()):
-            heights, edges, artists = ax.hist(X[:, i], n_bins_list_1D[frame][i], **diag_kws)
+            xmin, xmax = limits[i]
+            y = heights_list_1D[frame][i]
+            n = len(y)
+            x = np.linspace(limits[i][0], limits[i][1], n)
+            _, _, artists = ax.hist(x, n, weights=heights_list_1D[frame][i], **diag_kws)
+#             heights, edges, artists = ax.hist(X[:, i], n_bins_list_1D[frame][i], **diag_kws)
             artists_list.append(artists)
             
         # Off-diagonal plots
