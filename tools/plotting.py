@@ -232,9 +232,100 @@ def auto_limits(X, pad=0., zero_center=False, sigma=None):
 def auto_n_bins_4D(X, limits=None):
     """Try to determine best number of bins to use in 2D histograms in corner plot.
     
-    We should be able to find an algorithm to do this nicely.
+    We should be able to find an algorithm to do this nicely. (Edit: for our 
+    purposes, it is best to run auto-binning on each 1D histogram and use these
+    for the 2D grids. This results in grainy plots, but it resembles a scatter
+    plot with points shaded by density.)
     """
     raise NotImplementedError
+    
+    
+def pair_grid(
+    n_dims, figsize=None, limits=None, space=None, spines=False,
+    labels=None, label_kws=None, tick_kws=None
+):
+    """Create square grid of subplots (Seaborn does this with PairGrid)."""
+    constrained_layout = space is None
+    fig, axes = plt.subplots(n_dims, n_dims, figsize=figsize, 
+                             sharex='col', sharey=False, 
+                             constrained_layout=constrained_layout)
+    if not constrained_layout:
+        fig.subplots_adjust(wspace=space, hspace=space)
+    make_lower_triangular(axes)
+    if not spines:
+        despine(axes.flat, ('top', 'right'))
+        despine(axes.diagonal(), 'left')
+        
+    # Configure axis sharing
+    lcol, brow = axes[1:, 0], axes[-1, :]
+    for i, row in enumerate(axes[1:, :]): 
+        set_share_axes(row[:i+1], sharey=True)
+    set_share_axes(axes.diagonal(), sharey=True)
+    toggle_grid(axes.diagonal(), 'off')
+
+    # Limits
+    if limits is not None:
+        set_limits(brow, limits, 'x')
+        set_limits(lcol, limits[1:], 'y')
+
+    # Labels
+    if label_kws is None:
+        label_kws = dict()
+    label_kws.setdefault('fontsize', 'medium')
+    if labels:
+        set_labels(brow, labels, 'xlabel', **label_kws)
+        set_labels(lcol, labels[1:], 'ylabel', **label_kws)
+
+    # Ticks
+    if tick_kws is None:
+        tick_kws  = dict()
+    tick_kws.setdefault('labelsize', 'small')
+    fig.align_labels()
+    for ax in axes.flat:
+        ax.tick_params(**tick_kws)
+        
+    return fig, axes
+
+
+def pair_grid_nodiag(
+    n_dims, figsize=None, limits=None, space=None, spines=False,
+    labels=None, label_kws=None, tick_kws=None, 
+    constrained_layout=True
+):
+    """Same as `pair_grid` but without a diagonal axis."""
+    fig, axes = plt.subplots(n_dims - 1, n_dims - 1, figsize=figsize, 
+                             sharex='col', sharey='row', 
+                             constrained_layout=constrained_layout)
+    if not constrained_layout:
+        fig.subplots_adjust(wspace=space, hspace=space)
+    make_lower_triangular(axes)
+    if not spines:
+        despine(axes.flat, ('top', 'right'))
+        
+    lcol, brow = axes[:, 0], axes[-1, :]
+
+    # Limits
+    if limits is not None:
+        set_limits(brow, limits, 'x')
+        set_limits(lcol, limits[1:], 'y')
+
+    # Labels
+    if label_kws is None:
+        label_kws = dict()
+    label_kws.setdefault('fontsize', 'medium')
+    if labels:
+        set_labels(brow, labels, 'xlabel', **label_kws)
+        set_labels(lcol, labels[1:], 'ylabel', **label_kws)
+
+    # Ticks
+    if tick_kws is None:
+        tick_kws  = dict()
+    tick_kws.setdefault('labelsize', 'small')
+    fig.align_labels()
+    for ax in axes.flat:
+        ax.tick_params(**tick_kws)
+        
+    return fig, axes
     
     
 # def corner(
@@ -426,7 +517,8 @@ def auto_n_bins_4D(X, limits=None):
 
 
 def corner(
-    X, figsize=None, kind='hist', limits=None, pad=0., hist_height_frac=0.6, 
+    X, figsize=None, kind='hist', limits=None, pad=0., zero_center=False,
+    hist_height_frac=0.6, 
     sigma=None,
     thresh=None, smooth_hist=False, space=None, spines=False, blur=None,
     diag_kws=None, **plot_kws
@@ -439,6 +531,7 @@ def corner(
     To do:
     * Option to input an n-dimensional image.
     """
+    # Default key word arguments.
     if kind =='scatter' or kind == 'scatter_density':
         plot_kws.setdefault('s', 3)
         plot_kws.setdefault('c', 'black')
@@ -455,16 +548,17 @@ def corner(
     diag_kws.setdefault('histtype', 'step')
     diag_kws.setdefault('bins', 'auto')
 
+    # Create figure.
     n_parts, n_dims = X.shape
     if figsize is None:
         f = n_dims * 7.5 / 6.0
         figsize = (1.025 * f, f)
     
-    labels = ["x [mm]", "x' [mrad]", "y [mm]", "y' [mrad]", "z [m]", "dE [MeV]"]
+    labels = ["x [mm]", "x' [mrad]", 
+              "y [mm]", "y' [mrad]", 
+              "z [m]", "dE [MeV]"]
     label_kws = None
-    tick_kws = None
-    
-    zero_center = False
+    tick_kws = None    
     if limits is None:
         limits = auto_limits(X, pad, zero_center, sigma)
 
@@ -472,7 +566,7 @@ def corner(
                           space=space, spines=spines, labels=labels, 
                           label_kws=label_kws, tick_kws=tick_kws)
         
-    # Plot 1D histograms
+    # Univariate plots.
     if smooth_hist:
         diag_kws.pop('histtype')
     bins = diag_kws.pop('bins')
@@ -484,9 +578,9 @@ def corner(
         if smooth_hist:
             ax.plot(centers, heights, **diag_kws)
         else:
-            _, _, _ = ax.hist(centers, len(centers), weights=heights, **diag_kws)
+            ax.hist(centers, len(centers), weights=heights, **diag_kws)
         
-    # Bivariate plots
+    # Bivariate plots.
     if kind == 'hist':
         bins = plot_kws.pop('bins')
     for i in range(1, len(axes)):
@@ -497,17 +591,18 @@ def corner(
                 ax.scatter(x, y, **plot_kws)
             elif kind == 'hist':
                 if bins == 'auto':
-                    Z, xedges, yedges = np.histogram2d(x, y, (n_bins[j], n_bins[i]), (limits[j], limits[i]))
+                    Z, xedges, yedges = np.histogram2d(
+                        x, y, (n_bins[j], n_bins[i]), (limits[j], limits[i]))
                 else:
-                    Z, xedges, yedges = np.histogram2d(x, y, bins, (limits[j], limits[i]))
+                    Z, xedges, yedges = np.histogram2d(
+                        x, y, bins, (limits[j], limits[i]))
                 if blur:
                     Z = filters.gaussian(Z, sigma=blur)
                 if thresh:
                     Z = np.ma.masked_less_equal(Z, thresh)
                 xcenters = utils.get_bin_centers(xedges)
                 ycenters = utils.get_bin_centers(yedges)
-                ax.pcolormesh(xcenters, ycenters, Z.T, **plot_kws)                
-           
+                ax.pcolormesh(xcenters, ycenters, Z.T, **plot_kws)                        
     # Reduce height of 1D histograms. 
     max_hist_height = 0.
     for ax in axes.diagonal():
@@ -515,14 +610,13 @@ def corner(
     max_hist_height /= hist_height_frac
     for ax in axes.diagonal():
         ax.set_ylim(0, max_hist_height)
-        
     return axes
     
     
 def corner_env(
-    env_params, axes=None, figsize=None,
-    limits=None, pad=0.5, space=None, constrained_layout=True, 
-    dims='all', fill=False, cmap=None, cmap_range=(0, 1), 
+    env_params, dims='all', axes=None, 
+    figsize=None, limits=None, pad=0.5, space=None, constrained_layout=True, 
+    fill=False, cmap=None, cmap_range=(0, 1), 
     units='mm-mrad', norm_labels=False, 
     fill_kws=None, **plt_kws
 ):
@@ -533,24 +627,22 @@ def corner_env(
     env_params : ndarray, shape (8,) or (n, 8)
         Envelope parameters [a, b, a', b', e, f, e', f']. If multiple rows are
         provided, each will be plotted as different ellipse.
+    dims : str or tuple
+        If 'all', plot all 6 phase space projections. Otherwise provide a tuple
+        like ("x", "yp") or (0, 3).
     axes : matplotlib.pyplot.Axes object
         If plotting onto existing axes.
     figsize : tuple or int
-        Size of the figure (x_size, y_size). If an int is provided, the number
-        is used as the size for both dimensions.
+        Size of the figure (x_size, y_size). 
     limits : list
         List of (min, max) for each dimension.
     pad : float
         Fraction of umax and upmax to pad the axis ranges with. The edge of the 
         plot will be at umax * (1 + pad).
     space : float
-        Size of the space between subplots. If None, the `constrained_layout`
-        optimizer is used to determined the spacing.
+        Size of the space between subplots. 
     constrained_layout : bool
         Whether to use the constrained_layout option when creating the figure.
-    dims : str or tuple
-        If 'all', plot all 6 phase space projections. Otherwise provide a tuple
-        like ("x", "yp") or (0, 3).
     fill : bool
         Whether to fill the ellipses.
     cmap : list of colors or Matplotlib colormap
@@ -579,7 +671,8 @@ def corner_env(
     if env_params.ndim == 1:
         env_params = env_params[np.newaxis, :]
     coords = [get_ellipse_coords(p, npts=100) for p in env_params]
-    labels = get_labels(units, norm_labels)
+
+    # Auto-limits.
     if limits is None:
         umax, upmax = (1.0 + pad) * max_u_up_global(coords)
         limits = 2 * [(-umax, umax), (-upmax, upmax)]
@@ -600,6 +693,7 @@ def corner_env(
     fill_kws.setdefault('zorder', 10)
             
     # Create figure.
+    labels = get_labels(units, norm_labels)
     if dims == 'all':
         if axes is None:
             n_dims = 4
@@ -609,7 +703,8 @@ def corner_env(
             )
     else:
         if axes is None:
-            fig, ax = plt.subplots(figsize=figsize, constrained_layout=constrained_layout)
+            fig, ax = plt.subplots(figsize=figsize, 
+                                   constrained_layout=constrained_layout)
             i, j = dims
             if type(i) is str:
                 i = var_indices[i]
@@ -866,24 +961,6 @@ def rms_ellipses(Sigmas, figsize=(5, 5), pad=0.5, axes=None,
                 ycenter = centers[i + 1]
                 ellipse(axes[i, j], c1, c2, angle, center=(xcenter, ycenter), **plt_kws)
     return axes
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 def pair_grid(
