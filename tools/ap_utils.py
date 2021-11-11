@@ -1,3 +1,4 @@
+"""Methods specific to accelerator physics."""
 import numpy as np
 import numpy.linalg as la
 from scipy.integrate import trapz
