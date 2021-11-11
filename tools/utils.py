@@ -1,3 +1,4 @@
+"""General-purpose utility functions."""
 import os
 
 import numpy as np
@@ -9,6 +10,7 @@ from IPython.display import display, HTML
 
 
 # Files
+#------------------------------------------------------------------------------
 def list_files(path, join=True):
     files = []
     for file in os.listdir(path):
@@ -48,7 +50,8 @@ def ancestor_folder_path(current_path, ancestor_folder_name):
     return ancestor_folder_path(parent_path, ancestor_folder_name)
     
     
-# Lists and dicts
+# Lists and dictionaries
+#------------------------------------------------------------------------------
 def merge_lists(x, y):
     """Returns [x[0], y[0], ..., x[-1], y[-1]]"""
     return [x for pair in zip(a, b) for x in pair]
@@ -119,6 +122,7 @@ def blacklist(dictionary, exclude):
     
     
 # Display
+#------------------------------------------------------------------------------
 def tprint(string, indent=4):
     """Print with indent."""
     print(indent*' ' + str(string))
@@ -137,9 +141,10 @@ def play(anim, center=True):
     if center:
         html_string = ''.join(['<center>', html_string, '<center>'])
     display(HTML(html_string))
-    
+
     
 # Arrays
+#------------------------------------------------------------------------------
 def apply(M, X):
     """Apply M to each row of X."""
     return np.apply_along_axis(lambda x: np.matmul(M, x), 1, X)
@@ -181,11 +186,17 @@ def vec2mat(moment_vec):
     return symmetrize(Sigma)
 
 
-def is_positive_definite(Sigma):
-    return np.all(np.linalg.eigvals(Sigma) > 0)
+def get_bin_centers(bin_edges):
+    """Get bin centers assuming evenly spaced bins."""
+    return 0.5 * (bin_edges[:-1] + bin_edges[1:])
     
-    
-# The following three functions are from Tony Yu's blog post: https://tonysyu.github.io/ragged-arrays.html#.YKVwQy9h3OR
+
+# The following three functions are from Tony Yu's blog post. They allow fast
+# saving/loading of ragged arrays using NumPy. This is particularly useful for
+# injection simulations since the number of particles changes on each turn;
+# the entire simulation can be saved/loaded as an array of shape (n_turns,
+# n_parts, 6).
+# Source: https://tonysyu.github.io/ragged-arrays.html#.YKVwQy9h3OR.
 def stack_ragged(array_list, axis=0):
     """Stacks list of arrays along first axis.
     
@@ -215,15 +226,21 @@ def load_stacked_arrays(filename, axis=0):
 
 
 # Math
+#------------------------------------------------------------------------------
 def cov2corr(cov_mat):
     """Form correlation matrix from covariance matrix."""
     D = np.sqrt(np.diag(cov_mat.diagonal()))
     Dinv = la.inv(D)
     corr_mat = la.multi_dot([Dinv, cov_mat, Dinv])
     return corr_mat
+
+
+def is_positive_definite(cov_mat):
+    """Return True if the matrix is positive definite."""
+    return np.all(np.linalg.eigvals(cov_mat) > 0)
     
     
-def rotation_matrix(angle):
-    """2D rotation matrix (cw)."""
-    c, s = np.cos(angle), np.sin(angle)
+def rotation_matrix(theta):
+    """2D rotation matrix (clockwise) by `theta` radians."""
+    c, s = np.cos(theta), np.sin(theta)
     return np.array([[c, s], [-s, c]])
