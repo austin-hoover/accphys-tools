@@ -423,6 +423,100 @@ def auto_n_bins_4D(X, limits=None):
 #         axes[1, 2].annotate(text, xy=text_pos, xycoords='axes fraction',
 #                             **text_kws)
 #     return axes
+
+
+def corner(
+    X, figsize=None, kind='hist', limits=None, pad=0., hist_height_frac=0.6, 
+    sigma=None,
+    thresh=None, smooth_hist=False, space=None, spines=False, blur=None,
+    diag_kws=None, **plot_kws
+):
+    """Plot grid of 2D projections.
+
+    This is similar to routines in other packages like `scatter_matrix` in 
+    Pandas or `pairplot` in Seaborn.    
+    
+    To do:
+    * Option to input an n-dimensional image.
+    """
+    if kind =='scatter' or kind == 'scatter_density':
+        plot_kws.setdefault('s', 3)
+        plot_kws.setdefault('c', 'black')
+        plot_kws.setdefault('marker', '.')
+        plot_kws.setdefault('ec', 'none')
+        plot_kws.setdefault('zorder', 5)
+    elif kind == 'hist':
+        plot_kws.setdefault('cmap', 'dusk_r')
+        plot_kws.setdefault('shading', 'auto')
+        plot_kws.setdefault('bins', 'auto')
+    if diag_kws is None:
+        diag_kws = dict()
+    diag_kws.setdefault('color', 'black')
+    diag_kws.setdefault('histtype', 'step')
+    diag_kws.setdefault('bins', 'auto')
+
+    n_parts, n_dims = X.shape
+    if figsize is None:
+        f = n_dims * 7.5 / 6.0
+        figsize = (1.025 * f, f)
+    
+    labels = ["x [mm]", "x' [mrad]", "y [mm]", "y' [mrad]", "z [m]", "dE [MeV]"]
+    label_kws = None
+    tick_kws = None
+    
+    zero_center = False
+    if limits is None:
+        limits = auto_limits(X, pad, zero_center, sigma)
+
+    fig, axes = pair_grid(n_dims, figsize=figsize, limits=limits, 
+                          space=space, spines=spines, labels=labels, 
+                          label_kws=label_kws, tick_kws=tick_kws)
+        
+    # Plot 1D histograms
+    if smooth_hist:
+        diag_kws.pop('histtype')
+    bins = diag_kws.pop('bins')
+    n_bins = []
+    for i, ax in enumerate(axes.diagonal()):
+        heights, edges = np.histogram(X[:, i], bins, limits[i])
+        centers = utils.get_bin_centers(edges)
+        n_bins.append(len(edges) - 1)
+        if smooth_hist:
+            ax.plot(centers, heights, **diag_kws)
+        else:
+            _, _, _ = ax.hist(centers, len(centers), weights=heights, **diag_kws)
+        
+    # Bivariate plots
+    if kind == 'hist':
+        bins = plot_kws.pop('bins')
+    for i in range(1, len(axes)):
+        for j in range(i):
+            ax = axes[i, j]
+            x, y = X[:, j], X[:, i]
+            if kind == 'scatter':
+                ax.scatter(x, y, **plot_kws)
+            elif kind == 'hist':
+                if bins == 'auto':
+                    Z, xedges, yedges = np.histogram2d(x, y, (n_bins[j], n_bins[i]), (limits[j], limits[i]))
+                else:
+                    Z, xedges, yedges = np.histogram2d(x, y, bins, (limits[j], limits[i]))
+                if blur:
+                    Z = filters.gaussian(Z, sigma=blur)
+                if thresh:
+                    Z = np.ma.masked_less_equal(Z, thresh)
+                xcenters = utils.get_bin_centers(xedges)
+                ycenters = utils.get_bin_centers(yedges)
+                ax.pcolormesh(xcenters, ycenters, Z.T, **plot_kws)                
+           
+    # Reduce height of 1D histograms. 
+    max_hist_height = 0.
+    for ax in axes.diagonal():
+        max_hist_height = max(max_hist_height, ax.get_ylim()[1])
+    max_hist_height /= hist_height_frac
+    for ax in axes.diagonal():
+        ax.set_ylim(0, max_hist_height)
+        
+    return axes
     
     
 def corner_env(
@@ -529,15 +623,20 @@ def corner_env(
             ax = axes
     
     # Set the color cycle.
+    colors = None
     if n_env > 1 and cmap is not None:
-        start, end = cmap_range
-        colors = [cmap(i) for i in np.linspace(start, end, n_env)]
+        if type(cmap) in [tuple, list]:
+            colors = cmap
+        else:
+            start, end = cmap_range
+            colors = [cmap(i) for i in np.linspace(start, end, n_env)]
         color_cycle = cycler('color', colors)
         if dims != 'all':
             ax.set_prop_cycle(color_cycle)
         else:
             for ax in axes.flat:
                 ax.set_prop_cycle(color_cycle)
+                
                 
     # Plot.
     for X in coords:
@@ -561,9 +660,6 @@ def corner_env(
 def fft(ax, x, y):
     """Compute and plot the FFT of two signals x and y on the same figure.
     
-    Uses scipy.fft package. Particularly useful for plotting the horizontal
-    tunes of a particle from its turn-by-turn x and y coordinates.
-
     Let N be the number of samples, M=N/2, x(t)=signal as function of time, 
     and w(f) be the FFT of x. Then w[0] is zero frequency component, w[1:M] 
     are positive frequency components, and w[M:N] are negative frequency 
@@ -578,13 +674,15 @@ def fft(ax, x, y):
     ax.set_ylabel('Amplitude')
     ax.plot(f[1:], xf[1:], label=r'$\nu_x$')
     ax.plot(f[1:], yf[1:], label=r'$\nu_y$')
-#     ax.set_xticks(np.arange(0, 0.55, 0.05))
     return ax
 
 
 def scatter_density(ax, x, y, samples=None, sort=True, bins=40,
                     method='interp', **kws):
     """Scatter plot with colors weighted by local density.
+    
+    Note: it is easier to just plot a 2D histogram and set the `vmin` parameter 
+    to something slightly nonzero. 
     
     Taken from StackOverflow: 'https://stackoverflow.com/questions/20105364/how-can-i-make-a-scatter-plot-colored-by-density-in-matplotlib'.
     
@@ -732,8 +830,7 @@ def ellipse(ax, c1, c2, angle=0.0, center=(0, 0), **plt_kws):
     """Plot ellipse with semi-axes `c1` and `c2`. Angle is given in radians
     and is measured below the x axis."""
     plt_kws.setdefault('fill', False)
-    ax.add_patch(Ellipse(center, 2*c1, 2*c2, -np.degrees(angle), **plt_kws))
-    return ax
+    return ax.add_patch(Ellipse(center, 2*c1, 2*c2, -np.degrees(angle), **plt_kws))
 
 
 def rms_ellipses(Sigmas, figsize=(5, 5), pad=0.5, axes=None, 
@@ -879,94 +976,3 @@ def pair_grid_nodiag(
         ax.tick_params(**tick_kws)
         
     return fig, axes
-
-
-
-def get_bin_centers(bin_edges):
-    """Get bin centers assuming evenly spaced bins."""
-    return 0.5 * (bin_edges[:-1] + bin_edges[1:])
-    
-    
-def corner(X, figsize=None, kind='hist', limits=None, pad=0., hist_height_frac=0.6, sigma=None,
-           thresh=None, smooth_hist=False, space=None, spines=False, blur=None,
-           diag_kws=None, **plot_kws):
-    
-    if kind =='scatter' or kind == 'scatter_density':
-        plot_kws.setdefault('s', 3)
-        plot_kws.setdefault('c', 'black')
-        plot_kws.setdefault('marker', '.')
-        plot_kws.setdefault('ec', 'none')
-        plot_kws.setdefault('zorder', 5)
-    elif kind == 'hist':
-        plot_kws.setdefault('cmap', 'dusk_r')
-        plot_kws.setdefault('shading', 'auto')
-        plot_kws.setdefault('bins', 'auto')
-    if diag_kws is None:
-        diag_kws = dict()
-    diag_kws.setdefault('color', 'black')
-    diag_kws.setdefault('histtype', 'step')
-    diag_kws.setdefault('bins', 'auto')
-
-    n_dims = X.shape[1]
-    
-    if figsize is None:
-        f = n_dims * 7.5 / 6.0
-        figsize = (1.025 * f, f)
-    
-    labels = ["x [mm]", "x' [mrad]", "y [mm]", "y' [mrad]", "z [m]", "dE [MeV]"]
-    label_kws = None
-    tick_kws = None
-    
-    zero_center = False
-    if limits is None:
-        limits = auto_limits(X, pad, zero_center, sigma)
-
-    fig, axes = pair_grid(n_dims, figsize=figsize, limits=limits, 
-                          space=space, spines=spines, labels=labels, 
-                          label_kws=label_kws, tick_kws=tick_kws)
-        
-    # Plot 1D histograms
-    if smooth_hist:
-        diag_kws.pop('histtype')
-    bins = diag_kws.pop('bins')
-    n_bins = []
-    for i, ax in enumerate(axes.diagonal()):
-        heights, edges = np.histogram(X[:, i], bins, limits[i])
-        centers = get_bin_centers(edges)
-        n_bins.append(len(edges) - 1)
-        if smooth_hist:
-            ax.plot(centers, heights, **diag_kws)
-        else:
-            _, _, _ = ax.hist(centers, len(centers), weights=heights, **diag_kws)
-        
-    # Bivariate plots
-    if kind == 'hist':
-        bins = plot_kws.pop('bins')
-    for i in range(1, len(axes)):
-        for j in range(i):
-            ax = axes[i, j]
-            x, y = X[:, j], X[:, i]
-            if kind == 'scatter':
-                ax.scatter(x, y, **plot_kws)
-            elif kind == 'hist':
-                if bins == 'auto':
-                    Z, xedges, yedges = np.histogram2d(x, y, (n_bins[j], n_bins[i]), (limits[j], limits[i]))
-                else:
-                    Z, xedges, yedges = np.histogram2d(x, y, bins, (limits[j], limits[i]))
-                if blur:
-                    Z = filters.gaussian(Z, sigma=blur)
-                if thresh:
-                    Z = np.ma.masked_less_equal(Z, thresh)
-                xcenters = get_bin_centers(xedges)
-                ycenters = get_bin_centers(yedges)
-                ax.pcolormesh(xcenters, ycenters, Z.T, **plot_kws)                
-           
-    # Reduce height of 1D histograms. 
-    max_hist_height = 0.
-    for ax in axes.diagonal():
-        max_hist_height = max(max_hist_height, ax.get_ylim()[1])
-    max_hist_height /= hist_height_frac
-    for ax in axes.diagonal():
-        ax.set_ylim(0, max_hist_height)
-        
-    return axes
