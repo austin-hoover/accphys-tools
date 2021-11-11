@@ -28,7 +28,7 @@ from .plotting import auto_n_bins_4D
 from .plotting import remove_annotations
 from .plotting import vector
 from .plotting import var_indices
-from .plotting import get_bin_centers
+from .utils import get_bin_centers
 from .utils import rand_rows
 from . import plotting as myplt
 
