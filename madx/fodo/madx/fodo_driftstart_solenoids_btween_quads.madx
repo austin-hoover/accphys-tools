@@ -1,0 +1,41 @@
+// Single FODO cell
+
+TITLE,'fodo_driftstart_solenoids_between_quads.madx';
+ 
+E0 := 0.938272310; // proton mass [GeV]  
+EK := 1.00;        // injection kinetic energy [GeV] 
+BEAM, PARTICLE=PROTON, ENERGY=EK+E0;    
+
+phase_x := 80; // total phase advance in x plane 
+phase_y := 80; // total phase advance in y plane
+k0x := 0.5049168449;
+eta := 0.5; // quadrupole filling factor
+length := 5.0; // total lattice length
+length_quad := eta*length/2;
+length_drift := (1-eta)*length/2;
+length_sol := 0.5*length_quad;
+ks_sol := 0.1;
+
+QF: QUADRUPOLE, L=length_quad, K1=k0x;
+QD: QUADRUPOLE, L=length_quad, K1=-k0x;
+
+// Put solenoids in the middle of the drift spaces
+SOL1: SOLENOID, L=length_sol/2, ks=ks_sol;
+SOL2: SOLENOID, L=length_sol, ks=ks_sol;
+SOL3: SOLENOID, L=length_sol/2, ks=ks_sol;
+
+// Put drifts in between solenoids an quadrupoles
+new_drift_length := length_drift - length_sol;
+D1: DRIFT, L= new_drift_length/2;
+D2: DRIFT, L= new_drift_length/2;
+D3: DRIFT, L= new_drift_length/2;
+D4: DRIFT, L= new_drift_length/2;
+
+FODO: LINE=(SOL1,D1,QF,D2,SOL2,D3,QD,D4,SOL3);
+USE, PERIOD=FODO;
+
+TWISS;
+PLOT, HAXIS=S, VAXIS=BETX, BETY;
+SAVE, sequence=FODO, FILE='LATTICE.lat', BARE=false, NOEXPR=true;
+
+
