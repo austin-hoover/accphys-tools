@@ -139,7 +139,7 @@ def twiss4D(Sigma, mode):
 
 
 
-class StatsReader:
+class BeamStats:
     """Container for transverse beam statistics.
     
     Attributes
