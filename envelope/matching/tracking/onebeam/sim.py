@@ -54,10 +54,10 @@ store_bunch_coords = True
 dense = True  
 
 # Lattice
-# madx_file = '_input/fodo_driftstart.lat'
-# madx_seq = 'fodo'
-madx_file = '_input/SNSring_nux6.18_nuy6.18.lat'
-madx_seq = 'rnginj'
+madx_file = '_input/fodo_driftstart.lat'
+madx_seq = 'fodo'
+# madx_file = '_input/SNSring_nux6.18_nuy6.18.lat'
+# madx_seq = 'rnginj'
 fringe = False
 print('madx_file = {}'.format(madx_file))
 
@@ -238,21 +238,23 @@ for turn in trange(n_turns_track):
 # envelope solver.
 print('Saving bunch data.')
 if tracking == 'turn_by_turn':
-    moments = bunch_stats_node.get_data()
+    stats = bunch_stats_node.get_data()
     if store_bunch_coords:
         coords = bunch_monitor_node.get_data()
 elif tracking == 'within_lattice':
-    moments = []
+    stats = []
     for turn in range(n_turns_track):
-        moments.extend([node.get_data(turn).moments for node in bunch_stats_nodes])
+        stats.extend([node.get_data(turn) for node in bunch_stats_nodes])
     if store_bunch_coords:
         coords = []
         for turn in range(n_turns_track):
             coords.extend([node.get_data(turn) for node in bunch_monitor_nodes])
 else:
     raise ValueError("`tracking` is invalid")
+    
 
 # Save all bunch data.
+moments = [s.moments for s in stats]
 np.savetxt(filenames['bunch_moments'], moments)
 if store_bunch_coords:
     np.save(filenames['bunch_coords'], coords)
