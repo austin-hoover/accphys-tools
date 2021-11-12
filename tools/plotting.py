@@ -1,7 +1,5 @@
 """
-TO DO
-* Redo `corner` method.
-* Redo `set_corner_axes` method.
+To do: docstrings
 """
 from cycler import cycler
 import copy

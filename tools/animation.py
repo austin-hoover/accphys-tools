@@ -1,7 +1,5 @@
-"""Various animation functions
-
-TO DO
-* Redo `corner`.
+"""
+To do: docstrings
 """
 from cycler import cycler
 import copy
@@ -727,6 +725,7 @@ def corner(
     To do:
         * Randomly sample particles.
         * Plot rms envelope or provided envelope.
+        * Write docstring.
     """
     # Set default key word arguments
     if kind == 'hist':
