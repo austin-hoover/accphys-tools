@@ -390,7 +390,7 @@ def corner(
         Key word arguments for the univariate plots.
     plot_kws : dict
         Key word arguments for the bivariate plots. They will go to either
-        `scatter` or `hist2d`.
+        `ax.plot` or `ax.pcolormesh`.
         
     Returns
     -------
@@ -403,13 +403,17 @@ def corner(
     """
     # Default key word arguments.
     if kind =='scatter' or kind == 'scatter_density':
-        plot_kws.setdefault('s', 3)
-        plot_kws.setdefault('c', 'black')
-        if 'color' in plot_kws:
-            plot_kws['c'] = plot_kws.pop('color')
+        plot_kws.setdefault('ms', 3)
+        plot_kws.setdefault('color', 'black')
         plot_kws.setdefault('marker', '.')
-        plot_kws.setdefault('edgecolors', 'none')
+        plot_kws.setdefault('markeredgecolor', 'none')
         plot_kws.setdefault('zorder', 5)
+        plot_kws.setdefault('lw', 0)
+        plot_kws['lw'] = 0
+        if 'c' in plot_kws:
+            plot_kws['color'] = plot_kws.pop('c')
+        if 's' in plot_kws:
+            plot_kws['ms'] = plot_kws.pop('c')
     elif kind == 'hist':
         plot_kws.setdefault('cmap', 'dusk_r')
         plot_kws.setdefault('shading', 'auto')
@@ -476,7 +480,7 @@ def corner(
             ax = axes[i, j]
             if kind == 'scatter':
                 x, y = X[idx, j], X[idx, i]
-                ax.scatter(x, y, **plot_kws)
+                ax.plot(x, y, **plot_kws)
             elif kind == 'hist':
                 x, y = X[:, j], X[:, i]
                 if bins == 'auto':
