@@ -9,24 +9,32 @@ Unfortunately there is no `callback` option for scipy.optimize.least_squares,
 so we cannot view its progress.
 """
 import sys
+import os
+
 import numpy as np
-from tqdm import tqdm, trange
+from tqdm import tqdm
+from tqdm import trange
 
 from bunch import Bunch
 from spacecharge import SpaceChargeCalc2p5D
-from orbit.analysis import AnalysisNode
-from orbit.analysis import add_analysis_nodes
-from orbit.analysis import get_analysis_nodes_data
+from orbit.diagnostics import BunchMonitorNode
+from orbit.diagnostics import BunchStatsNode
+from orbit.diagnostics import DanilovEnvelopeBunchMonitorNode
+from orbit.diagnostics import add_analysis_node
+from orbit.diagnostics import add_analysis_nodes
 from orbit.envelope import DanilovEnvelope
-from orbit.lattice import AccLattice, AccNode, AccActionsContainer
-from orbit.space_charge.envelope import set_env_solver_nodes, set_perveance
+from orbit.lattice import AccLattice
+from orbit.lattice import AccNode
+from orbit.lattice import AccActionsContainer
+from orbit.space_charge.envelope import DanilovEnvSolverNode
+from orbit.space_charge.envelope import set_env_solver_nodes
+from orbit.space_charge.envelope import set_perveance
 from orbit.space_charge.sc2p5d.scLatticeModifications import setSC2p5DAccNodes
 from orbit.teapot import TEAPOT_Lattice
 from orbit.twiss import twiss
 from orbit.utils import helper_funcs as hf
-
-sys.path.append('/Users/46h/Research/code/accphys') 
-from tools.utils import delete_files_not_folders
+from orbit.utils.consts import mass_proton
+from orbit.utils.general import delete_files_not_folders
     
     
 # Settings
@@ -44,7 +52,7 @@ fringe = False
 
 # Initial beam
 mode = 1
-eps = 50e-6 # intrinsic emitance
+eps_l = 50e-6 # intrinsic emitance
 eps_x_frac = 0.25 # ex/eps
 nu = np.radians(90) # x-y phase difference
 
@@ -68,8 +76,10 @@ nturns = 15
 
 # Match and store optimizer history
 print 'Matching.'
-lattice = hf.lattice_from_file(latfile, latseq, fringe)
-env = DanilovEnvelope(eps, mode, eps_x_frac, mass, kin_energy, length=bunch_length)
+lattice = TEAPOT_Lattice()
+lattice.readMADX(latfile, latseq)
+lattice.set_fringe(False)
+env = DanilovEnvelope(eps_l, mode, eps_x_frac, mass, kin_energy, length=bunch_length)
 env.set_intensity(intensity)
 solver_nodes = set_env_solver_nodes(lattice, env.perveance, max_solver_spacing)
 result = env.match(lattice, solver_nodes, method=method, verbose=2)
@@ -90,15 +100,14 @@ np.save('_output/data/costs.npy', costs)
 # Using the seed from each iteration, track and store the s-dependent
 # envelope parameters.
 print 'Collecting s-dependent data.'
-monitor_nodes = add_analysis_nodes(lattice, kind='env_monitor')
+monitor_nodes = add_analysis_nodes(DanilovEnvelopeBunchMonitorNode, lattice, dense=True)
 sdep_params_list = []
 for twiss_params in tqdm(result.history):
     env.set_twiss4D(twiss_params)
     env.track(lattice)
-    sdep_params = get_analysis_nodes_data(monitor_nodes, 'env_params')
+    sdep_params = [node.get_data(0).env_params for node in monitor_nodes]
     sdep_params_list.append(sdep_params)
     for monitor_node in monitor_nodes:
         monitor_node.clear_data()
 np.save('_output/data/sdep_params_list.npy', sdep_params_list)
-np.save('_output/data/positions.npy', 
-        get_analysis_nodes_data(monitor_nodes, 'position'))
+np.save('_output/data/positions.npy', [node.position for node in monitor_nodes])
