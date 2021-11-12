@@ -366,6 +366,7 @@ def corner(
     coords, dims=None, kind='hist', figsize=None, limits=None, skip=0,
     keep_last=False, samples=None, hist_height_frac=0.6, text_fmt='',
     text_vals=None, blur=None, global_cmap_norm=False, static_n_bins=False,
+    env_params=None, env_kws=None,
     text_kws=None, grid_kws=None, autolim_kws=None, plot_kws=None,
     diag_kws=None, **anim_kws
 ):
@@ -411,6 +412,11 @@ def corner(
             int: Number of bins at frame `static_n_bins`.
             float: `static_n_bins` * maximum number of bins across frames.
         Of course the number of bins can just be hard-coded.
+    env_params : list or ndarray
+        List of Danilov envelope parameters at each frame. This is useful
+        for comparison with the envelope model.
+    env_kws : dict:
+        Key word arguments passed to `ax.plot` for the Danilov envelope.
     **anim_kws
         Key word arguments for matplotlib.animation.FuncAnimation.
     """
@@ -609,7 +615,13 @@ def corner(
                 for j in range(i):
                     X = coords_samp[frame]
                     lines[i][j].set_data(X[:, j], X[:, i])
-
+        
+        if env_params is not None:
+            myplt.corner_env(env_params[frame],
+                             dims='all',
+                             axes=axes[1:, :-1],
+                             **env_kws)
+                    
         # Display text
         axes[1, 2].annotate(texts[frame], xy=(0.1, 0), xycoords='axes fraction', **text_kws)
         
