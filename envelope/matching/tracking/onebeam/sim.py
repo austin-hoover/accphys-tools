@@ -42,8 +42,8 @@ from orbit.utils.general import delete_files_not_folders
 # General
 n_parts = int(1e5)
 n_test_parts = 100
-n_turns_track = 1
-tracking = 'within_lattice' # {'turn_by_turn', 'within_lattice'}
+n_turns_track = 20
+tracking = 'turn_by_turn' # {'turn_by_turn', 'within_lattice'}
 track_bunch = True
 store_bunch_coords = True
 # If tracking the s-dependent beam parameters, we need to choose where to 
@@ -54,9 +54,12 @@ store_bunch_coords = True
 dense = True  
 
 # Lattice
-madx_file = '_input/fodo_driftstart.lat'
-madx_seq = 'fodo'
+# madx_file = '_input/fodo_driftstart.lat'
+# madx_seq = 'fodo'
+madx_file = '_input/SNSring_nux6.18_nuy6.18.lat'
+madx_seq = 'rnginj'
 fringe = False
+print('madx_file = {}'.format(madx_file))
 
 # Initial beam
 mass = mass_proton # [GeV/c^2]
@@ -77,7 +80,7 @@ gridpts = (128, 128, 1) # (x, y, z)
 match = True 
 tol = 1e-4 # absolute tolerance for cost function
 verbose = 2 # {0 (silent), 1 (report once at end), 2 (report at each step)}
-perturb_radius = 0.1 # between 0 (no effect) and 1.0
+perturb_radius = 0. # between 0 (no effect) and 1.0
 method = 'auto' # {'lsq', 'replace_by_avg', 'auto'}
 
 # Output data locations
