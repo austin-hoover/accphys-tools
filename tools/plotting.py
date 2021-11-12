@@ -645,7 +645,7 @@ def corner_env(
         Whether to use the constrained_layout option when creating the figure.
     fill : bool
         Whether to fill the ellipses.
-    cmap : list of colors or Matplotlib colormap
+    cmap : list of colors, Matplotlib colormap, or str 
         Determines the color cycle if plotting multiple envelopes.
     cmap_range : (min, max)
         The locations for the color cycle to to start and end in the color map.
@@ -723,6 +723,8 @@ def corner_env(
         if type(cmap) in [tuple, list]:
             colors = cmap
         else:
+            if type(cmap) is str:
+                cmap = matplotlib.cm.get_cmap(cmap)
             start, end = cmap_range
             colors = [cmap(i) for i in np.linspace(start, end, n_env)]
         color_cycle = cycler('color', colors)
@@ -829,22 +831,23 @@ def scatter_density(ax, x, y, samples=None, sort=True, bins=40,
     return ax
 
 
-def vector(ax, v, origin=(0, 0), c='k', lw=None, style='->', head_width=0.4,
-           head_length=0.8):
+def vector(ax, v, origin=(0, 0), color='black', lw=None, 
+           style='->', head_width=0.4, head_length=0.8):
     """Plot 2D vector `v` as an arrow."""
-    props = {}
+    props = dict()
     props['arrowstyle'] = '{},head_width={},head_length={}'.format(
-        style, head_width, head_length)
+        style, head_width, head_length
+    )
     props['shrinkA'] = props['shrinkB'] = 0
-    props['fc'] = props['ec'] = c
+    props['fc'] = props['ec'] = color
     props['lw'] = lw
     ax.annotate('', xy=(origin[0]+v[0], origin[1]+v[1]),
                 xytext=origin, arrowprops=props)
     return ax
 
 
-def eigvec_trajectory(ax, M, i='x', j='y', colors=('r','b'), s=None, lw=2,
-                      alpha=0.3):
+def eigvec_trajectory(ax, M, dim1='x', dim2='y', colors=('red', 'blue'), turns=20,
+                      arrow_kws=None, scatter_kws=None):
     """Plot the trajectory of the eigenvectors of the transfer matrix.
     
     Parameters
@@ -853,38 +856,40 @@ def eigvec_trajectory(ax, M, i='x', j='y', colors=('r','b'), s=None, lw=2,
         The axis on which to plot.
     M : ndarray, shape (4, 4)
         The lattice transfer matrix.
-    i{j} : str or int
+    dim1{dim2} : str or int
         The component of the eigenvector to plot on the x{y} axis. Can be
         either {'x', 'xp', 'y', 'yp'} or {0, 1, 2, 3}.
-    colors : two-element list or tuple
+    colors : (color1, color2)
         The colors to use for eigenvector 1 and 2.
-    s : float
-        The marker size for the scatter plot.
-    lw : float
-        The lineweight for the arrrows.
-    alpha : float
-        The alpha parameter for the scatter plot.
         
     Returns
     -------
     ax : matplotlib.pyplot.axes object
         The modified axis.
     """
-    def track(x, M, nturns=1):
-        X = [x]
+    def track(vector, M, nturns=1):
+        X = [vector]
         for i in range(nturns):
             X.append(np.matmul(M, X[i]))
         return np.array(X)
     
-    if type(i) is str:
-        i, j = var_indices[i], var_indices[j]
+    if type(dim1) is str:
+        dim1 = var_indices[dim1]
+    if type(dim2) is str:
+        dim2 = var_indices[dim2]
+    i, j = dim1, dim2
+        
+    if scatter_kws is None:
+        scatter_kws = dict()
+    if arrow_kws is None:
+        arrow_kws = dict()
         
     eigvals, eigvecs = np.linalg.eig(M)
     v1, _, v2, _ = eigvecs.T
     for v, color in zip((v1, v2), colors):
-        X = track(v.real, M, nturns=20)
-        ax.scatter(X[:, i], X[:, j], s=s, c=color, alpha=alpha, marker='o')
-        vector(ax, v[[i, j]].real, c=color, lw=lw)
+        X = track(v.real, M, turns)
+        ax.scatter(X[:, i], X[:, j], color=color, **scatter_kws)
+        vector(ax, v[[i, j]].real, color=color, **arrow_kws)
     return ax
 
 

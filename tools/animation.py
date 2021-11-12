@@ -36,7 +36,7 @@ from . import plotting as myplt
 plt.rcParams['animation.ffmpeg_path'] = '/usr/local/bin/ffmpeg'
     
 # I had to make this global for some reason... don't remember why.
-artists_list = []
+ARTISTS_LIST = []
 
 
 def skip_frames(frames, skip=1, keep_last=False):
@@ -325,14 +325,14 @@ def auto_limits_global(coords, pad=0., zero_center=False, sigma=None):
 #                     lines_env[i][j].set_data(X_env[:, j], X_env[:, i+1])
 #         if plt_diag:
 #             if diag_kind == 'hist':
-#                 global artists_list
-#                 for artists in artists_list:
+#                 global ARTISTS_LIST
+#                 for artists in ARTISTS_LIST:
 #                     for artist in artists:
 #                         artist.remove()
-#                 artists_list = []
+#                 ARTISTS_LIST = []
 #                 for i, ax in enumerate(axes.diagonal()):
 #                     heights, bin_edges, artists = ax.hist(X[:, i], **diag_kws)
-#                     artists_list.append(artists)
+#                     ARTISTS_LIST.append(artists)
 #             elif diag_kind == 'kde':
 #                 for i, ax in enumerate(axes.diagonal()):
 #                     for line in ax.lines:
@@ -353,8 +353,8 @@ def auto_limits_global(coords, pad=0., zero_center=False, sigma=None):
 #     return anim
 
 
-def _corner_2D(fig, ax, coords, coords_env, dims, texts, fps, env_kws,
-               text_kws, **plot_kws):
+def _corner_2D(fig, ax, coords, coords_env, dims, texts, env_kws,
+               text_kws, plot_kws, **anim_kws):
     """2D scatter plot (helper function for `corner`)."""
     n_frames = coords.shape[0]
     j, i = [var_indices[dim] for dim in dims]
@@ -374,8 +374,7 @@ def _corner_2D(fig, ax, coords, coords_env, dims, texts, fps, env_kws,
             line_env.set_data(X_env[:, j], X_env[:, i])
         ax.set_title(texts[t], **text_kws)
         
-    return animation.FuncAnimation(fig, update, init_func=init, frames=n_frames,
-                                   interval=1000/fps)
+    return animation.FuncAnimation(fig, update, init_func=init, frames=n_frames, **anim_kws)
     
 
 def corner_env(
@@ -466,12 +465,12 @@ def corner_env(
         text_vals = list(range(n_frames))
     if text_fmt is None: # display empty text
         text_fmt = ''
-    texts = np.array([text_fmt.format(val) for val in text_vals])
+    texts = [text_fmt.format(val) for val in text_vals]
     
     # Skip frames
     for i in range(n_env):
         coords_list[i] = skip_frames(coords_list[i], skip, keep_last)
-    texts = skip_frames(texts, skip ,keep_last)
+    texts = skip_frames(texts, skip, keep_last)
     n_frames = coords_list[0].shape[0]
         
     # Configure axes limits.
@@ -524,8 +523,8 @@ def corner_env(
     plt.close()
                 
     if dims != 'all':
-        return _corner_env_2D(fig, ax, coords_list, dims, clear_history,
-                              show_init, fill, fc, ec, lw, fps, texts)
+        return _corner_env_2D(fig, ax, coords_list, dims, clear_history, show_init,
+                              fill, fc, ec, lw, texts, **anim_kws)
     
     # Create list of Line2D objects.
     lines_list = []
@@ -560,12 +559,12 @@ def corner_env(
         remove_annotations(axes[0, 1])
         axes[0, 1].annotate(texts[t], xy=(0.35, 0.5), xycoords='axes fraction')
                         
-    anim = animation.FuncAnimation(fig, update, frames=n_frames)
+    anim = animation.FuncAnimation(fig, update, frames=n_frames, **anim_kws)
     return anim
     
     
 def _corner_env_2D(fig, ax, coords_list, dims, clear_history, show_init,
-                   plot_boundary, fill, fc, ec, lw, fps, texts):
+                   fill, fc, ec, lw, texts, **anim_kws):
     """Helper function for `corner_env`."""
     X_init = coords_list[0][0]
     lines = []
@@ -587,8 +586,7 @@ def _corner_env_2D(fig, ax, coords_list, dims, clear_history, show_init,
                 ax.plot(X_init[:, k], X_init[:, j], 'k--',
                         lw=0.5, alpha=0.25)
             ax.set_title(texts[t])
-    anim = animation.FuncAnimation(fig, update, frames=coords_list[0].shape[0],
-                                   interval=1000/fps)
+    anim = animation.FuncAnimation(fig, update, frames=coords_list[0].shape[0], **anim_kws)
     return anim
         
 
@@ -716,15 +714,21 @@ def corner(
     kind='hist',
     limits=None, pad=0., zero_center=False, space=0.1, figsize=None, 
     skip=0, keep_last=False, 
-    hist_height_frac=1.0, 
+    hist_height_frac=0.6, 
     sigma=None,
     blur=None, 
-    global_cmap_norm=True,
-    static_n_bins=True,
+    global_cmap_norm=False,
+    static_n_bins=False,
     text_fmt='', text_vals=None, fps=1, 
     diag_kws=None, text_kws=None, 
     **plot_kws
 ):     
+    """Animation of corner plot.
+    
+    To do:
+        * Randomly sample particles.
+        * Plot rms envelope or provided envelope.
+    """
     # Set default key word arguments
     if kind == 'hist':
         plot_kws.setdefault('cmap', 'mono_r')
@@ -802,7 +806,7 @@ def corner(
     
     # Option to keep the number of bins fixed in 2D histograms.
     n_bins_list_1D = np.array(n_bins_list_1D)
-    if static_n_bins is not None:
+    if static_n_bins:
         for j in range(n_dims):
             if static_n_bins == 'mean':
                 n_bins_list_1D[:, j] = np.max(n_bins_list_1D[:, j])
@@ -812,6 +816,8 @@ def corner(
                 n_bins_list_1D[:, j] = n_bins_list_1D[-1, j]
             elif type(static_n_bins) in [int, float]:
                 n_bins_list_1D[:, j] = static_n_bins * np.max(n_bins_list_1D[:, j])
+            else:
+                raise ValueError("Invalid `static_n_bins` parameter.")
     
     # Setup for 2D plots
     if kind == 'hist':  
@@ -847,11 +853,11 @@ def corner(
                 lines[i].append(line)  
 
     def update(frame):
-        global artists_list
-        for artists in artists_list:
+        global ARTISTS_LIST
+        for artists in ARTISTS_LIST:
             for artist in artists:
                 artist.remove()
-        artists_list = []
+        ARTISTS_LIST = []
         remove_annotations(axes)  
         
         X = coords[frame]
@@ -863,8 +869,7 @@ def corner(
             n = len(y)
             x = np.linspace(limits[i][0], limits[i][1], n)
             _, _, artists = ax.hist(x, n, weights=heights_list_1D[frame][i], **diag_kws)
-#             heights, edges, artists = ax.hist(X[:, i], n_bins_list_1D[frame][i], **diag_kws)
-            artists_list.append(artists)
+            ARTISTS_LIST.append(artists)
             
         # Off-diagonal plots
         if kind == 'hist':
@@ -881,14 +886,14 @@ def corner(
                         plot_kws['vmax'] = max_heights[i, j]
                     qmesh = ax.pcolormesh(x, y, Z.T, **plot_kws)
                     artists.append(qmesh)
-            artists_list.append(artists)
+            ARTISTS_LIST.append(artists)
         elif kind == 'scatter':
             for i in range(1, n_dims):
                 for j in range(i):
                     lines[i][j].set_data(X[:, j], X[:, i])
 
         # Display text
-        axes[1, 2].annotate(texts[frame], xy=(0.35, 0), xycoords='axes fraction', **text_kws)
+        axes[1, 2].annotate(texts[frame], xy=(0.1, 0), xycoords='axes fraction', **text_kws)
         
     # Call animator
     interval = 1000. / fps
