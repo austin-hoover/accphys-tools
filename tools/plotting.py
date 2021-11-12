@@ -417,7 +417,7 @@ def corner(
         autolim_kws = dict()
 
     # Create figure.
-    n_parts, n_dims = X.shape
+    n_points, n_dims = X.shape
     if figsize is None:
         f = n_dims * 7.5 / 6.0
         figsize = (1.025 * f, f)
@@ -454,10 +454,10 @@ def corner(
             ax.hist(centers, len(centers), weights=heights, **diag_kws)
         
     # Take random sample.
-    idx = np.arange(n_parts)
-    if samples is not None and samples < n_parts:
+    idx = np.arange(n_points)
+    if samples is not None and samples < n_points:
         if type(samples) is float:
-            n = int(samples * n_parts)
+            n = int(samples * n_points)
         else:
             n = samples
         idx = utils.rand_rows(idx, n)
