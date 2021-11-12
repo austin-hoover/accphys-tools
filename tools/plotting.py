@@ -399,6 +399,8 @@ def corner(
     if kind =='scatter' or kind == 'scatter_density':
         plot_kws.setdefault('s', 3)
         plot_kws.setdefault('c', 'black')
+        if 'color' in plot_kws:
+            plot_kws['c'] = plot_kws.pop('color')
         plot_kws.setdefault('marker', '.')
         plot_kws.setdefault('ec', 'none')
         plot_kws.setdefault('zorder', 5)
