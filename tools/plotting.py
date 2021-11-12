@@ -342,8 +342,8 @@ def pair_grid_nodiag(
 def corner(
     X, kind='hist', figsize=None, limits=None, hist_height_frac=0.6,
     samples=None, smooth_hist=False, thresh=None, blur=None,
-    rms_ellipse_kws=None, autolim_kws=None, grid_kws=None, diag_kws=None,
-    **plot_kws
+    env_params=None, env_kws=None, rms_ellipse=False, rms_ellipse_kws=None,
+    autolim_kws=None, grid_kws=None, diag_kws=None, **plot_kws
 ):
     """Plot the pairwise relationships between the coordinates.
 
@@ -372,10 +372,16 @@ def corner(
         In the 2D histograms, with count < thresh will not be plotted.
     blur : float
         Apply a Gaussian blur to the 2D histograms with sigma=blur.
+    env_params : list or ndarray, shape (8,)
+        Danilov envelope parameters passed to `corner_env`.
+    env_kws : dict:
+        Key word arguments passed to `ax.plot` for the Danilov envelope.
+    rms_ellipse : bool
+        Whether to plot the rms ellipses.
     rms_ellipse_kws : dict
-        Key word arguments for plotting of the rms ellipses. Pass
+        Key word arguments passed to `ax.plot` for the rms ellipses. Pass
         {'2rms': False} to plot the true rms ellipse instead of the 2-rms
-        ellipse. If None, the ellipses are not plotted.
+        ellipse.
     autolim_kws : dict
         Key word arguments for `auto_limits` method.
     grid_kws : dict
@@ -402,7 +408,7 @@ def corner(
         if 'color' in plot_kws:
             plot_kws['c'] = plot_kws.pop('color')
         plot_kws.setdefault('marker', '.')
-        plot_kws.setdefault('ec', 'none')
+        plot_kws.setdefault('edgecolors', 'none')
         plot_kws.setdefault('zorder', 5)
     elif kind == 'hist':
         plot_kws.setdefault('cmap', 'dusk_r')
@@ -486,8 +492,13 @@ def corner(
                 xcenters = utils.get_bin_centers(xedges)
                 ycenters = utils.get_bin_centers(yedges)
                 ax.pcolormesh(xcenters, ycenters, Z.T, **plot_kws)
-            if rms_ellipse_kws is not None:
-                rms_ellipses(Sigma, axes=axes, **rms_ellipse_kws)
+                
+    # Ellipses
+    scatter_axes = axes[1:, :-1]
+    if rms_ellipse:
+        rms_ellipses(Sigma, axes=scatter_axes, **rms_ellipse_kws)
+    if env_params is not None:
+        corner_env(env_params, dims='all', axes=scatter_axes, **env_kws)
     
     # Reduce height of 1D histograms. 
     max_hist_height = 0.
@@ -496,6 +507,7 @@ def corner(
     max_hist_height /= hist_height_frac
     for ax in axes.diagonal():
         ax.set_ylim(0, max_hist_height)
+        
     return axes
     
     
@@ -503,7 +515,7 @@ def corner_env(
     env_params, dims='all', axes=None, figsize=None, limits=None,
     units='mm-mrad', norm_labels=False, fill=False, cmap=None,
     cmap_range=(0, 1), autolim_kws=None, grid_kws=None, fill_kws=None,
-    **plt_kws
+    return_lines=False, **plt_kws
 ):
     """Plot projected phase space ellipses from Danilov envelope parameters.
     
@@ -539,6 +551,8 @@ def corner_env(
         Key word arguments for `pair_grid` method.
     fill_kws : dict
         Key word arguments for `ax.fill` if filling the ellipses.
+    return_lines : bool
+        Whether to return
     **plt_kws
         Key word arguments for `ax.plot` if plotting ellipse boundaries. (We
         should eventually be able to pass a list to use different key words
@@ -548,6 +562,9 @@ def corner_env(
     -------
     axes : ndarray, shape (3, 3)
         Array of subplots.
+    lines : list[matplotlib.lines.Line2D]
+        The lines corresponding the ellipses. This is helpful if you want to
+        delete them later.
     """   
     # Get ellipse boundary data.
     if type(env_params) is not np.ndarray:
@@ -623,13 +640,15 @@ def corner_env(
                 ax.set_prop_cycle(color_cycle)
 
     # Plot
+    lines = []
     for X in coords:
         if dims != 'all':
             j, i = [var_indices[dim] for dim in dims]
             if fill:
                 ax.fill(X[:, j], X[:, i], **fill_kws)
             else:
-                ax.plot(X[:, j], X[:, i], **plt_kws)
+                line, = ax.plot(X[:, j], X[:, i], **plt_kws)
+                lines.append(line)
         else:
             for i in range(3):
                 for j in range(i + 1):
@@ -637,8 +656,12 @@ def corner_env(
                     if fill:
                         ax.fill(X[:, j], X[:, i+1], **fill_kws)
                     else:
-                        ax.plot(X[:, j], X[:, i+1], **plt_kws)
-    return axes
+                        line, = ax.plot(X[:, j], X[:, i+1], **plt_kws)
+                        lines.append(line)
+    if return_lines:
+        return axes, lines
+    else:
+        return axes
     
     
 def fft(ax, x, y):
@@ -821,7 +844,9 @@ def ellipse(ax, c1, c2, angle=0.0, center=(0, 0), **plt_kws):
 
 
 def rms_ellipses(Sigmas, figsize=(5, 5), pad=0.5, axes=None, 
-                 cmap=None, cmap_range=(0, 1), centers=None, **plt_kws):
+                 cmap=None, cmap_range=(0, 1), centers=None,
+                 return_artists=False,
+                 **plt_kws):
     """Plot rms ellipse parameters directly from covariance matrix."""
     Sigmas = np.array(Sigmas)
     if Sigmas.ndim == 2:
@@ -843,6 +868,7 @@ def rms_ellipses(Sigmas, figsize=(5, 5), pad=0.5, axes=None,
         centers = 4 * [0.0]
     
     dims = {0:'x', 1:'xp', 2:'y', 3:'yp'}
+    artists = []
     for l, Sigma in enumerate(Sigmas):
         for i in range(3):
             for j in range(i + 1):
@@ -851,5 +877,10 @@ def rms_ellipses(Sigmas, figsize=(5, 5), pad=0.5, axes=None,
                     plt_kws['color'] = colors[l]
                 xcenter = centers[j]
                 ycenter = centers[i + 1]
-                ellipse(axes[i, j], c1, c2, angle, center=(xcenter, ycenter), **plt_kws)
-    return axes
+                artist = ellipse(axes[i, j], c1, c2, angle,
+                             center=(xcenter, ycenter), **plt_kws)
+                artists.append(artist)
+    if return_artists:
+        return axes, artists
+    else:
+        return axes

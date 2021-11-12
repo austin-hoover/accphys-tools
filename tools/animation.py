@@ -366,7 +366,7 @@ def corner(
     coords, dims=None, kind='hist', figsize=None, limits=None, skip=0,
     keep_last=False, samples=None, hist_height_frac=0.6, text_fmt='',
     text_vals=None, blur=None, global_cmap_norm=False, static_n_bins=False,
-    env_params=None, env_kws=None,
+    rms_ellipse=False, rms_ellipse_kws=None, env_params=None, env_kws=None,
     text_kws=None, grid_kws=None, autolim_kws=None, plot_kws=None,
     diag_kws=None, **anim_kws
 ):
@@ -401,6 +401,8 @@ def corner(
         colormap using all frames for that subplot. This makes sense if raw
         counts are plotted; however, it can wash out certain frames if the
         distribution becomes very peaked in a different frame.
+    env_params : list
+        List of Danilov envelope parameters to be passed to `corner_env`.
     static_n_bins : {'mean', 'max', 'final', int, float}
         The auto-binning routine produces a different number of bins on each
         frame. This parameter keeps the number of bins within each subplot the
@@ -412,11 +414,6 @@ def corner(
             int: Number of bins at frame `static_n_bins`.
             float: `static_n_bins` * maximum number of bins across frames.
         Of course the number of bins can just be hard-coded.
-    env_params : list or ndarray
-        List of Danilov envelope parameters at each frame. This is useful
-        for comparison with the envelope model.
-    env_kws : dict:
-        Key word arguments passed to `ax.plot` for the Danilov envelope.
     **anim_kws
         Key word arguments for matplotlib.animation.FuncAnimation.
     """
@@ -446,6 +443,14 @@ def corner(
         text_kws = dict()
     if autolim_kws is None:
         autolim_kws = dict()
+    if rms_ellipse:
+        if rms_ellipse_kws is None:
+            rms_ellipse_kws = dict()
+        rms_ellipse_kws.setdefault('2rms', True)
+        two_rms = rms_ellipse_kws.pop('2rms')
+    if env_params is not None:
+        if env_kws is None:
+            env_kws = dict()
 
     # Process particle coordinates
     if dims is None:
@@ -466,6 +471,8 @@ def corner(
     # Skip frames.
     coords = skip_frames(coords, skip, keep_last)
     texts = skip_frames(texts, skip, keep_last)
+    if env_params is not None:
+        env_params = skip_frames(env_params, skip, keep_last)
     n_frames = len(coords)
     
     # Take random sample of particles for scatter plots.
@@ -616,14 +623,37 @@ def corner(
                     X = coords_samp[frame]
                     lines[i][j].set_data(X[:, j], X[:, i])
         
+        # Plot ellipses.
+        scatter_axes = axes[1:, :-1]
+#        if env_params is not None or rms_ellipse:
+#            for ax in scatter_axes.flat:
+#                for line in ax.lines:
+#                    line.set_visible(()
+            
         if env_params is not None:
-            myplt.corner_env(env_params[frame],
-                             dims='all',
-                             axes=axes[1:, :-1],
-                             **env_kws)
+            _, env_lines = myplt.corner_env(
+                env_params[frame], dims='all',
+                axes=scatter_axes, return_lines=True,
+                **env_kws
+            )
+            ARTISTS_LIST.append(env_lines)
+            
+        if rms_ellipse:
+            Sigma = np.cov(X.T)
+            if two_rms:
+                Sigma *= 4.0
+            _, rms_artists = myplt.rms_ellipses(
+                Sigma,
+                axes=scatter_axes,
+                return_artists=True,
+                **rms_ellipse_kws
+            )
+            ARTISTS_LIST.append(rms_artists)
                     
         # Display text
-        axes[1, 2].annotate(texts[frame], xy=(0.1, 0), xycoords='axes fraction', **text_kws)
+        axes[1, 2].annotate(texts[frame], xy=(0.1, 0),
+                            xycoords='axes fraction',
+                            **text_kws)
         
     anim = animation.FuncAnimation(fig, update, frames=n_frames, **anim_kws)
     return anim
