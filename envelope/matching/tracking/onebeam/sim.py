@@ -80,7 +80,7 @@ gridpts = (128, 128, 1) # (x, y, z)
 match = True 
 tol = 1e-4 # absolute tolerance for cost function
 verbose = 2 # {0 (silent), 1 (report once at end), 2 (report at each step)}
-perturb_radius = 0. # between 0 (no effect) and 1.0
+perturb_radius = 0.2 # between 0 (no effect) and 1.0
 method = 'auto' # {'lsq', 'replace_by_avg', 'auto'}
 
 # Output data locations
@@ -159,7 +159,7 @@ env.track(lattice, n_turns_track, n_test_parts, progbar=True)
 print('Saving envelope data.')
 if tracking == 'turn_by_turn':
     env_data = env_monitor_node.get_data()
-    xvals = np.arange(n_turns_track)
+    xvals = np.arange(n_turns_track).astype(int)
 elif tracking == 'within_lattice':
     positions = np.array([node.position for node in env_monitor_nodes])
     env_data, xvals = [], []
