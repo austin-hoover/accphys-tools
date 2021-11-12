@@ -18,7 +18,6 @@ from matplotlib.patches import Ellipse, transforms
 from skimage import filters
 
 from .beam_analysis import get_ellipse_coords
-# from .plotting import setup_corner
 from .plotting import pair_grid
 from .plotting import pair_grid_nodiag
 from .plotting import max_u_up, max_u_up_global
@@ -503,10 +502,10 @@ def corner_env(
     if cmap is not None:
         colors = None
         if type(cmap) in [list, tuple]:
+            colors = cmap
+        else:
             values = np.linspace(cmap_range[0], cmap_range[1], n_env)
             colors = [cmap(i) for i in values]
-        else:
-            colors = cmap
         if dims != 'all':
             ax.set_prop_cycle(cycler('color', colors))
         else:
