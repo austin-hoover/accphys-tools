@@ -20,6 +20,7 @@ from .plotting import pair_grid
 from .plotting import pair_grid_nodiag
 from .plotting import max_u_up, max_u_up_global
 from .plotting import auto_limits
+from .plotting import auto_limits_global
 from .plotting import process_limits
 from .plotting import auto_n_bins_4D
 from .plotting import remove_annotations
@@ -45,20 +46,6 @@ def skip_frames(frames, skip=1, keep_last=False):
         elif type(frames) is np.ndarray:
             frames = np.append(frames, last)
     return frames
-
-
-def auto_limits_global(coords, pad=0., zero_center=False, sigma=None):
-    if sigma is None:
-        mins = np.min([np.min(X, axis=0) for X in coords], axis=0)
-        maxs = np.max([np.max(X, axis=0) for X in coords], axis=0)
-    else:
-        means = np.mean([np.mean(X, axis=0) for X in coords], axis=0)
-        stds = np.max([np.std(X, axis=0) for X in coords], axis=0)
-        widths = 2.0 * sigma * stds
-        mins = means - 0.5 * widths
-        maxs = means + 0.5 * widths
-    mins, maxs = process_limits(mins, maxs, pad, zero_center)
-    return [(lo, hi) for lo, hi in zip(mins, maxs)]
 
 
 # def corner(
@@ -376,11 +363,10 @@ def _corner_2D(fig, ax, coords, coords_env, dims, texts, env_kws,
 
 def corner_env(
     params, dims='all', skip=0, keep_last=False, 
-    figsize=None, limits=None, pad=0.25, space=0.15, grid=True,
-    ec='k', fc='lightsteelblue', lw=None, fill=True,
-    show_init=False, clear_history=True, 
-    text_fmt='', text_vals=None, 
-    units='mm-mrad', norm_labels=False, cmap=None, cmap_range=(0, 1), 
+    figsize=None, limits=None, fill=True, show_init=False, clear_history=True,
+    text_fmt='', text_vals=None, units='mm-mrad', norm_labels=False,
+    cmap=None, cmap_range=(0, 1), autolim_kws=None, grid_kws=None,
+    fill_kws=None, plt_kws=None, init_kws=None,
     **anim_kws
 ):
     """Corner plot with beam envelope only.
@@ -402,14 +388,6 @@ def corner_env(
         Size of the figure (x_size, y_size). 
     limits : list
         List of (min, max) for each dimension.
-    pad : float
-        Padding for the axes ranges. The edge of the plots will be at
-        umax * (1 + pad), where umax is maximum amplitude of any beam particle
-        among all the frames.
-    space : float
-        Size of the space between subplots. 
-    grid : bool
-        Whether to plot grid lines.
     ec, fc : str
         Color of ellipse boundary and interior, respectively.
     lw : float
@@ -422,20 +400,27 @@ def corner_env(
         Whether to clear the previous frames before plotting the new frame.
     text_vals, text_fmt: list, str
         Each new frame will display text indicating the turn, position, etc.
-        For example: 'Turn = 5' or 's = 17.4 m'. The string that will be printed
-        is `text_fmt.format(text_vals[f])`, where f is the frame number. If
-        `text_vals` is None, we use list(range(n_frames)).
-    cmap : list of colors or Matplotlib colormap
-        Determines the color cycle if plotting multiple envelopes.
-    cmap_range : (min, max)
-        The locations for the color cycle to to start and end in the color map.
-        (0, 1) would use the entire color map, while (0.5, 1) would start at
-        the midpoint and go until the end.
+        For example: 'Turn = 5' or 's = 17.4 m'. The string that will be
+        printed is `text_fmt.format(text_vals[f])`, where f is the frame
+        number. If `text_vals` is None, we use list(range(n_frames)).
     units : str, bool, or None
         Whether to display units on the axis labels. Options are 'mm-mrad' or
-        'm-rad'. 
+        'm-rad'.
     norm_labels : bool
         Whether to add '_n' to the axis labels ('x' -> 'x_n').
+    cmap : list of colors, Matplotlib colormap, or str
+        Determines the color cycle if plotting multiple envelopes.
+    cmap_range : (min, max)
+        The locations for the color cycle to start and end in the color map
+        (between 0 and 1).
+    autolim_kws : dict
+        Key word arguments for `auto_limits_global` method.
+    grid_kws : dict
+        Key word arguments for `pair_grid` method.
+    fill_kws : dict
+        Key word arguments for `ax.fill` if filling the ellipses.
+    plt_kws : dict
+        Key word arguments for `ax.plot` if plotting ellipse boundaries.
     **anim_kws
         Key word arguments for matplotlib.animation.FuncAnimation.
     
@@ -443,6 +428,22 @@ def corner_env(
     -------
     matplotlib.animation.FuncAnimation
     """
+    # Default key word arguments.
+    if fill_kws is None:
+        fill_kws = dict()
+    fill_kws.setdefault('lw', 0)
+    fill_kws.setdefault('fc', 'lightsteelblue')
+    if plt_kws is None:
+        plt_kws = dict()
+    plt_kws.setdefault('color', 'black')
+    plt_kws.setdefault('ls', '-')
+    if init_kws is None:
+        init_kws = dict()
+    init_kws.setdefault('color', 'black')
+    init_kws.setdefault('ls', '--')
+    init_kws.setdefault('lw', 0.5)
+    init_kws.setdefault('alpha', 0.25)
+        
     # Get ellipse coordinates at each frame.
     params_list = np.copy(params)
     if params_list.ndim == 2:
@@ -457,14 +458,14 @@ def corner_env(
         fill = False
         ec = None
             
-    # Configure text updates
+    # Configure text updates.
     if text_vals is None:
         text_vals = list(range(n_frames))
     if text_fmt is None: # display empty text
         text_fmt = ''
     texts = [text_fmt.format(val) for val in text_vals]
     
-    # Skip frames
+    # Skip frames.
     for i in range(n_env):
         coords_list[i] = skip_frames(coords_list[i], skip, keep_last)
     texts = skip_frames(texts, skip, keep_last)
@@ -472,19 +473,21 @@ def corner_env(
         
     # Configure axes limits.
     if limits is None:
-        maxs = [(1 + pad) * max_u_up_global(coords) for coords in coords_list]
-        umax, upmax = np.max(maxs, axis=0)
-        limits = [(-umax, umax), (-upmax, upmax)]
-    if len(limits) == 2:
-        limits = 2 * limits
+        if autolim_kws is None:
+            autolim_kws = dict()
+        autolim_kws.setdefault('pad', 0.5)
+        limits = auto_limits_global(np.vstack(coords_list), **autolim_kws)
         
     # Create figure
-    labels = myplt.get_labels(units, norm_labels)
+    if grid_kws is None:
+        grid_kws = dict()
+    grid_kws.setdefault('figsize', figsize)
+    grid_kws.setdefault('limits', limits)
+    grid_kws.setdefault('constrained_layout', True)
+    grid_kws.setdefault('labels', myplt.get_labels(units, norm_labels))
     if dims == 'all':
         n_dims = 4
-        fig, axes = pair_grid_nodiag(n_dims, figsize=figsize, limits=limits,
-                                     space=space, labels=labels,
-                                     constrained_layout=False)
+        fig, axes = pair_grid_nodiag(n_dims, **grid_kws)
     else:
         fig, ax = plt.subplots(figsize=figsize)
         i, j = dims
@@ -492,8 +495,8 @@ def corner_env(
             i = var_indices[i]
         if type(j) is str:
             j = var_indices[j]
-        ax.set_xlabel(labels[i])
-        ax.set_ylabel(labels[j])
+        ax.set_xlabel(grid_kws['labels'][i])
+        ax.set_ylabel(grid_kws['labels'][j])
         ax.set_xlim(limits[i])
         ax.set_ylim(limits[j])
                                  
@@ -509,19 +512,12 @@ def corner_env(
         else:
             for ax in axes.flat:
                 ax.set_prop_cycle(cycler('color', colors))
-           
-    # Toggle axes grid.
-    if not grid:
-        if dims != 'all':
-            ax.grid(False)
-        else:
-            for ax in axes.flat:
-                ax.grid(False)
     plt.close()
                 
     if dims != 'all':
-        return _corner_env_2D(fig, ax, coords_list, dims, clear_history, show_init,
-                              fill, fc, ec, lw, texts, **anim_kws)
+        return _corner_env_2D(fig, ax, coords_list, dims, fill, show_init,
+                              clear_history, texts, init_kws, plt_kws,
+                              fill_kws, **anim_kws)
     
     # Create list of Line2D objects.
     lines_list = []
@@ -530,7 +526,7 @@ def corner_env(
         for i in range(3):
             for j in range(i + 1):
                 ax = axes[i, j]
-                line, = ax.plot([], [], '-', color=ec, lw=lw)
+                line, = ax.plot([], [], **plt_kws)
                 lines[i].append(line)
         lines_list.append(lines)
     
@@ -539,7 +535,6 @@ def corner_env(
             for ax in axes.flat:
                 for patch in ax.patches:
                     patch.remove()
-                    
         for i, coords in enumerate(coords_list):
             X = coords[t]
             hdata, vdata = X[:, :-1], X[:, 1:]
@@ -548,25 +543,23 @@ def corner_env(
                     ax = axes[j, k]
                     lines_list[i][j][k].set_data(hdata[:, k], vdata[:, j])
                     if fill:
-                        ax.fill(hdata[:, k], vdata[:, j], fc=fc, lw=0)
+                        ax.fill(hdata[:, k], vdata[:, j], **fill_kws)
                     if show_init and clear_history:
-                        ax.plot(X_init[:, k], X_init[:, j+1], 'k--',
-                                lw=0.5, alpha=0.25)
-        # Display text
+                        ax.plot(X_init[:, k], X_init[:, j + 1], **init_kws)
         remove_annotations(axes[0, 1])
         axes[0, 1].annotate(texts[t], xy=(0.35, 0.5), xycoords='axes fraction')
-                        
+
     anim = animation.FuncAnimation(fig, update, frames=n_frames, **anim_kws)
     return anim
     
     
-def _corner_env_2D(fig, ax, coords_list, dims, clear_history, show_init,
-                   fill, fc, ec, lw, texts, **anim_kws):
+def _corner_env_2D(fig, ax, coords_list, dims, fill, show_init, clear_history,
+                   texts, init_kws, plt_kws, fill_kws, **anim_kws):
     """Helper function for `corner_env`."""
     X_init = coords_list[0][0]
     lines = []
     for coords in coords_list:
-        line, = ax.plot([], [], '-', lw=lw, color=ec)
+        line, = ax.plot([], [], **plt_kws)
         lines.append(line)
     k, j = [var_indices[dim] for dim in dims]
     
@@ -578,12 +571,12 @@ def _corner_env_2D(fig, ax, coords_list, dims, clear_history, show_init,
             X = coords[t]
             line.set_data(X[:, k], X[:, j])
             if fill:
-                ax.fill(X[:, k], X[:, j], fc=fc, lw=0)
+                ax.fill(X[:, k], X[:, j], **fill_kws)
             if show_init and clear_history:
-                ax.plot(X_init[:, k], X_init[:, j], 'k--',
-                        lw=0.5, alpha=0.25)
+                ax.plot(X_init[:, k], X_init[:, j], **init_kws)
             ax.set_title(texts[t])
-    anim = animation.FuncAnimation(fig, update, frames=coords_list[0].shape[0], **anim_kws)
+    frames = len(coords_list[0])
+    anim = animation.FuncAnimation(fig, update, frames=frames, **anim_kws)
     return anim
         
 
