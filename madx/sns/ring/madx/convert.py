@@ -109,8 +109,8 @@ def madx_to_pyorbit_tunes(madx_script, nux, nuy, latfile, latseq,
 if __name__ == '__main__':
 
     # Settings
-    nux = 6.18
-    nuy = 6.18
+    nux = 6.23
+    nuy = 6.20
     atol = 1e-3
     madx_script = 'SNSring_madx.mad'
     latfile = 'LATTICE.lat'

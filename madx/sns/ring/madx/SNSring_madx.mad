@@ -17,8 +17,8 @@
   BETA  := sqrt(1-1/(GAMMA*GAMMA));  !  Value BETA  
 !--------------Select Nominal Tunes--------------------------  
 
-  QH:=6.18;
-  QV:=6.18;
+QH:=6.23406331428;
+QV:=6.22274272729;
   MUH:=QH/4.0;  
   MUV:=QV/4.0;  
 
