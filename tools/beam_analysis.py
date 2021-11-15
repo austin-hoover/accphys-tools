@@ -8,7 +8,7 @@ from .utils import cov2corr, symmetrize
 env_cols = ['a','b','ap','bp','e','f','ep','fp']
 moment_cols = ['x2','xxp','xy','xyp','xp2','yxp','xpyp','y2','yyp','yp2']
 twiss2D_cols = ['alpha_x','alpha_y','beta_x','beta_y','eps_x','eps_y']
-twiss4D_cols = ['alpha_x','alpha_y','beta_x','beta_y','u','nu','eps_1','eps_2','eps_4D']
+twiss4D_cols = ['alpha_x','alpha_y','beta_x','beta_y','u','nu','eps_1','eps_2','eps_4D','eps_4D_app','C']
 
 
 def mat2vec(Sigma):
@@ -163,6 +163,7 @@ class BeamStats:
             'eps_1': rms intrinsic emittance for mode 1
             'eps_2': rms intrinsic emittance for mode 2
             'eps_4D': rms 4D emittance = eps_1 * eps_2
+            'eps_4D_app': apparent rms 4D emittance = eps_x * eps_y
             'beta_lx': <x^2> / eps_l (l = 1 if eps_2 = 0, or 2 if eps_1 = 0)
             'beta_ly': <y^2> / eps_l
             'alpha_lx': -<xx'> / eps_l
@@ -171,6 +172,7 @@ class BeamStats:
             'nu': the x-y phase difference in the beam. It is related to the
                   correlation coefficient as cos(nu) = x-y correlation
                   coefficent.
+            'C': coupling coefficient sqrt((eps_x * eps_y) / (eps_1 * eps_2))
         Technically, the above definitions are only true if the 4D emittance is
         zero. So maybe we should compute directly from the definition in
         Lebedev/Bogacz (I think I had trouble with this before).
@@ -213,7 +215,11 @@ class BeamStats:
         self.corr_arr = np.zeros((self.nframes, 10))
         self.realspace_arr = np.zeros((self.nframes, 4))
         self.twiss2D_arr = np.zeros((self.nframes, 6))
-        self.twiss4D_arr = np.zeros((self.nframes, 9))
+        self.twiss4D_arr = np.zeros((self.nframes, 11))
+        
+    def read_cov(self, Sigma_list):
+        moments_list = [mat2vec(Sigma) for Sigma in Sigma_list]
+        return self.read_moments(moments_list)
         
     def read_moments(self, moments_list):
         if not self._initialized:
@@ -226,11 +232,13 @@ class BeamStats:
             eps_x, eps_y = apparent_emittances(Sigma)
             eps_1, eps_2 = intrinsic_emittances(Sigma)
             eps_4D = eps_1 * eps_2
+            eps_4D_app = eps_x * eps_y
+            C = np.sqrt(eps_4D_app / eps_4D) if eps_4D > 0. else np.inf
             self.moments_arr[i] = moments
             self.corr_arr[i] = mat2vec(Corr)
             self.twiss2D_arr[i] = [alpha_x, alpha_y, beta_x, beta_y, eps_x, eps_y]
             self.twiss4D_arr[i] = [alpha_lx, alpha_ly, beta_lx, beta_ly, 
-                                   u, nu, eps_1, eps_2, eps_4D]
+                                   u, nu, eps_1, eps_2, eps_4D, eps_4D_app, C]
             angle, cx, cy = rms_ellipse_dims(Sigma, 'x', 'y')
             angle = np.degrees(angle)
             area = np.pi * cx * cy

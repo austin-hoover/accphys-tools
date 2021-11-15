@@ -4,6 +4,7 @@ import os
 
 import numpy as np
 import scipy.optimize as opt
+from tqdm import trange
 
 
 def ancestor_folder_path(current_path, ancestor_folder_name):  
@@ -14,7 +15,7 @@ def ancestor_folder_path(current_path, ancestor_folder_name):
         return parent_path
     return ancestor_folder_path(parent_path, ancestor_folder_name)
 
-sys.path.append(ancestor_folder_path(os.path.abspath(__file__), 'accphys'))
+sys.path.append(ancestor_folder_path(os.path.abspath(__file__), 'scdist'))
 from tools import beam_analysis as ba
 from tools import utils
 
@@ -51,39 +52,125 @@ def to_vec(Sigma):
     s33, s34 = Sigma[2, 2:]
     s44 = Sigma[3, 3]
     return np.array([s11, s22, s12, s33, s44, s34, s13, s23, s14, s24])
+
+
+# def reconstruct(moments, transfer_mats, **lsq_kws):
+#     """Reconstruct the covariance matrix.
     
-    
-def reconstruct(transfer_mats, moments, **lsq_kws):
+#     Parameters
+#     ----------
+#     moments : list or ndarray, shape (n, 3)
+#         List of [<xx>, <yy>, <xy>] moments for each scan.
+#     transfer_mats : list of (4, 4) ndarray, length n
+#         List of 4x4 transfer matrix at each scan.
+#     **lsq_kws
+#         Key word arguments passed to scipy.optimize.lsq_linear
+
+#     Returns
+#     -------
+#     ndarray, shape (4, 4)
+#         The reconstructed covariance matrix.
+#     """
+#     A, b = [], []
+#     for M, (sig_xx, sig_yy, sig_xy) in zip(transfer_mats, moments):
+#         A.append([M[0, 0]**2, M[0, 1]**2, 2*M[0, 0]*M[0, 1], 0, 0, 0, 0, 0, 0, 0])
+#         A.append([0, 0, 0, M[2, 2]**2, M[2, 3]**2, 2*M[2, 2]*M[2, 3], 0, 0, 0, 0])
+#         A.append([0, 0, 0, 0, 0, 0, M[0, 0]*M[2, 2],  M[0, 1]*M[2, 2],  M[0, 0]*M[2, 3],  M[0, 1]*M[2, 3]])
+#         b.append(sig_xx)
+#         b.append(sig_yy)
+#         b.append(sig_xy)
+#     lb = 10 * [-np.inf]
+#     lb[0] = lb[1] = lb[3] = lb[4] = 0.0 # Squared moments can't be negative
+#     result = opt.lsq_linear(A, b, bounds=(lb, np.inf), **lsq_kws)
+#     return to_mat(result.x)
+
+
+def reconstruct(moments, transfer_matrices):
     """Reconstruct the covariance matrix.
     
     Parameters
     ----------
-    transfer_mats : list of (4, 4) ndarray, length n
-        List of 4x4 transfer matrix at each scan.
     moments : list or ndarray, shape (n, 3)
-        List of [<xx>, <yy>, <xy>] moments for each scan.
-    **lsq_kws
-        Key word arguments passed to scipy.optimize.lsq_linear
+        The [<xx>, <yy>, <xy>] moments.
+    transfer_matrices : list or ndarray, shape (n, 4, 4)
+        Transfer matrices from the reconstruction location to the measurement locations.
 
     Returns
     -------
-    ndarray, shape (4, 4)
+    Sigma : ndarray, shape (4, 4)
         The reconstructed covariance matrix.
+    C : ndarray, shape (10, 10)
+        The LLSQ covariance matrix.
     """
-    A, b = [], []
-    for M, (sig_xx, sig_yy, sig_xy) in zip(transfer_mats, moments):
-        A.append([M[0, 0]**2, M[0, 1]**2, 2*M[0, 0]*M[0, 1], 0, 0, 0, 0, 0, 0, 0])
-        A.append([0, 0, 0, M[2, 2]**2, M[2, 3]**2, 2*M[2, 2]*M[2, 3], 0, 0, 0, 0])
-        A.append([0, 0, 0, 0, 0, 0, M[0, 0]*M[2, 2],  M[0, 1]*M[2, 2],  M[0, 0]*M[2, 3],  M[0, 1]*M[2, 3]])
-        b.append(sig_xx)
-        b.append(sig_yy)
-        b.append(sig_xy)
-    lb = 10 * [-np.inf]
-    lb[0] = lb[1] = lb[3] = lb[4] = 0.0 # Squared moments can't be negative
-    result = opt.lsq_linear(A, b, bounds=(lb, np.inf), **lsq_kws)
-    return to_mat(result.x)
+    # Form coefficient arrays and target arrays, 
+    Axx, Ayy, Axy, bxx, byy, bxy = [], [], [], [], [], []
+    for M, (sig_xx, sig_yy, sig_xy) in zip(transfer_matrices, moments):
+        Axx.append([M[0, 0]**2, M[0, 1]**2, 2*M[0, 0]*M[0, 1]])
+        Ayy.append([M[2, 2]**2, M[2, 3]**2, 2*M[2, 2]*M[2, 3]])
+        Axy.append([M[0, 0]*M[2, 2],  M[0, 1]*M[2, 2],  M[0, 0]*M[2, 3],  M[0, 1]*M[2, 3]])
+        bxx.append(sig_xx)
+        byy.append(sig_yy)
+        bxy.append(sig_xy)
+    Axx = np.array(Axx)
+    Ayy = np.array(Ayy)
+    Axy = np.array(Axy)
+
+    # Solve LLSQ problem.
+    vec_xx, res_xx, _, _ = np.linalg.lstsq(Axx, bxx, rcond=None)
+    vec_yy, res_yy, _, _ = np.linalg.lstsq(Ayy, byy, rcond=None)
+    vec_xy, res_xy, _, _ = np.linalg.lstsq(Axy, bxy, rcond=None)
+    
+    # Form beam covariance matrix.
+    sig_11, sig_22, sig_12 = vec_xx
+    sig_33, sig_44, sig_34 = vec_yy
+    sig_13, sig_23, sig_14, sig_24 = vec_xy
+    Sigma = np.array([[sig_11, sig_12, sig_13, sig_14],
+                      [sig_12, sig_22, sig_23, sig_24],
+                      [sig_13, sig_23, sig_33, sig_34],
+                      [sig_14, sig_24, sig_34, sig_44]])
+
+    # Compute standard deviation of parameter vectors.
+    if len(res_xy) == 0:
+        res_xy = 1e-8
+    C = np.zeros((10, 10))
+    C[:3, :3] = llsq_cov_mat(Axx, float(res_xx))
+    C[3:6, 3:6] = llsq_cov_mat(Ayy, float(res_yy))
+    C[6:, 6:] = llsq_cov_mat(Axy, float(res_xy)) 
+    return Sigma, C
 
 
+def get_sig_xy(sig_xx, sig_yy, sig_uu):
+    return sig_uu - 0.5 * (sig_xx + sig_yy)
+
+
+def monte_carlo(moments, transfer_matrices, frac_err=0.02, n_trials=1000):
+    """Here `moments` is list of [<xx>, <yy>, <uu>]."""
+    n_trials = 5000
+    Sigmas = []
+    fails = 0
+    hi = 1.0 + frac_err
+    lo = 1.0 - frac_err
+
+    def run_trial(moments, transfer_matrices):
+        noisy_moments = np.random.uniform(lo * moments, hi * moments, size=moments.shape)
+#         _moments = moments * (1.0 + np.random.normal(scale=frac_err, size=moments.shape))
+        noisy_moments[:, 2] = get_sig_xy(noisy_moments[:, 0], noisy_moments[:, 1], noisy_moments[:, 2])
+        Sigma, C = reconstruct(noisy_moments, transfer_matrices)
+        return Sigma
+
+    for _ in trange(n_trials):
+        failed = True
+        while failed:
+            Sigma = run_trial(moments, transfer_matrices)
+            failed = not is_physical_cov(Sigma)
+            if failed:
+                fails += 1
+        Sigmas.append(Sigma)
+    return np.array(Sigmas), fails
+
+
+# Error propagation.
+#-------------------------------------------------------------------------------
 def propagate_emittance_errors(Sigma, C):
     """Compute standard deviation of beam covariance matrix from computed Sigma 
     and LLSQ covariance matrix C."""
@@ -176,59 +263,11 @@ def llsq_cov_mat(A, residuals):
     return C
 
 
-def reconstruct(transfer_matrices, moments):
-    """Reconstruct the covariance matrix.
-    
-    Parameters
-    ----------
-    transfer_matrices : list or ndarray, shape (n, 4, 4)
-        Transfer matrices from the reconstruction location to the measurement locations.
-    moments : list or ndarray, shape (n, 3)
-        The [<xx>, <yy>, <xy>] moments.
-
-    Returns
-    -------
-    Sigma : ndarray, shape (4, 4)
-        The reconstructed covariance matrix.
-    C : ndarray, shape (10, 10)
-        The LLSQ covariance matrix.
-    """
-    # Form coefficient arrays and target arrays, 
-    Axx, Ayy, Axy, bxx, byy, bxy = [], [], [], [], [], []
-    for M, (sig_xx, sig_yy, sig_xy) in zip(transfer_matrices, moments):
-        Axx.append([M[0, 0]**2, M[0, 1]**2, 2*M[0, 0]*M[0, 1]])
-        Ayy.append([M[2, 2]**2, M[2, 3]**2, 2*M[2, 2]*M[2, 3]])
-        Axy.append([M[0, 0]*M[2, 2],  M[0, 1]*M[2, 2],  M[0, 0]*M[2, 3],  M[0, 1]*M[2, 3]])
-        bxx.append(sig_xx)
-        byy.append(sig_yy)
-        bxy.append(sig_xy)
-    Axx = np.array(Axx)
-    Ayy = np.array(Ayy)
-    Axy = np.array(Axy)
-
-    # Solve LLSQ problem.
-    vec_xx, res_xx, _, _ = np.linalg.lstsq(Axx, bxx, rcond=None)
-    vec_yy, res_yy, _, _ = np.linalg.lstsq(Ayy, byy, rcond=None)
-    vec_xy, res_xy, _, _ = np.linalg.lstsq(Axy, bxy, rcond=None)
-    
-    # Form beam covariance matrix.
-    sig_11, sig_22, sig_12 = vec_xx
-    sig_33, sig_44, sig_34 = vec_yy
-    sig_13, sig_23, sig_14, sig_24 = vec_xy
-    Sigma = np.array([[sig_11, sig_12, sig_13, sig_14],
-                      [sig_12, sig_22, sig_23, sig_24],
-                      [sig_13, sig_23, sig_33, sig_34],
-                      [sig_14, sig_24, sig_34, sig_44]])
-
-    # Compute standard deviation of parameter vectors.
-    if len(res_xy) == 0:
-        res_xy = 1e-8
-    C = np.zeros((10, 10))
-    C[:3, :3] = llsq_cov_mat(Axx, float(res_xx))
-    C[3:6, 3:6] = llsq_cov_mat(Ayy, float(res_yy))
-    C[6:, 6:] = llsq_cov_mat(Axy, float(res_xy)) 
-    return Sigma, C
-
-
 def get_eps4D_std(eps_1, eps_2, eps_1_std, eps_2_std):
     return np.sqrt((eps_2 * eps_1_std)**2 + (eps_1 * eps_2_std)**2)
+
+
+def get_corr_coef_err(sig_xx, sig_yy, sig_xy, dsig_xx, dsig_yy, dsig_xy):
+    r = sig_xy / np.sqrt(sig_xx * sig_yy)
+    dr = np.sqrt(dsig_xy / (np.sqrt(sig_xx * sig_yy))**2 + ((r / sig_yy) * dsig_yy)**2 + ((r / sig_xx) * dsig_xx)**2)
+    return dr

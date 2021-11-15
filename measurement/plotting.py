@@ -14,7 +14,7 @@ def ancestor_folder_path(current_path, ancestor_folder_name):
         return parent_path
     return ancestor_folder_path(parent_path, ancestor_folder_name)
 
-sys.path.append(ancestor_folder_path(os.path.abspath(__file__), 'accphys'))
+sys.path.append(ancestor_folder_path(os.path.abspath(__file__), 'scdist'))
 from tools import utils
 from tools.plotting import DEFAULT_COLORCYCLE
 
