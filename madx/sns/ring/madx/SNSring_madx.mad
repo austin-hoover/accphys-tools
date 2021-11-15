@@ -93,14 +93,8 @@ Vary, name=KFC, step=.00001, lower=0.0, upper=8.0;
 Vary, name=KDC, step=.00001, lower=-8.0, upper=0.0;
 Constraint, Range=#E, MUX=QH, MUY=QV;
 Constraint, Range=#E, MUY=QV;
-!Constraint, Range=QDEE, BETY<13.0;
-!Constraint, Range=QD, BETY<13.0;
-Constraint, Range=QDEE, BETY<20.0;
-Constraint, Range=QD, BETY<20.0;
-
-! Change the beta functions at the foil
-Constraint, Range=INJ_MID, BETX>15.0, BETY>15.0;
-
+Constraint, Range=QDEE, BETY<13.0;
+Constraint, Range=QD, BETY<13.0;
 Simplex, calls=2000, Tolerance=1.0E-10;
 Endmatch;
 
