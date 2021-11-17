@@ -31,9 +31,10 @@ n_cells = 500
 cell_length = 5.0 # [m]
 tunes_x = np.linspace(100.0, 90.0, n_cells) # [deg]
 tunes_y = np.linspace(100.0, 90.0, n_cells) # [deg]
+tunes = np.vstack([tunes_x, tunes_y]).T
 
 # Initial bunch
-n_parts = 200000 # number of macro particles
+n_parts = 256000 # number of macro particles
 mass = mass_proton # particle mass [GeV/c^2]
 kin_energy = 1.0 # particle kinetic energy [GeV/c^2]
 bunch_length = 150.0 # [m]
@@ -49,8 +50,7 @@ min_solver_spacing = 1e-6 # [m]
 gridpts = (128, 128, 1) # (x, y, z)
 
 # Set initial depressed tunes.
-tune_x = tunes_x[0]
-tune_y = tunes_y[0]
+tune_x, tune_y = tunes[0]
 lattice = hf.fodo_lattice(tune_x, tune_y, cell_length, fill_fac=0.5, start='quad')
 matcher = Matcher(lattice, kin_energy, eps_x, eps_y)
 perveance = matcher.set_tunes(mux, muy, verbose=2)
@@ -68,7 +68,7 @@ bunch, params_dict = hf.coasting_beam(bunch_kind, n_parts,
 
 # Track the bunch.
 coords = [analysis.bunch_coord_array(bunch, mm_mrad=True, transverse_only=True)]
-for tune_x, tune_y in tqdm(zip(tunes_x, tunes_y)):
+for tune_x, tune_y in tqdm(tunes):
     lattice = hf.fodo_lattice(tune_x, tune_y, cell_length, fill_fac=0.5, start='quad')
     lattice.split(max_solver_spacing)    
     calc2p5d = SpaceChargeCalc2p5D(*gridpts)
@@ -77,3 +77,4 @@ for tune_x, tune_y in tqdm(zip(tunes_x, tunes_y)):
     coords.append(analysis.bunch_coord_array(bunch, mm_mrad=True, transverse_only=True))
     
 np.save('_output/data/coords.npy', coords)
+np.savetxt('_output/data/tunes.dat', tunes)
