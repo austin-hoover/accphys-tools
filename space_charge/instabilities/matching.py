@@ -1,3 +1,4 @@
+from __future__ import print_function
 import sys
 import numpy as np
 from scipy import optimize as opt
@@ -38,7 +39,8 @@ class Matcher:
     def match(self, perveance):
         """Find the matched beam for a given perveance."""
         self.matched_params = self.solver.match_root(
-            self.eps_x, self.eps_y, self.sigma_p, perveance)
+            self.eps_x, self.eps_y, self.sigma_p, perveance
+        )
         
     def twiss(self):
         """Return matched Twiss parameters at lattice entrance."""
@@ -52,14 +54,14 @@ class Matcher:
     def tunes(self):
         """Return depressed tunes of matched beam."""
         rx, rxp, ry, ryp, Dx, Dxp, s = self.matched_params
-        mu_x, mu_y = self.solver.phase_advance(rx, ry, Dx, self.eps_x, self.eps_y, self.sigma_p, s)  
-        return np.degrees([mu_x, mu_y])
+        mux, muy = self.solver.phase_advance(rx, ry, Dx, self.eps_x, self.eps_y, self.sigma_p, s)  
+        return np.degrees([mux, muy])
     
-    def set_tunes(self, mu_x, mu_y, **kws):
+    def set_tunes(self, mux, muy, **kws):
         """Set depressed tunes by varying space charge strength."""
         def cost(perveance):
             self.match(perveance)
-            return np.subtract([mu_x, mu_y], self.tunes())
+            return np.subtract([mux, muy], self.tunes())
         
         guess = 0.0
         result = opt.least_squares(cost, guess, **kws)
@@ -74,6 +76,8 @@ class Matcher:
         sizes.append([rx[-1], ry[-1]])
         for i in trange(n_turns):
             rx, rxp, ry, ryp, Dx, Dxp, s = self.solver.envelope_odeint(
-                self.eps_x, self.eps_y, self.sigma_p, perveance, rx[-1], rxp[-1], ry[-1], ryp[-1], Dx[-1], Dxp[-1])
+                self.eps_x, self.eps_y, self.sigma_p, perveance, 
+                rx[-1], rxp[-1], ry[-1], ryp[-1], Dx[-1], Dxp[-1]
+            )
             sizes.append([rx[-1], ry[-1]])
         return np.array(sizes)
