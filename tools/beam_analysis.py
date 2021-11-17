@@ -259,8 +259,8 @@ class BeamStats:
     def read_coords(self, coords):
         moments_list = []
         for X in coords:
-            X = X[:4, :4]
             Sigma = np.cov(X.T)
+            Sigma = Sigma[:4, :4]
             moments = mat2vec(Sigma)
             moments_list.append(moments)
         self.read_moments(moments_list)
