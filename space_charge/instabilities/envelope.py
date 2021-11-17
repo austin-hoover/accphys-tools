@@ -1,16 +1,16 @@
 """
 This script integrates the KV envelope equations over 500 cells for a few 
-different space charge strengths. The point is to approach an instability
-stopband from below. 
+different space charge strengths. The point is to approach the 90 degree 
+envelope instability stopband.
 """
 import sys
 import numpy as np
 from scipy import optimize as opt
+from tqdm import tqdm
 from tqdm import trange
 
 from bunch import Bunch
 from spacecharge import SpaceChargeCalc2p5D
-from orbit.analysis import AnalysisNode
 from orbit.space_charge.sc2p5d.scLatticeModifications import setSC2p5DAccNodes
 from orbit.teapot import teapot
 from orbit.teapot import TEAPOT_Lattice
@@ -26,7 +26,7 @@ mu_x0 = 100.0 # horizontal tune [deg]
 mu_y0 = 100.0 # vertical tune [deg]
 cell_length = 5.0 # [m]
 n_cells = 500
-depressed_tunes = [92.0, 85.0]
+depressed_tunes = np.linspace(90.0, 71.0, 6)
 
 # Initial bunch
 mass = 0.93827231 # particle mass [GeV/c^2]
@@ -42,9 +42,11 @@ min_solver_spacing = 1e-6 # [m]
 # Tracking
 lattice = hf.fodo_lattice(mu_x0, mu_y0, cell_length, fill_fac=0.5, start='quad')
 matcher = Matcher(lattice, kin_energy, eps_x, eps_y)
-for i, mu in enumerate(depressed_tunes):
-    mu_x = mu_y = mu
-    perveance = matcher.set_tunes(mu_x, mu_y, verbose=2)
+sizes_list = []
+for depressed_tune in tqdm(depressed_tunes):
+    perveance = matcher.set_tunes(depressed_tune, depressed_tune, verbose=2)
     sizes = matcher.track(perveance, n_cells)
-    np.save('data/sizes_{}.npy'.format(i), sizes)
-np.save('data/depressed_tunes.npy', depressed_tunes)
+    sizes_list.append(sizes)
+
+np.save('_output/data/sizes_list.npy', sizes_list)
+np.savetxt('_output/data/depressed_tunes.dat', depressed_tunes)
