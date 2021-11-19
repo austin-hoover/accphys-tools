@@ -425,6 +425,10 @@ def corner(
     diag_kws.setdefault('bins', 'auto')
     if autolim_kws is None:
         autolim_kws = dict()
+    if rms_ellipse_kws is None:
+        rms_ellipse_kws = dict()
+    if env_kws is None:
+        env_kws = dict()
 
     # Create figure.
     n_points, n_dims = X.shape
@@ -441,13 +445,6 @@ def corner(
     grid_kws.setdefault('limits', limits)
     grid_kws.setdefault('figsize', figsize)
     fig, axes = pair_grid(n_dims, **grid_kws)
-    
-    # Compute the covariance matrix. Multiply by four unless told not to.
-    if rms_ellipse_kws is not None:
-        Sigma = np.cov(X.T)
-        rms_ellipse_kws.setdefault('2rms', True)
-        if rms_ellipse_kws.pop('2rms'):
-            Sigma *= 4.0
         
     # Univariate plots.
     if smooth_hist:
@@ -498,8 +495,13 @@ def corner(
                 ax.pcolormesh(xcenters, ycenters, Z.T, **plot_kws)
                 
     # Ellipses
-    scatter_axes = axes[1:, :-1]
+    scatter_axes = axes[1:, :-1]        
     if rms_ellipse:
+        Sigma = np.cov(X.T)
+        # Multiply by four unless told not to.
+        rms_ellipse_kws.setdefault('2rms', True)
+        if rms_ellipse_kws.pop('2rms'):
+            Sigma *= 4.0
         rms_ellipses(Sigma, axes=scatter_axes, **rms_ellipse_kws)
     if env_params is not None:
         corner_env(env_params, dims='all', axes=scatter_axes, **env_kws)
