@@ -5,9 +5,14 @@
 import numpy as np
 import numpy.linalg as la
 import scipy.optimize as opt
-from . import coupling as BL
-from .utils import rotate_vec, rotate_mat, apply, normalize
+from ..coupling import coupling as BL
+from .ap_utils import rotation_matrix_4D
 
+
+def rotate_mat(M, phi):
+    R = rotation_matrix_4D(phi)
+    return np.linalg.multi_dot([np.linalg.inv(R), M, R])
+    
 
 # Element definitions
 def M_drift(L):
@@ -199,7 +204,7 @@ class MatrixLattice:
         """
         X_n = np.random.normal(size=(nparts, 4))
         if kind == 'KV':
-            X_n = normalize(X_n)
+            X_n = np.apply_along_axis(lambda row: row / np.linalg.norm(row), 1, X_n)
         A = np.sqrt(np.diag([eps1, eps1, eps2, eps2]))
         X = apply(np.matmul(self.V, A), X_n)
         return X
