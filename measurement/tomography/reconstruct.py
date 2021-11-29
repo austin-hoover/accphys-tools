@@ -77,14 +77,21 @@ def sart(projections, angles, iterations=1, keep_positive=False,
 def ment(projections, angles, **kws):
     """Maximum Entropy (MENT)."""
     raise NotImplementedError
+    
 
-
-def rec4D(S, muxx, muyy, method='SART', keep_positive=False, 
+def rec4D(S, tmats_x, tmats_y, method='SART', keep_positive=False, 
           density=False, limits=None, **kws):
     """4D reconstruction using method from Hock (2013).
-    
+
     Parameters
     ----------
+    S : ndarray, shape (N, N, len(tmats_x), len(tmats_y))
+        Projection data. S[i, j, k, l] gives the intensity at (x[i], y[j]) on
+        the screen for transfer matrix M = [[tmats_x[k], 0], [0, tmats_y[l]].
+    tmats_x{y} : list[ndarray]
+        List of 2 x 2 transfer matrices for x-x'{y-y'}.
+    method : {'SART', 'FBP', 'MENT'}
+        The 2D reconstruction method to use.
     """
     rfunc = None
     if method == 'SART':
@@ -96,19 +103,23 @@ def rec4D(S, muxx, muyy, method='SART', keep_positive=False,
     else:
         raise ValueError("Invalid method!")
     
-    K = len(muxx)
-    L = len(muyy)
-    n_bins = n_bins = S.shape[0]
-           
+    K = len(tmats_x)
+    L = len(tmats_y)
+    n_bins = n_bins = S.shape[0] # assume same number of x/y bins.
+    thetas_x = [get_projection_angle(M) for M in tmats_x]
+    thetas_y = [get_projection_angle(M) for M in tmats_y]
+               
     D = np.zeros((n_bins, L, n_bins, n_bins))
     for j in trange(n_bins):
         for l in range(L):
-            D[j, l, :, :] = rfunc(S[:, j, :, l], muxx, **kws)
-
+            projections = S[:, j, :, l]
+            D[j, l, :, :] = rfunc(projections, thetas_x, **kws)
+            
     Z = np.zeros((n_bins, n_bins, n_bins, n_bins))
     for r in trange(n_bins):
         for s in range(n_bins):
-            Z[r, s, :, :] = rfunc(D[:, :, r, s], muyy, **kws)
+            projections = D[:, :, r, s]
+            Z[r, s, :, :] = rfunc(projections, thetas_y, **kws)
             
     return process(Z, keep_positive, density, limits)
 
@@ -252,3 +263,10 @@ def art4D(projections, tmats, rec_grid_centers, screen_edges_x, screen_edges_y):
     Z = psi.reshape(tuple(n_bins_rec))
     
     return Z
+
+
+def get_projection_angle(M):
+    theta = np.arctan(M[0, 1] / M[0, 0])
+    if theta < 0.0:
+        theta += np.pi
+    return theta
