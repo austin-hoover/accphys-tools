@@ -6,7 +6,7 @@ import pandas as pd
 import matplotlib
 from matplotlib import pyplot as plt, animation, ticker
 from matplotlib.lines import Line2D
-from matplotlib.patches import Ellipse
+from matplotlib.patches import Ellipse, Rectangle
 from skimage import filters
 import seaborn as sns
 import scipy
