@@ -496,10 +496,10 @@ def corner(
                     Z, xedges, yedges = np.histogram2d(
                         x, y, bins, (limits[j], limits[i]))
                 if log:
-                    Z = np.log(Z + 1.0)
+                    Z = np.log10(Z + 1.0)
                 if blur:
                     Z = filters.gaussian(Z, sigma=blur)
-                if thresh:
+                if thresh is not None:
                     Z = np.ma.masked_less_equal(Z, thresh)
                 xcenters = utils.get_bin_centers(xedges)
                 ycenters = utils.get_bin_centers(yedges)
