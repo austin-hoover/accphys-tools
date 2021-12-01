@@ -341,7 +341,7 @@ def pair_grid_nodiag(
 
 def corner(
     X, kind='hist', figsize=None, limits=None, hist_height_frac=0.6,
-    samples=None, smooth_hist=False, thresh=None, blur=None,
+    samples=None, smooth_hist=False, thresh=None, blur=None, log=False,
     env_params=None, env_kws=None, rms_ellipse=False, rms_ellipse_kws=None,
     autolim_kws=None, grid_kws=None, diag_kws=None, **plot_kws
 ):
@@ -372,6 +372,8 @@ def corner(
         In the 2D histograms, with count < thresh will not be plotted.
     blur : float
         Apply a Gaussian blur to the 2D histograms with sigma=blur.
+    log : bool
+        Whether to use log scale in 2D histogram.
     env_params : list or ndarray, shape (8,)
         Danilov envelope parameters passed to `corner_env`.
     env_kws : dict:
@@ -413,7 +415,7 @@ def corner(
         if 'c' in plot_kws:
             plot_kws['color'] = plot_kws.pop('c')
         if 's' in plot_kws:
-            plot_kws['ms'] = plot_kws.pop('c')
+            plot_kws['ms'] = plot_kws.pop('s')
     elif kind == 'hist':
         plot_kws.setdefault('cmap', 'dusk_r')
         plot_kws.setdefault('shading', 'auto')
@@ -427,8 +429,15 @@ def corner(
         autolim_kws = dict()
     if rms_ellipse_kws is None:
         rms_ellipse_kws = dict()
+        rms_ellipse_kws.setdefault('zorder', int(1e9))
+    if rms_ellipse:
+        Sigma = np.cov(X.T)
+        rms_ellipse_kws.setdefault('2rms', True)
+        if rms_ellipse_kws.pop('2rms'):
+            Sigma *= 4.0
     if env_kws is None:
         env_kws = dict()
+        env_kws.setdefault('zorder', int(1 + 1e9))
 
     # Create figure.
     n_points, n_dims = X.shape
@@ -486,6 +495,8 @@ def corner(
                 else:
                     Z, xedges, yedges = np.histogram2d(
                         x, y, bins, (limits[j], limits[i]))
+                if log:
+                    Z = np.log(Z + 1.0)
                 if blur:
                     Z = filters.gaussian(Z, sigma=blur)
                 if thresh:
@@ -497,11 +508,6 @@ def corner(
     # Ellipses
     scatter_axes = axes[1:, :-1]        
     if rms_ellipse:
-        Sigma = np.cov(X.T)
-        # Multiply by four unless told not to.
-        rms_ellipse_kws.setdefault('2rms', True)
-        if rms_ellipse_kws.pop('2rms'):
-            Sigma *= 4.0
         rms_ellipses(Sigma, axes=scatter_axes, **rms_ellipse_kws)
     if env_params is not None:
         corner_env(env_params, dims='all', axes=scatter_axes, **env_kws)
@@ -514,6 +520,39 @@ def corner(
     for ax in axes.diagonal():
         ax.set_ylim(0, max_hist_height)
         
+    return axes
+
+###############################################################################
+def _corner_no_diag(axes, X, kind, thresh, blur, idx, n_bins, limits,
+                    env_params, env_kws, Sigma, rms_ellipse_kws, **plot_kws):
+    """Helper function for `corner`."""
+    if kind == 'hist':
+        bins = plot_kws.pop('bins')
+    for i in range(1, len(axes) + 1):
+        for j in range(i + 1):
+            ax = axes[i - 1, j]
+            if kind == 'scatter':
+                x, y = X[idx, j], X[idx, i]
+                ax.plot(x, y, **plot_kws)
+            elif kind == 'hist':
+                x, y = X[:, j], X[:, i]
+                if bins == 'auto':
+                    Z, xedges, yedges = np.histogram2d(
+                        x, y, (n_bins[j], n_bins[i]), (limits[j], limits[i]))
+                else:
+                    Z, xedges, yedges = np.histogram2d(
+                        x, y, bins, (limits[j], limits[i]))
+                if blur:
+                    Z = filters.gaussian(Z, sigma=blur)
+                if thresh:
+                    Z = np.ma.masked_less_equal(Z, thresh)
+                xcenters = utils.get_bin_centers(xedges)
+                ycenters = utils.get_bin_centers(yedges)
+                ax.pcolormesh(xcenters, ycenters, Z.T, **plot_kws)
+    if Sigma is not None:
+        rms_ellipses(Sigma, axes=axes, **rms_ellipse_kws)
+    if env_params is not None:
+        corner_env(env_params, dims='all', axes=axes, **env_kws)
     return axes
     
     
@@ -587,6 +626,8 @@ def corner_env(
     plt_kws.setdefault('zorder', 10)
     if fill_kws is None:
         fill_kws = dict()
+    if 'color' in fill_kws:
+        fill_kws['fc'] = fill_kws.pop('color')
     fill_kws.setdefault('lw', 1)
     fill_kws.setdefault('fc', 'lightsteelblue')
     fill_kws.setdefault('ec', 'k')
@@ -690,8 +731,11 @@ def fft(ax, x, y):
     return ax
 
 
-def scatter_density(ax, x, y, samples=None, sort=True, bins=40,
-                    method='interp', **kws):
+def scatter_density(ax, x, y, samples=None, sort=True, 
+                    method='interp', interp='nearest', 
+                    bins='auto', binrange=None,
+                    hist_kws=None, 
+                    **plot_kws):
     """Scatter plot with colors weighted by local density.
     
     Note: it is easier to just plot a 2D histogram and set the `vmin` parameter 
@@ -720,21 +764,27 @@ def scatter_density(ax, x, y, samples=None, sort=True, bins=40,
     **kws
         Key word arguments passed to matplotlib.pyplot.scatter.
     """
+    if hist_kws is None:
+        hist_kws = dict()
+    
     xy = np.vstack([x, y])
     if method == 'kde':
         z = scipy.stats.gaussian_kde(xy)(xy)
     elif method == 'interp':
-        data, x_e, y_e = np.histogram2d(x, y, bins=bins, density=True)
+        xedges = np.histogram_bin_edges(x, bins, binrange, **hist_kws)
+        yedges = np.histogram_bin_edges(y, bins, binrange, **hist_kws)
+        heights, _, _ = np.histogram2d(x, y, [xedges, yedges])
+        xcenters = 0.5 * (xedges[:-1] + xedges[1:])
+        ycenters = 0.5 * (yedges[:-1] + yedges[1:])
         z = scipy.interpolate.interpn(
-            (0.5 * (x_e[1:] + x_e[:-1]), 0.5 * (y_e[1:] + y_e[:-1])),
-            data,
+            (xcenters, ycenters),
+            heights,
             xy.T,
-            method='splinef2d',
+            method=interp,
             bounds_error=False
         )
     else:
-        raise ValueError("'method' must be in ['interp', 'kde']")
-
+        raise ValueError("'method' must be in ['interp', 'kde', 'hist']")
     if sort:
         idx = z.argsort()
         x, y, z = x[idx], y[idx], z[idx]
@@ -743,7 +793,7 @@ def scatter_density(ax, x, y, samples=None, sort=True, bins=40,
         idx = np.random.choice(len(z), samples, replace=False)
         x, y, z = x[idx], y[idx], z[idx]
         
-    ax.scatter(x, y, c=z, **kws)
+    ax.scatter(x, y, c=z, **plot_kws)
     return ax
 
 
@@ -823,7 +873,8 @@ def eigvals_complex_plane(ax, eigvals, colors=('r','b'), legend=True, **kws):
     """Plot the eigenvalues in the complex plane."""
     unit_circle(ax)
     c1, c2 = colors
-    ax.scatter(eigvals.real, eigvals.imag, c=[c1, c1, c2, c2], **kws)
+    for e, c in zip(eigvals, [c1, c1, c2, c2]):
+        ax.scatter(e.real, e.imag, c=c, **kws)
     xmax = 1.75
     ax.set_xlim((-xmax, xmax))
     ax.set_ylim((-xmax, xmax))
@@ -834,7 +885,7 @@ def eigvals_complex_plane(ax, eigvals, colors=('r','b'), legend=True, **kws):
     if legend:
         mu1, mu2 = np.degrees(np.arccos(eigvals[[0, 2]].real))
         lines = [Line2D([0], [0], marker='o', lw=0, color=c1, ms=2),
-                        Line2D([0], [0], marker='o', lw=0, color=c2, ms=2)]
+                 Line2D([0], [0], marker='o', lw=0, color=c2, ms=2)]
         labels = [r'$\mu_1 = {:.2f}\degree$'.format(mu1),
                   r'$\mu_2 = {:.2f}\degree$'.format(mu2)]
         ax.legend(lines, labels, loc='upper right', handletextpad=0.1,
