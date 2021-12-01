@@ -205,6 +205,12 @@ if switches['solenoid']:
     ring.set_fringe(False)
     ring.initialize()
     ring_length = ring.getLength()
+    
+file = open('_output/data/injection_region_node_positions.txt', 'w')
+for node in ring.getNodes():
+    start, stop = ring.getNodePositionsDict()[node]
+    file.write('{} {} {}\n'.format(node.getName(), start, stop))
+file.close()
         
         
 # Beam setup
