@@ -5,13 +5,19 @@ angles to skimage.
 """
 import time
 
-from tqdm import trange
-from tqdm import tqdm
 import numpy as np
 from scipy import sparse
 from scipy.interpolate import griddata
 from skimage.transform import iradon
 from skimage.transform import iradon_sart
+from skimage import filters
+from tqdm import trange
+from tqdm import tqdm
+
+
+def apply(M, X):
+    """Apply matrix M to each row of X."""
+    return np.apply_along_axis(lambda row: np.matmul(row, M), 1, X)
 
 
 def get_centers(edges):
@@ -256,7 +262,6 @@ def art4D(projections, tmats, rec_grid_centers, screen_edges_x, screen_edges_y):
             cols.append(j)
         rho[i_offset: i_offset + row_block_size] = projection.flat
 
-
     print('Creating sparse matrix P.')
     t = time.time()
     P = sparse.csr_matrix((np.ones(len(rows)), (rows, cols)), shape=(n_proj * row_block_size, rec_grid_size))
@@ -272,3 +277,78 @@ def art4D(projections, tmats, rec_grid_centers, screen_edges_x, screen_edges_y):
     Z = psi.reshape(tuple(n_bins_rec))
     
     return Z
+
+
+def pic4D(projections, tmats, rec_edges, screen_edges, max_iters=6,
+          return_projections=True):
+    """Four-dimensional reconstruction using particle tracking.
+    
+    The method is described in Wang et al. (2019).
+    """
+    n_dims = len(rec_edges)
+    n_proj = len(projections)
+    n_parts_max = int(5e5)
+    n_parts_min = int(5e5)
+    projections_meas = np.copy(projections)
+    
+    # Generate initial coordinates uniformly within the reconstruction grid. 
+    # The distribution should be large to ensure that a significant number of 
+    # particles land on the screen.     
+    n_parts = n_parts_max
+    mins = np.min(rec_edges, axis=1)
+    maxs = np.max(rec_edges, axis=1)
+    scale = 5.0
+    lo = scale * mins
+    hi = scale * maxs
+    X = np.random.uniform(lo, hi, size=(n_parts, n_dims))
+    
+    Zs = []
+    
+    for iteration in range(max_iters):
+    
+        # Simulate the measurements.
+        projections, coords = [], []
+        for M in tqdm(tmats):
+            X_meas = apply(M, X)
+            projection, _, _ = np.histogram2d(X_meas[:, 0], X_meas[:, 2], bins=screen_edges, density=True)
+            projections.append(projection)
+            coords.append(X_meas)
+        projections = np.array(projections)
+        coords = np.array(coords)
+        
+        # Assign particle weights.
+        weights = np.zeros((n_proj, X.shape[0]))
+        for k in trange(n_proj):
+            xidx = np.digitize(coords[k, :, 0], screen_edges[0]) - 1
+            yidx = np.digitize(coords[k, :, 2], screen_edges[1]) - 1
+            on_screen_x = np.logical_and(xidx >= 0, xidx < len(screen_edges[0]) - 1)
+            on_screen_y = np.logical_and(yidx >= 0, yidx < len(screen_edges[1]) - 1)
+            on_screen = np.logical_and(on_screen_x, on_screen_y)
+            weights[k, on_screen] = projections[k, xidx[on_screen], yidx[on_screen]]
+
+        # Only keep particles that landed on all the screens.
+        keep_idx = [np.all(weights[:, i] > 0.) for i in range(weights.shape[1])]
+        weights[:, np.logical_not(keep_idx)] = 0.
+        weights = np.sum(weights, axis=0)
+        weights /= np.sum(weights)
+        
+        # Generate new particles.
+        counts = weights * n_parts
+        # counts[np.logical_and(counts > 0, counts < 1)] = 1
+        counts = counts.astype(int)
+        add_idx = counts > 0
+        widths = np.abs(np.diff(rec_edges)[:, 0])        
+        lo = np.repeat(X[add_idx] - 0.5 * widths, counts[add_idx], axis=0)
+        hi = np.repeat(X[add_idx] + 0.5 * widths, counts[add_idx], axis=0)
+        X = np.random.uniform(lo, hi)
+                
+        Z, _ = np.histogramdd(X, bins=rec_edges, density=True)
+        
+        Zs.append(Z)
+        
+    # if return_projections:
+    #     return Z, projections
+    # else:
+    #     return Z
+    
+    return Zs
