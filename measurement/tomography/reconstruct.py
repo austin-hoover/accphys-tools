@@ -1,4 +1,4 @@
-"""Image reconstuction.
+"""Tomographic image reconstruction.
 
 All angles should be kept in radians. We convert to degrees only when passing the 
 angles to skimage.
@@ -53,77 +53,19 @@ def process(Z, keep_positive=False, density=False, limits=None):
             bin_volume = get_bin_volume(limits, Z.shape)
         Z = normalize(Z, bin_volume)
     return Z
-    
-    
-def fbp(projections, angles, keep_positive=False, density=False,
-        limits=None, **kws):
-    """Filtered Back Projection (FBP)."""
-    n_bins, n_proj = projections.shape
-    angles = np.degrees(angles)
-    Z = iradon(projections, theta=-angles, **kws).T
-    return process(Z, keep_positive, density, limits)
 
 
-def sart(projections, angles, iterations=1, keep_positive=False,
-         density=False, limits=None, **kws):
-    """Simultaneous Algebraic Reconstruction (SART)"""
-    angles = np.degrees(angles)
-    Z = iradon_sart(projections, theta=-angles, **kws).T
-    for _ in range(iterations - 1):
-        Z = iradon_sart(projections, theta=-angles, image=Z.T, **kws).T
-    return process(Z, keep_positive, density, limits)
+def get_projection_angle(M):
+    theta = np.arctan(M[0, 1] / M[0, 0])
+    if theta < 0.0:
+        theta += np.pi
+    return theta
 
 
-def ment(projections, angles, **kws):
-    """Maximum Entropy (MENT)."""
+def get_projection_scaling(M):
     raise NotImplementedError
     
-
-def rec4D(S, tmats_x, tmats_y, method='SART', keep_positive=False, 
-          density=False, limits=None, **kws):
-    """4D reconstruction using method from Hock (2013).
-
-    Parameters
-    ----------
-    S : ndarray, shape (N, N, len(tmats_x), len(tmats_y))
-        Projection data. S[i, j, k, l] gives the intensity at (x[i], y[j]) on
-        the screen for transfer matrix M = [[tmats_x[k], 0], [0, tmats_y[l]].
-    tmats_x{y} : list[ndarray]
-        List of 2 x 2 transfer matrices for x-x'{y-y'}.
-    method : {'SART', 'FBP', 'MENT'}
-        The 2D reconstruction method to use.
-    """
-    rfunc = None
-    if method == 'SART':
-        rfunc = sart
-    elif method == 'FBP':
-        rfunc = fbp
-    elif method == 'MENT':
-        rfunc = ment
-    else:
-        raise ValueError("Invalid method!")
     
-    K = len(tmats_x)
-    L = len(tmats_y)
-    n_bins = n_bins = S.shape[0] # assume same number of x/y bins.
-    thetas_x = [get_projection_angle(M) for M in tmats_x]
-    thetas_y = [get_projection_angle(M) for M in tmats_y]
-               
-    D = np.zeros((n_bins, L, n_bins, n_bins))
-    for j in trange(n_bins):
-        for l in range(L):
-            projections = S[:, j, :, l]
-            D[j, l, :, :] = rfunc(projections, thetas_x, **kws)
-            
-    Z = np.zeros((n_bins, n_bins, n_bins, n_bins))
-    for r in trange(n_bins):
-        for s in range(n_bins):
-            projections = D[:, :, r, s]
-            Z[r, s, :, :] = rfunc(projections, thetas_y, **kws)
-            
-    return process(Z, keep_positive, density, limits)
-
-
 def get_grid_coords(*xi, indexing='ij'):
     """Return array of shape (N, D), where N is the number of points on 
     the grid and D is the number of dimensions."""
@@ -171,7 +113,75 @@ def transform(Z, V, grid, new_grid=None):
     Z[np.isnan(Z)] = 0.0
     Z = Z.reshape([len(xi) for xi in new_grid])
     return Z, new_grid
+    
+    
+def fbp(projections, angles, keep_positive=False, density=False,
+        limits=None, **kws):
+    """Filtered Back Projection (FBP)."""
+    n_bins, n_proj = projections.shape
+    angles = np.degrees(angles)
+    Z = iradon(projections, theta=-angles, **kws).T
+    return process(Z, keep_positive, density, limits)
 
+
+def sart(projections, angles, iterations=1, keep_positive=False,
+         density=False, limits=None, **kws):
+    """Simultaneous Algebraic Reconstruction (SART)."""
+    angles = np.degrees(angles)
+    Z = iradon_sart(projections, theta=-angles, **kws).T
+    for _ in range(iterations - 1):
+        Z = iradon_sart(projections, theta=-angles, image=Z.T, **kws).T
+    return process(Z, keep_positive, density, limits)
+
+
+def ment(projections, angles, **kws):
+    """Maximum Entropy (MENT)."""
+    raise NotImplementedError
+    
+
+def hock4D(S, tmats_x, tmats_y, method='SART', keep_positive=False, 
+          density=False, limits=None, **kws):
+    """4D reconstruction using method from Hock (2013).
+
+    Parameters
+    ----------
+    S : ndarray, shape (N, N, len(tmats_x), len(tmats_y))
+        Projection data. S[i, j, k, l] gives the intensity at (x[i], y[j]) on
+        the screen for transfer matrix M = [[tmats_x[k], 0], [0, tmats_y[l]].
+    tmats_x{y} : list[ndarray]
+        List of 2 x 2 transfer matrices for x-x'{y-y'}.
+    method : {'SART', 'FBP', 'MENT'}
+        The 2D reconstruction method to use.
+    """
+    rfunc = None
+    if method == 'SART':
+        rfunc = sart
+    elif method == 'FBP':
+        rfunc = fbp
+    elif method == 'MENT':
+        rfunc = ment
+    else:
+        raise ValueError("Invalid method!")
+    
+    K = len(tmats_x)
+    L = len(tmats_y)
+    n_bins = n_bins = S.shape[0] # assume same number of x/y bins.
+    thetas_x = [get_projection_angle(M) for M in tmats_x]
+    thetas_y = [get_projection_angle(M) for M in tmats_y]
+               
+    D = np.zeros((n_bins, L, n_bins, n_bins))
+    for j in trange(n_bins):
+        for l in range(L):
+            projections = S[:, j, :, l]
+            D[j, l, :, :] = rfunc(projections, thetas_x, **kws)
+            
+    Z = np.zeros((n_bins, n_bins, n_bins, n_bins))
+    for r in trange(n_bins):
+        for s in range(n_bins):
+            projections = D[:, :, r, s]
+            Z[r, s, :, :] = rfunc(projections, thetas_y, **kws)
+            
+    return process(Z, keep_positive, density, limits)
 
 
 def art4D(projections, tmats, rec_grid_centers, screen_edges_x, screen_edges_y):
@@ -206,7 +216,6 @@ def art4D(projections, tmats, rec_grid_centers, screen_edges_x, screen_edges_y):
         y = rec_grid_centers[2][k], 
         y' = rec_grid_centers[3][l].
     """
-    
     print('Forming arrays.')
 
     # Treat each reconstruction bin center as a particle. 
@@ -214,7 +223,7 @@ def art4D(projections, tmats, rec_grid_centers, screen_edges_x, screen_edges_y):
     n_bins_rec = [len(c) for c in rec_grid_centers]
     rec_grid_size = np.prod(n_bins_rec)
     col_indices = np.arange(rec_grid_size)
-
+    
     n_bins_x_screen = len(screen_edges_x) - 1
     n_bins_y_screen = len(screen_edges_y) - 1
     row_block_size = n_bins_x_screen * n_bins_y_screen
@@ -263,10 +272,3 @@ def art4D(projections, tmats, rec_grid_centers, screen_edges_x, screen_edges_y):
     Z = psi.reshape(tuple(n_bins_rec))
     
     return Z
-
-
-def get_projection_angle(M):
-    theta = np.arctan(M[0, 1] / M[0, 0])
-    if theta < 0.0:
-        theta += np.pi
-    return theta
