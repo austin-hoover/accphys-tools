@@ -26,8 +26,7 @@ could make it read a file that is output from the painting script.
 
 To do
 -----
-You should only track the beam once when saving the "real" moments throughout
-the lattice. 
+* Uncertainty in wire-scanner fork position
 """
 from __future__ import print_function
 import sys
@@ -54,13 +53,13 @@ from orbit.utils.general import load_stacked_arrays
 
 # Local
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
-from emittance_measurement.phase_controller import PhaseController
-from emittance_measurement.analysis import reconstruct
+from measurement.phase_controller import PhaseController
+from measurement.analysis import reconstruct
 
 
 # Settings
 #------------------------------------------------------------------------------
-n_trials = 100
+n_trials = 10
 beam_input_file = '_input/coords_rtbt.npz'
 kin_energy = 0.8 # [GeV]
 mass = 0.93827231 # [GeV/c^2]
@@ -84,21 +83,21 @@ init_twiss = {'alpha_x': -0.25897,
 ws_names = ['ws20', 'ws21', 'ws23', 'ws24']
 
 # Space charge solver
-max_solver_spacing = 1.0
-min_solver_spacing = 0.00001
+max_solver_spacing = 1.0 # [m]
+min_solver_spacing = 0.00001 # [m]
 gridpts = (128, 128, 1)
 
 # Errors
-rms_frac_quad_strength_err = 0.01
-rms_kin_energy_err = 0.005 # [GeV]
+rms_frac_quad_strength_err = 0.02
+max_kin_energy_err = 0.003 # [GeV]
 max_ws_angle_err = np.radians(1.0) # [rad]
-rms_frac_ws_count_err = 0.05
+rms_frac_ws_count_err = 0.02
 errors = {
     'energy spread': True,
     'kinetic energy': True,
     'fringe fields': True,
     'quad strengths': True,
-    'space charge': True,
+    'space charge': False,
     'wire-scanner noise': True,
     'wire-scanner angle': True,
 }
@@ -148,12 +147,10 @@ for node_name in rec_node_names:
 np.savetxt('_output/data/rec_node_positions.dat', rec_node_positions)
 
 # Add space charge nodes.
-lattice.split(max_solver_spacing)    
-calc2p5d = SpaceChargeCalc2p5D(*gridpts)
-sc_nodes = setSC2p5DAccNodes(lattice, min_solver_spacing, calc2p5d)
-if (not errors['space charge']) or final_intensity == 0.:
-    for node in sc_nodes:
-        node.setCalculationOn(False)
+if errors['space charge']:
+    lattice.split(max_solver_spacing)    
+    calc2p5d = SpaceChargeCalc2p5D(*gridpts)
+    sc_nodes = setSC2p5DAccNodes(lattice, min_solver_spacing, calc2p5d)
 
 # Add wire-scanner nodes.
 ws_nodes = dict()
@@ -214,11 +211,18 @@ def set_bunch_coords(bunch, X):
         bunch.deleteAllParticles()
         for (x, xp, y, yp, z, dE) in X:
             bunch.addParticle(x, xp, y, yp, z, dE)
+            
+            
+def truncated_gaussian(scale=1.0, cut=1.0):
+    x = np.inf
+    while x > cut:
+        x = np.random.normal(scale=scale)
+    return x
 
         
 # Simulate the measurement for each bunch in `coords`.
 #------------------------------------------------------------------------------
-for frame in range(len(turns)):
+for frame in range(0, len(turns)):
     
     # Initialize the bunch.
     X = coords[frame]
@@ -226,6 +230,7 @@ for frame in range(len(turns)):
     intensity = intensities[frame]
     turn = turns[frame]
     macro_size = max(1, int(intensity / bunch.getSize()))
+    
     bunch.macroSize(macro_size)
     print('Bunch {}/{}'.format(frame + 1, len(coords)))
     print('Intensity = {:.3e}'.format(intensity))
@@ -239,6 +244,7 @@ for frame in range(len(turns)):
         bunch_stats_node.clear_data()
         bunch_stats_node.set_active(True)
     set_bunch_coords(bunch, X)
+    bunch.macroSize(macro_size)
     controller.lattice.trackBunch(bunch, params_dict)
     Sigmas_sim_dict = dict()
     for node_name in rec_node_names:
@@ -259,7 +265,7 @@ for frame in range(len(turns)):
 
         # Add errors.
         if errors['kinetic energy']:
-            kin_energy_err = np.random.normal(scale=rms_kin_energy_err)
+            kin_energy_err = truncated_gaussian(scale=max_kin_energy_err, cut=max_kin_energy_err)
             Brho_correct = hf.get_Brho(mass, kin_energy)
             Brho_err = hf.get_Brho(mass, kin_energy + kin_energy_err)
             quad_strengths *= (Brho_correct / Brho_err)
@@ -267,16 +273,19 @@ for frame in range(len(turns)):
             
         assumed_ws_angle = np.radians(45.0)
         if errors['wire-scanner angle']:
-            assumed_ws_angle += np.random.uniform(-max_ws_angle_err, max_ws_angle_err)
+            assumed_ws_angle += truncated_gaussian(scale=max_ws_angle_err, cut=max_ws_angle_err)
 
         quad_strengths = np.copy(default_quad_strengths)
         if errors['quad strengths']:
-            quad_strengths *= (1.0 + np.random.normal(scale=rms_frac_quad_strength_err,
-                                                      size=len(quad_strengths)))
+            for i in range(len(quad_strengths)):
+                quad_strength_frac_err = truncated_gaussian(scale=rms_frac_quad_strength_err, 
+                                                            cut=rms_frac_quad_strength_err)
+                quad_strengths[i] *= (1.0 + quad_strength_frac_err)            
             controller.set_quad_strengths(controller.ind_quad_names, quad_strengths)
 
         # Track the bunch through the lattice.
         set_bunch_coords(bunch, X)
+        bunch.macroSize(macro_size)
         controller.lattice.trackBunch(bunch, params_dict)
 
         # Estimate the moments from the wire-scanners.
@@ -290,7 +299,7 @@ for frame in range(len(turns)):
         # Reconstruct the covariance matrix at every node. 
         for node_name in rec_node_names:
             tmats = tmats_dict[node_name]
-            Sigma, C = reconstruct(tmats, moments)        
+            Sigma, C = reconstruct(moments, tmats)        
             Sigmas_rec_dict[node_name].append(Sigma)
 
     # Save the reconstructed covariance matrices.
