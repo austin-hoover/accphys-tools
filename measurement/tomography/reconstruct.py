@@ -13,6 +13,8 @@ from skimage.transform import iradon_sart
 from skimage import filters
 from tqdm import trange
 from tqdm import tqdm
+import matplotlib.pyplot as plt
+import proplot as pplt
 
 
 def apply(M, X):
@@ -190,7 +192,7 @@ def hock4D(S, tmats_x, tmats_y, method='SART', keep_positive=False,
     return process(Z, keep_positive, density, limits)
 
 
-def art4D(projections, tmats, rec_grid_centers, screen_edges_x, screen_edges_y):
+def art4D(projections, tmats, rec_grid_centers, screen_edges):
     """Direct four-dimensional algebraic reconstruction (ART).
     
     We set up the linear system rho = P psi. Assume the x-x'-y-y' grid at the reconstruction
@@ -210,7 +212,7 @@ def art4D(projections, tmats, rec_grid_centers, screen_edges_x, screen_edges_y):
         List of transfer matrices from the reconstruction location to the measurement location.
     rec_grid_centers : list[ndarray, shape (Nr,)]
         Grid center coordinates in [x, x', y, y'].
-    screen_edges_x, screen_edges_y : ndarray, shape (Ns,)
+    screen_edges : list[ndarray, shape (Ns,)]
         Coordinates of bin edges on the screen in [x, y].
         
     Returns
@@ -230,8 +232,9 @@ def art4D(projections, tmats, rec_grid_centers, screen_edges_x, screen_edges_y):
     rec_grid_size = np.prod(n_bins_rec)
     col_indices = np.arange(rec_grid_size)
     
-    n_bins_x_screen = len(screen_edges_x) - 1
-    n_bins_y_screen = len(screen_edges_y) - 1
+    screen_xedges, screen_yedges = screen_edges
+    n_bins_x_screen = len(screen_xedges) - 1
+    n_bins_y_screen = len(screen_yedges) - 1
     row_block_size = n_bins_x_screen * n_bins_y_screen
     n_proj = len(projections)
     rho = np.zeros(n_proj * row_block_size) # measured density on the screen.
@@ -245,8 +248,8 @@ def art4D(projections, tmats, rec_grid_centers, screen_edges_x, screen_edges_y):
         # For each particle, record the indices of the bin it landed in. So we want (k, l) such
         # that the particle landed in the bin with x = x[k] and y = y[l] on the screen. One of 
         # the indices will be -1 or n_bins if the particle landed outside the screen.
-        xidx = np.digitize(screen_grid_coords[:, 0], screen_edges_x) - 1
-        yidx = np.digitize(screen_grid_coords[:, 2], screen_edges_y) - 1
+        xidx = np.digitize(screen_grid_coords[:, 0], screen_xedges) - 1
+        yidx = np.digitize(screen_grid_coords[:, 2], screen_yedges) - 1
         on_screen = np.logical_and(np.logical_and(xidx >= 0, xidx < n_bins_x_screen), 
                                    np.logical_and(yidx >= 0, yidx < n_bins_y_screen))
 
@@ -279,76 +282,103 @@ def art4D(projections, tmats, rec_grid_centers, screen_edges_x, screen_edges_y):
     return Z
 
 
-def pic4D(projections, tmats, rec_edges, screen_edges, max_iters=6,
-          return_projections=True):
+def pic4D(projections, tmats, screen_edges, rec_limits, rec_bins, max_iters=15):
     """Four-dimensional reconstruction using particle tracking.
     
     The method is described in Wang et al. (2019).
     """
-    n_dims = len(rec_edges)
+    n_dims = 4
     n_proj = len(projections)
-    n_parts_max = int(5e5)
-    n_parts_min = int(5e5)
+    n_parts = 500000
+    rec_bin_widths = 2 * np.diff(rec_limits)[:, 0] / rec_bins 
     projections_meas = np.copy(projections)
+    screen_xedges, screen_yedges = screen_edges
     
     # Generate initial coordinates uniformly within the reconstruction grid. 
     # The distribution should be large to ensure that a significant number of 
     # particles land on the screen.     
-    n_parts = n_parts_max
-    mins = np.min(rec_edges, axis=1)
-    maxs = np.max(rec_edges, axis=1)
-    scale = 5.0
+    mins = np.min(rec_limits, axis=1)
+    maxs = np.max(rec_limits, axis=1)
+    scale = 1.0
     lo = scale * mins
     hi = scale * maxs
-    X = np.random.uniform(lo, hi, size=(n_parts, n_dims))
-    
-    Zs = []
-    
-    for iteration in range(max_iters):
-    
-        # Simulate the measurements.
-        projections, coords = [], []
-        for M in tqdm(tmats):
-            X_meas = apply(M, X)
-            projection, _, _ = np.histogram2d(X_meas[:, 0], X_meas[:, 2], bins=screen_edges, density=True)
-            projections.append(projection)
-            coords.append(X_meas)
-        projections = np.array(projections)
-        coords = np.array(coords)
-        
-        # Assign particle weights.
-        weights = np.zeros((n_proj, X.shape[0]))
-        for k in trange(n_proj):
-            xidx = np.digitize(coords[k, :, 0], screen_edges[0]) - 1
-            yidx = np.digitize(coords[k, :, 2], screen_edges[1]) - 1
-            on_screen_x = np.logical_and(xidx >= 0, xidx < len(screen_edges[0]) - 1)
-            on_screen_y = np.logical_and(yidx >= 0, yidx < len(screen_edges[1]) - 1)
-            on_screen = np.logical_and(on_screen_x, on_screen_y)
-            weights[k, on_screen] = projections[k, xidx[on_screen], yidx[on_screen]]
+    X = np.random.uniform(scale * mins, scale * maxs, size=(n_parts, n_dims))
 
-        # Only keep particles that landed on all the screens.
+    for iteration in range(max_iters):
+        # Simulate the measurements.
+        projections, coords_screen = [], []
+        for M in tqdm(tmats):
+            X_screen = apply(M, X)
+            projection, _, _ = np.histogram2d(X_screen[:, 0], X_screen[:, 2], bins=screen_edges)
+            projection = projection.astype(float)
+            projections.append(projection)
+            coords_screen.append(X_screen)
+        projections = np.array(projections)
+        coords_screen = np.array(coords_screen)
+
+        # Weight particles.
+        weights = np.zeros((n_proj, X.shape[0]))
+        for k, X_screen in enumerate(coords_screen):
+            xidx = np.digitize(X_screen[:, 0], screen_xedges) - 1
+            yidx = np.digitize(X_screen[:, 2], screen_yedges) - 1
+            on_screen_x = np.logical_and(xidx >= 0, xidx < len(screen_xedges) - 1)
+            on_screen_y = np.logical_and(yidx >= 0, yidx < len(screen_yedges) - 1)
+            on_screen = np.logical_and(on_screen_x, on_screen_y)
+            weights[k, on_screen] = projections_meas[k, xidx[on_screen], yidx[on_screen]] 
+            weights[k, on_screen] /= projections[k, xidx[on_screen], yidx[on_screen]]
+
+        # Only keep particles that hit every screen.
         keep_idx = [np.all(weights[:, i] > 0.) for i in range(weights.shape[1])]
         weights[:, np.logical_not(keep_idx)] = 0.
-        weights = np.sum(weights, axis=0)
+        weights = np.sum(weights, axis=0)    
         weights /= np.sum(weights)
-        
-        # Generate new particles.
+
+        # Convert the weights to counts.
         counts = weights * n_parts
-        # counts[np.logical_and(counts > 0, counts < 1)] = 1
-        counts = counts.astype(int)
+        counts = np.round(counts).astype(int)
+        
+        # Generate a new bunch.
         add_idx = counts > 0
-        widths = np.abs(np.diff(rec_edges)[:, 0])        
-        lo = np.repeat(X[add_idx] - 0.5 * widths, counts[add_idx], axis=0)
-        hi = np.repeat(X[add_idx] + 0.5 * widths, counts[add_idx], axis=0)
+        lo = np.repeat(X[add_idx] - 0.5 * rec_bin_widths, counts[add_idx], axis=0)
+        hi = np.repeat(X[add_idx] + 0.5 * rec_bin_widths, counts[add_idx], axis=0)
         X = np.random.uniform(lo, hi)
-                
-        Z, _ = np.histogramdd(X, bins=rec_edges, density=True)
         
-        Zs.append(Z)
+        for i, projection in enumerate(projections):
+            projections[i] = projection / np.sum(projection)
+        proj_error = np.sum((projections_meas - projections)**2)
+        print('proj_error = {}'.format(proj_error))
+        print('New bunch has {} particles'.format(X.shape[0]))
+        print('Iteration {} complete'.format(iteration))
         
-    # if return_projections:
-    #     return Z, projections
-    # else:
-    #     return Z
-    
-    return Zs
+        
+        plot_kws = dict(ec='None', cmap=None)
+        labels = ["x", "x'", "y", "y'"]
+        indices = [(0, 1), (2, 3), (0, 2), (0, 3), (2, 1), (1, 3)]
+
+        Z, edges = np.histogramdd(X, rec_bins, rec_limits)
+        Z /= np.sum(Z)
+
+        fig, axes = pplt.subplots(nrows=1, ncols=6, figwidth=8.5, sharex=False, sharey=False)
+        for ax, (i, j) in zip(axes, indices):
+            _Z = project(Z, [i, j])
+            ax.pcolormesh(edges[i], edges[j], _Z.T, **plot_kws)
+            ax.annotate('{}-{}'.format(labels[i], labels[j]),
+                        xy=(0.02, 0.92), xycoords='axes fraction', 
+                        color='white', fontsize='medium')
+        axes.format(xticks=[], yticks=[])
+        plt.show()
+        
+        
+        
+    return X, projections
+
+
+
+
+
+
+def temp(projections, tmats, screen_edges, rec_limits, rec_bins, max_iters=15):
+    n_proj = len(projections)
+    rec_bin_widths = 2 * np.diff(rec_limits)[:, 0] / rec_bins 
+    projections_meas = np.copy(projections)
+    screen_xedges, screen_yedges = screen_edges
