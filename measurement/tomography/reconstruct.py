@@ -71,7 +71,7 @@ def get_projection_angle(M):
 
 
 def get_projection_scaling(M):
-    raise NotImplementedError
+    return np.sqrt(M[0, 0]**2 + M[0, 1]**2)
     
     
 def get_grid_coords(*xi, indexing='ij'):
@@ -282,6 +282,65 @@ def art4D(projections, tmats, rec_grid_centers, screen_edges):
     return Z
 
 
+def art2D(projections, tmats, rec_grid_centers, screen_edges):
+    """Two-dimensional algebraic reconstruction (ART)."""
+    print('Forming arrays.')
+
+    # Treat each reconstruction bin center as a particle. 
+    rec_grid_coords = get_grid_coords(*rec_grid_centers)
+    n_bins_rec = [len(c) for c in rec_grid_centers]
+    rec_grid_size = np.prod(n_bins_rec)
+    col_indices = np.arange(rec_grid_size)
+    
+    n_bins_screen = len(screen_edges) - 1
+    row_block_size = n_bins_screen
+    n_proj = len(projections)
+    rho = np.zeros(n_proj * row_block_size) # measured density on the screen.
+    rows, cols = [], [] # nonzero row and column indices of P
+
+    for proj_index in trange(n_proj):
+        # Transport the reconstruction grid to the screen.
+        M = tmats[proj_index]
+        screen_grid_coords = np.apply_along_axis(lambda row: np.matmul(M, row), 1, rec_grid_coords)
+
+        # For each particle, record the indices of the bin it landed in. We want k such
+        # that the particle landed in the bin with x = x[k]. One of the indices will be 
+        # -1 or n_bins_screen if the particle landed outside the screen.
+        xidx = np.digitize(screen_grid_coords[:, 0], screen_edges) - 1
+        on_screen = np.logical_and(xidx >= 0, xidx < n_bins_screen)
+
+        # Get the indices for the flattened array.
+        projection = projections[proj_index]
+        screen_idx = xidx
+
+        # P[i, j] = 1 if particle j landed in bin i on the screen, 0 otherwise.
+        i_offset = proj_index * row_block_size
+        for j in tqdm(col_indices[on_screen]):
+            i = screen_idx[j] + i_offset
+            rows.append(i)
+            cols.append(j)
+        rho[i_offset: i_offset + row_block_size] = projection.flat
+
+    print('Creating sparse matrix P.')
+    t = time.time()
+    P = sparse.csr_matrix((np.ones(len(rows)), (rows, cols)), shape=(n_proj * row_block_size, rec_grid_size))
+    print('Done. t = {}'.format(time.time() - t))
+
+    print('Solving linear system.')
+    t = time.time()
+    (psi, istop, itn, r1norm, r2norm, 
+     anorm, acond, arnorm, xnorm, var) = sparse.linalg.lsqr(P, rho, show=True, iter_lim=10000, atol=1e-12)
+    print()
+    print('Done. t = {}'.format(time.time() - t))
+
+    print('Reshaping phase space density.')
+    Z = psi.reshape(tuple(n_bins_rec))
+    
+    return Z
+
+
+
+
 def pic4D(projections, tmats, screen_edges, rec_limits, rec_bins, max_iters=15):
     """Four-dimensional reconstruction using particle tracking.
     
@@ -310,7 +369,7 @@ def pic4D(projections, tmats, screen_edges, rec_limits, rec_bins, max_iters=15):
         for M in tqdm(tmats):
             X_screen = apply(M, X)
             projection, _, _ = np.histogram2d(X_screen[:, 0], X_screen[:, 2], bins=screen_edges)
-            projection = projection.astype(float)
+            projection /= np.sum(projection)
             projections.append(projection)
             coords_screen.append(X_screen)
         projections = np.array(projections)
@@ -343,8 +402,6 @@ def pic4D(projections, tmats, screen_edges, rec_limits, rec_bins, max_iters=15):
         hi = np.repeat(X[add_idx] + 0.5 * rec_bin_widths, counts[add_idx], axis=0)
         X = np.random.uniform(lo, hi)
         
-        for i, projection in enumerate(projections):
-            projections[i] = projection / np.sum(projection)
         proj_error = np.sum((projections_meas - projections)**2)
         print('proj_error = {}'.format(proj_error))
         print('New bunch has {} particles'.format(X.shape[0]))
