@@ -3,11 +3,13 @@
 All angles should be kept in radians. We convert to degrees only when passing the 
 angles to skimage.
 """
+import sys
+import os
 import time
 
 import numpy as np
 from scipy import sparse
-from scipy.interpolate import griddata
+from scipy import interpolate
 from skimage.transform import iradon
 from skimage.transform import iradon_sart
 from skimage import filters
@@ -19,7 +21,7 @@ import proplot as pplt
 
 def apply(M, X):
     """Apply matrix M to each row of X."""
-    return np.apply_along_axis(lambda row: np.matmul(row, M), 1, X)
+    return np.apply_along_axis(lambda row: np.matmul(M, row), 1, X)
 
 
 def get_centers(edges):
@@ -64,6 +66,11 @@ def process(Z, keep_positive=False, density=False, limits=None):
 
 
 def get_projection_angle(M):
+    """Return projection angle from 2x2 matrix.
+    
+    The angle is given by tan(theta) = M_{11} / M{12}. The value returned is
+    in the range [0, 2pi].
+    """
     theta = np.arctan(M[0, 1] / M[0, 0])
     if theta < 0.0:
         theta += np.pi
@@ -71,6 +78,11 @@ def get_projection_angle(M):
 
 
 def get_projection_scaling(M):
+    """Return projection scaling from 2x2 matrix.
+    
+    If M connects points A and B, and s is the projection axis at A, then the 
+    projections are related by p_A(s) = r * p_B(r * s).
+    """
     return np.sqrt(M[0, 0]**2 + M[0, 1]**2)
     
     
@@ -78,7 +90,7 @@ def get_grid_coords(*xi, indexing='ij'):
     """Return array of shape (N, D), where N is the number of points on 
     the grid and D is the number of dimensions."""
     return np.vstack([X.ravel() for X in np.meshgrid(*xi, indexing='ij')]).T
-
+    
 
 def transform(Z, V, grid, new_grid=None):
     """Apply a linear transformation to a distribution.
@@ -107,7 +119,7 @@ def transform(Z, V, grid, new_grid=None):
     """        
     # Transform the grid coordinates.
     coords = get_grid_coords(*grid)
-    coords_new = np.apply_along_axis(lambda row: np.matmul(V, row), 1, coords)
+    coords_new = apply(V, coords)
         
     # Define the interpolation coordinates.
     if new_grid is None:
@@ -117,49 +129,60 @@ def transform(Z, V, grid, new_grid=None):
     coords_int = get_grid_coords(*new_grid)
     
     # Interpolate.
-    Z = griddata(coords_new, Z.ravel(), coords_int, method='linear')
+    Z = interpolate.griddata(coords_new, Z.ravel(), coords_int, method='linear')
     Z[np.isnan(Z)] = 0.0
     Z = Z.reshape([len(xi) for xi in new_grid])
     return Z, new_grid
+
+
+# 2D reconstruction
+#------------------------------------------------------------------------------
+def scale_projections(projections, tmats, xx_meas, xx_rec):
+    """Given projections at B and the linear transfer matrices from A to B, 
+    return the projections at A. 
     
+    The reconstruction methods in this skimage assume the bin spacing is the 
+    same for all projections, with the only difference being the projection 
+    angle. The transfer matrices scale the bin spacing. If s is the projection
+    axis at A, and x is the projection axis at B, then we have x = rs, where
+    r = sqrt(M_{11}^2 + M_{12}^2). The projections are related by 
+    p_A = r * p_B(r * s). So we define the s axis bin spacing, scale to get
+    the x axis coordinates at B, then interpolate to get the projection p_B
+    at those coordinates.
+    """
+    n_proj, n_bins = np.shape(projections)
+    scaled_projections = np.zeros((n_proj, n_bins))
+    proj_angles = np.zeros(n_proj)
+    scale_factors = np.zeros(n_proj)
+    for k, (M, projection) in enumerate(zip(tmats, projections)):
+        r = get_projection_scaling(M)
+        interp = interpolate.interp1d(xx_meas, projection, kind='linear', 
+                                      bounds_error=False, fill_value=0.0)
+        scaled_projections[k, :] = r * interp(r * xx_rec)
+        scale_factors[k] = r
+        proj_angles[k] = get_projection_angle(M)
+    return scaled_projections, proj_angles
+
+
+def rec2D(projections, tmats, xx_meas, xx_rec, method='SART', proc_kws=None, **kws):
+    """Simultaneous Algebraic Reconstruction (SART).
     
-def fbp(projections, angles, keep_positive=False, density=False,
-        limits=None, **kws):
-    """Filtered Back Projection (FBP)."""
-    n_bins, n_proj = projections.shape
-    angles = np.degrees(angles)
-    Z = iradon(projections, theta=-angles, **kws).T
-    return process(Z, keep_positive, density, limits)
-
-
-def sart(projections, angles, iterations=1, keep_positive=False,
-         density=False, limits=None, **kws):
-    """Simultaneous Algebraic Reconstruction (SART)."""
-    angles = np.degrees(angles)
-    Z = iradon_sart(projections, theta=-angles, **kws).T
-    for _ in range(iterations - 1):
-        Z = iradon_sart(projections, theta=-angles, image=Z.T, **kws).T
-    return process(Z, keep_positive, density, limits)
-
-
-def ment(projections, angles, **kws):
-    """Maximum Entropy (MENT)."""
-    raise NotImplementedError
-    
-
-def hock4D(S, tmats_x, tmats_y, method='SART', keep_positive=False, 
-          density=False, limits=None, **kws):
-    """4D reconstruction using method from Hock (2013).
-
     Parameters
     ----------
-    S : ndarray, shape (N, N, len(tmats_x), len(tmats_y))
-        Projection data. S[i, j, k, l] gives the intensity at (x[i], y[j]) on
-        the screen for transfer matrix M = [[tmats_x[k], 0], [0, tmats_y[l]].
-    tmats_x{y} : list[ndarray]
-        List of 2 x 2 transfer matrices for x-x'{y-y'}.
+    projections : list, shape (n_proj, n_bins)
+        Measured 1D projections of the distribution.
+    tmats: list, shape (n_proj, 2, 2)
+        Transfer matrices from reconstruction point to measurement point.
+    xx_meas : list, shape (n_bins,)
+        Bin center coordinates at the measurement point.
+    xx_rec : list, shape (n_bins,)
+        Bin center coordinates at the reconstruction point.
     method : {'SART', 'FBP', 'MENT'}
-        The 2D reconstruction method to use.
+        The reconstruction method to use.
+    proc_kws : dict
+        Key word arguments for `process`.
+    **kws
+        Key word arguments for reconstruction method.
     """
     rfunc = None
     if method == 'SART':
@@ -169,27 +192,145 @@ def hock4D(S, tmats_x, tmats_y, method='SART', keep_positive=False,
     elif method == 'MENT':
         rfunc = ment
     else:
-        raise ValueError("Invalid method!")
+        raise ValueError("Invalid reconstruction method.")
+    if proc_kws is None:
+        proc_kws = dict()
+    projections, angles = scale_projections(projections, tmats, xx_meas, xx_rec)
+    angles = np.degrees(angles)
+    Z = rfunc(projections, angles, **kws).T
+    Z = process(Z, **proc_kws)
+    return Z
     
+
+def fbp(projections, angles, **kws):
+    """Filtered Back Projection (FBP)."""
+    return iradon(projections.T, theta=-angles, **kws)
+    
+    
+def sart(projections, angles, iterations=1, **kws):
+    """Simultaneous Algebraic Reconstruction (SART)."""
+    if 'iterations' in kws:
+        iterations = kws.pop('iterations')
+    Z = iradon_sart(projections.T, theta=-angles, **kws)
+    for _ in range(iterations - 1):
+        Z = iradon_sart(projections.T, theta=-angles, image=Z, **kws)
+    return Z
+
+
+def ment(projections, angles, proc_kws=None):
+    """Maximum Entropy (MENT)."""
+    raise NotImplementedError
+    
+    
+
+def art2D(projections, tmats, rec_grid_centers, screen_edges):
+    """Two-dimensional algebraic reconstruction (ART)."""
+    print('Forming arrays.')
+
+    # Treat each reconstruction bin center as a particle. 
+    rec_grid_coords = get_grid_coords(*rec_grid_centers)
+    n_bins_rec = [len(c) for c in rec_grid_centers]
+    rec_grid_size = np.prod(n_bins_rec)
+    col_indices = np.arange(rec_grid_size)
+    
+    n_bins_screen = len(screen_edges) - 1
+    row_block_size = n_bins_screen
+    n_proj = len(projections)
+    rho = np.zeros(n_proj * row_block_size) # measured density on the screen.
+    rows, cols = [], [] # nonzero row and column indices of P
+
+    for proj_index in trange(n_proj):
+        # Transport the reconstruction grid to the screen.
+        M = tmats[proj_index]
+        screen_grid_coords = np.apply_along_axis(lambda row: np.matmul(M, row), 1, rec_grid_coords)
+
+        # For each particle, record the indices of the bin it landed in. We want k such
+        # that the particle landed in the bin with x = x[k]. One of the indices will be 
+        # -1 or n_bins_screen if the particle landed outside the screen.
+        xidx = np.digitize(screen_grid_coords[:, 0], screen_edges) - 1
+        on_screen = np.logical_and(xidx >= 0, xidx < n_bins_screen)
+
+        # Get the indices for the flattened array.
+        projection = projections[proj_index]
+        screen_idx = xidx
+
+        # P[i, j] = 1 if particle j landed in bin i on the screen, 0 otherwise.
+        i_offset = proj_index * row_block_size
+        for j in tqdm(col_indices[on_screen]):
+            i = screen_idx[j] + i_offset
+            rows.append(i)
+            cols.append(j)
+        rho[i_offset: i_offset + row_block_size] = projection.flat
+
+    print('Creating sparse matrix P.')
+    t = time.time()
+    P = sparse.csr_matrix((np.ones(len(rows)), (rows, cols)), shape=(n_proj * row_block_size, rec_grid_size))
+    print('Done. t = {}'.format(time.time() - t))
+
+    print('Solving linear system.')
+    t = time.time()
+    (psi, istop, itn, r1norm, r2norm, 
+     anorm, acond, arnorm, xnorm, var) = sparse.linalg.lsqr(P, rho, show=True, iter_lim=10000, atol=1e-12)
+    print()
+    print('Done. t = {}'.format(time.time() - t))
+
+    print('Reshaping phase space density.')
+    Z = psi.reshape(tuple(n_bins_rec))
+    
+    return Z
+    
+
+# 4D reconstruction
+#------------------------------------------------------------------------------
+def hock4D(S, screen_centers, rec_centers, tmats_x, tmats_y, 
+           method='SART', proc_kws=None, **kws):
+    """4D reconstruction using method from Hock (2013).
+
+    Parameters
+    ----------
+    S : ndarray, shape (n_bins, n_bins, n_proj, n_proj)
+        Projection data. S[i, j, k, l] gives the intensity at (x[i], y[j]) on
+        the screen for transfer matrix M = [[tmats_x[k], 0], [0, tmats_y[l]].
+    screen_centers : list, shape (2, nbins)
+        Coordinates of x and y bin centers on the screen.
+    rec_centers : list, shape (2, nbins)
+        Coordinates of x and y bin centers on the reconstruction grid.
+    tmats_x{y} : list[ndarray], shape (n_proj,)
+        List of 2 x 2 transfer matrices for x-x'{y-y'}.
+    method : {'SART', 'FBP', 'MENT'}
+        The 2D reconstruction method.
+    proc_kws : dict
+        Key word arguments for `process`.
+    **kws
+        Key word arguments for `rec2D`.
+        
+    Returns
+    -------
+    Z, ndarray, shape (n_bins, n_bins, n_bins, n_bins)
+        Reconstructed phase space distribution. I think the grid dimensions
+        are all the same, since the method first transforms the projections
+        so that they are the same width and differ only by projection angle?
+    """        
+    if proc_kws is None:
+        proc_kws = dict()
     K = len(tmats_x)
     L = len(tmats_y)
     n_bins = n_bins = S.shape[0] # assume same number of x/y bins.
-    thetas_x = [get_projection_angle(M) for M in tmats_x]
-    thetas_y = [get_projection_angle(M) for M in tmats_y]
-               
+    xx_meas, yy_meas = screen_centers
+    xx_rec, yy_rec = rec_centers
+    
     D = np.zeros((n_bins, L, n_bins, n_bins))
     for j in trange(n_bins):
         for l in range(L):
-            projections = S[:, j, :, l]
-            D[j, l, :, :] = rfunc(projections, thetas_x, **kws)
-            
+            projections = S[:, j, :, l].T
+            D[j, l, :, :] = rec2D(projections, tmats_x, xx_meas, xx_rec, method=method, **kws)
     Z = np.zeros((n_bins, n_bins, n_bins, n_bins))
     for r in trange(n_bins):
         for s in range(n_bins):
-            projections = D[:, :, r, s]
-            Z[r, s, :, :] = rfunc(projections, thetas_y, **kws)
-            
-    return process(Z, keep_positive, density, limits)
+            projections = D[:, :, r, s].T
+            Z[r, s, :, :] = rec2D(projections, tmats_y, yy_meas, yy_rec, method=method, **kws)
+    Z = process(Z, **proc_kws)
+    return Z
 
 
 def art4D(projections, tmats, rec_grid_centers, screen_edges):
@@ -281,75 +422,17 @@ def art4D(projections, tmats, rec_grid_centers, screen_edges):
     
     return Z
 
-
-def art2D(projections, tmats, rec_grid_centers, screen_edges):
-    """Two-dimensional algebraic reconstruction (ART)."""
-    print('Forming arrays.')
-
-    # Treat each reconstruction bin center as a particle. 
-    rec_grid_coords = get_grid_coords(*rec_grid_centers)
-    n_bins_rec = [len(c) for c in rec_grid_centers]
-    rec_grid_size = np.prod(n_bins_rec)
-    col_indices = np.arange(rec_grid_size)
-    
-    n_bins_screen = len(screen_edges) - 1
-    row_block_size = n_bins_screen
-    n_proj = len(projections)
-    rho = np.zeros(n_proj * row_block_size) # measured density on the screen.
-    rows, cols = [], [] # nonzero row and column indices of P
-
-    for proj_index in trange(n_proj):
-        # Transport the reconstruction grid to the screen.
-        M = tmats[proj_index]
-        screen_grid_coords = np.apply_along_axis(lambda row: np.matmul(M, row), 1, rec_grid_coords)
-
-        # For each particle, record the indices of the bin it landed in. We want k such
-        # that the particle landed in the bin with x = x[k]. One of the indices will be 
-        # -1 or n_bins_screen if the particle landed outside the screen.
-        xidx = np.digitize(screen_grid_coords[:, 0], screen_edges) - 1
-        on_screen = np.logical_and(xidx >= 0, xidx < n_bins_screen)
-
-        # Get the indices for the flattened array.
-        projection = projections[proj_index]
-        screen_idx = xidx
-
-        # P[i, j] = 1 if particle j landed in bin i on the screen, 0 otherwise.
-        i_offset = proj_index * row_block_size
-        for j in tqdm(col_indices[on_screen]):
-            i = screen_idx[j] + i_offset
-            rows.append(i)
-            cols.append(j)
-        rho[i_offset: i_offset + row_block_size] = projection.flat
-
-    print('Creating sparse matrix P.')
-    t = time.time()
-    P = sparse.csr_matrix((np.ones(len(rows)), (rows, cols)), shape=(n_proj * row_block_size, rec_grid_size))
-    print('Done. t = {}'.format(time.time() - t))
-
-    print('Solving linear system.')
-    t = time.time()
-    (psi, istop, itn, r1norm, r2norm, 
-     anorm, acond, arnorm, xnorm, var) = sparse.linalg.lsqr(P, rho, show=True, iter_lim=10000, atol=1e-12)
-    print()
-    print('Done. t = {}'.format(time.time() - t))
-
-    print('Reshaping phase space density.')
-    Z = psi.reshape(tuple(n_bins_rec))
-    
-    return Z
-
-
-
-
-def pic4D(projections, tmats, screen_edges, rec_limits, rec_bins, max_iters=15):
+def pic4D(projections, tmats, rec_grid_centers, screen_edges, max_iters=15):
     """Four-dimensional reconstruction using particle tracking.
     
     The method is described in Wang et al. (2019).
     """
     n_dims = 4
     n_proj = len(projections)
-    n_parts = 500000
-    rec_bin_widths = 2 * np.diff(rec_limits)[:, 0] / rec_bins 
+    n_parts = 1000000
+    rec_bin_widths = np.diff(rec_grid_centers)[:, 0]
+    rec_grid_edges = [get_edges(_centers) for _centers in rec_grid_centers]
+    rec_limits = [(min(_edges), max(_edges)) for _edges in rec_grid_edges]
     projections_meas = np.copy(projections)
     screen_xedges, screen_yedges = screen_edges
     
@@ -408,26 +491,25 @@ def pic4D(projections, tmats, screen_edges, rec_limits, rec_bins, max_iters=15):
         print('Iteration {} complete'.format(iteration))
         
         
-        plot_kws = dict(ec='None', cmap=None)
+
+        Z, _ = np.histogramdd(X, rec_grid_edges)
+        Z /= np.sum(Z)
+        
+        plot_kws = dict(ec='None', cmap='mono_r')
         labels = ["x", "x'", "y", "y'"]
         indices = [(0, 1), (2, 3), (0, 2), (0, 3), (2, 1), (1, 3)]
-
-        Z, edges = np.histogramdd(X, rec_bins, rec_limits)
-        Z /= np.sum(Z)
-
-        fig, axes = pplt.subplots(nrows=1, ncols=6, figwidth=8.5, sharex=False, sharey=False)
+        fig, axes = pplt.subplots(nrows=1, ncols=6, figwidth=8.5, sharex=False, sharey=False, space=0.2)
         for ax, (i, j) in zip(axes, indices):
             _Z = project(Z, [i, j])
-            ax.pcolormesh(edges[i], edges[j], _Z.T, **plot_kws)
+            ax.pcolormesh(rec_grid_edges[i], rec_grid_edges[j], _Z.T, **plot_kws)
             ax.annotate('{}-{}'.format(labels[i], labels[j]),
                         xy=(0.02, 0.92), xycoords='axes fraction', 
                         color='white', fontsize='medium')
         axes.format(xticks=[], yticks=[])
         plt.show()
         
-        
-        
-    return X, projections
+    Z = np.histogramdd(X, rec_grid_edges)
+    return Z, projections
 
 
 
