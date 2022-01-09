@@ -417,7 +417,6 @@ def corner(
         if 's' in plot_kws:
             plot_kws['ms'] = plot_kws.pop('s')
     elif kind == 'hist':
-        plot_kws.setdefault('cmap', 'dusk_r')
         plot_kws.setdefault('shading', 'auto')
         plot_kws.setdefault('bins', 'auto')
     if diag_kws is None:
@@ -902,7 +901,7 @@ def ellipse(ax, c1, c2, angle=0.0, center=(0, 0), **plt_kws):
 
 def rms_ellipses(Sigmas, figsize=(5, 5), pad=0.5, axes=None, 
                  cmap=None, cmap_range=(0, 1), centers=None,
-                 return_artists=False,
+                 return_artists=False, constrained_layout=True,
                  **plt_kws):
     """Plot rms ellipse parameters directly from covariance matrix."""
     Sigmas = np.array(Sigmas)
@@ -914,7 +913,7 @@ def rms_ellipses(Sigmas, figsize=(5, 5), pad=0.5, axes=None,
         umax = (1 + pad) * np.sqrt(max(x2_max, y2_max))
         upmax = (1 + pad) * np.sqrt(max(xp2_max, yp2_max))
         limits = 2 * [(-umax, umax), (-upmax, upmax)]
-        fig, axes = pair_grid_nodiag(4, figsize, limits, constrained_layout=False)
+        fig, axes = pair_grid_nodiag(4, figsize, limits, constrained_layout=constrained_layout)
 
     colors = None
     if len(Sigmas) > 1 and cmap is not None:
