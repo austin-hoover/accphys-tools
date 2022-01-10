@@ -32,7 +32,7 @@ def get_bin_centers(bin_edges):
 def get_bin_edges(bin_centers):
     """Return bin edges from bin centers."""
     w = 0.5 * np.diff(bin_centers)[0]
-    return np.hstack([centers - w, [centers[-1] + w]])
+    return np.hstack([bin_centers - w, [bin_centers[-1] + w]])
 
 
 def project(Z, indices):
@@ -336,18 +336,18 @@ def hock4D(S, centers_meas, centers_rec, tmats_x, tmats_y,
     return Z
 
 
-def art4D(projections, tmats, rec_centers, meas_centers):
+def art4D(projections, tmats, rec_centers, screen_centers):
     """Direct four-dimensional algebraic reconstruction (ART).
     
     We set up the linear system rho = P psi. Assume the x-x'-y-y' grid at the
     reconstruction grid has Nr**4 bins, the x-y grid on the screen has Ns**2
-    bins, and that there are n measurements. Then rho is a vector with n*Ns**2
-    elements of the measured density on the screen and psi is a vector with
-    Nr**4 elements. P[i, j] = 1.0 if the jth bin center in the reconstruction
-    grid ends up in the ith bin on the screen, or 0.0 otherwise. 
+    bins, and that there are n measurements. Then rho is a vector with 
+    n * Ns**2 elements of the measured density on the screen and psi is a 
+    vector with Nr**4 elements. P[i, j] = 1.0 if the jth bin center in the
+    reconstruction grid ends up in the ith bin on the screen, or 0.0 otherwise. 
     
-    P is a very sparse matrix. Currently, scipy.sparse.linalg.lsqr is used. A
-    grid size of N = 50 has used successfuly, but N = 75 lead to an 'out of
+    P is a very sparse matrix. Currently, scipy.sparse.linalg.lsqr is used. A 
+    grid size of N = 50 has used successfuly, but N = 75 lead to an 'out of 
     memory' error.
     
     Parameters
@@ -359,30 +359,31 @@ def art4D(projections, tmats, rec_centers, meas_centers):
         measurement location.
     rec_centers : list[ndarray, shape (Nr,)]
         Grid center coordinates in [x, x', y, y'].
-    meas_edges : list[ndarray, shape (Ns,)], shape (2,)
-        Coordinates of bin centers on the screen in [x, y].
+    screen_edges : list[ndarray, shape (Ns,)]
+        Coordinates of bin edges on the screen in [x, y].
         
     Returns
     -------
     Z : ndarray, shape (Nr**4)
-        Z[i, j, k, l] gives the phase space density at:
-            x = rec_centers[0][i], 
-            x' = rec_centers[1][j], 
-            y = rec_centers[2][k], 
-            y' = rec_centers[3][l].
+        Z[i, j, k, l] gives the phase space density at 
+        x = rec_centers[0][i], 
+        x' = rec_centers[1][j], 
+        y = rec_centers[2][k], 
+        y' = rec_centers[3][l].
     """
-    # Treat each reconstruction bin center as a particle.
     print('Forming arrays.')
+
+    # Treat each reconstruction bin center as a particle. 
     rec_grid_coords = get_grid_coords(*rec_centers)
     n_bins_rec = [len(c) for c in rec_centers]
     rec_grid_size = np.prod(n_bins_rec)
     col_indices = np.arange(rec_grid_size)
     
-    meas_edges = [get_bin_centers(_centers) for _centers in meas_centers]
-    n_bins_meas = [len(_centers) for _centers in meas_centers]
-    n_bins_meas[0] = len(meas_edges[0]) - 1
-    n_bins_meas[1] = len(meas_edges[1]) - 1
-    row_block_size = n_bins_meas[0] * n_bins_meas[1]
+    screen_edges = [get_bin_edges(_centers) for _centers in screen_centers]
+    screen_xedges, screen_yedges = screen_edges
+    n_bins_x_screen = len(screen_xedges) - 1
+    n_bins_y_screen = len(screen_yedges) - 1
+    row_block_size = n_bins_x_screen * n_bins_y_screen
     n_proj = len(projections)
     rho = np.zeros(n_proj * row_block_size) # measured density on the screen.
     rows, cols = [], [] # nonzero row and column indices of P
@@ -390,26 +391,26 @@ def art4D(projections, tmats, rec_centers, meas_centers):
     for proj_index in trange(n_proj):
         # Transport the reconstruction grid to the screen.
         M = tmats[proj_index]
-        meas_grid_coords = np.apply_along_axis(lambda row: np.matmul(M, row), 1, rec_grid_coords)
+        screen_grid_coords = apply(M, rec_grid_coords)
 
         # For each particle, record the indices of the bin it landed in. So we
-        # want (k, l) such that the particle landed in the bin with x = x[k] and
-        # y = y[l] on the screen. One of the indices will be -1 or n_bins if the
-        # particle landed outside the screen.
-        xidx = np.digitize(meas_grid_coords[:, 0], meas_edges[0]) - 1
-        yidx = np.digitize(meas_grid_coords[:, 2], meas_edges[1]) - 1
-        on_meas = np.logical_and(
-            np.logical_and(xidx >= 0, xidx < n_bins_meas[0]),
-            np.logical_and(yidx >= 0, yidx < n_bins_meas[1])
+        # want (k, l) such that the particle landed in the bin with x = x[k] 
+        # and y = y[l] on the screen. One of the indices will be -1 or n_bins 
+        # if the particle landed outside the screen.
+        xidx = np.digitize(screen_grid_coords[:, 0], screen_xedges) - 1
+        yidx = np.digitize(screen_grid_coords[:, 2], screen_yedges) - 1
+        on_screen = np.logical_and(
+            np.logical_and(xidx >= 0, xidx < n_bins_x_screen), 
+            np.logical_and(yidx >= 0, yidx < n_bins_y_screen)
         )
         # Get the indices for the flattened array.
         projection = projections[proj_index]
-        meas_idx = np.ravel_multi_index((xidx, yidx), projection.shape, mode='clip')
+        screen_idx = np.ravel_multi_index((xidx, yidx), projection.shape, mode='clip')
 
         # P[i, j] = 1 if particle j landed in bin i on the screen, 0 otherwise.
         i_offset = proj_index * row_block_size
-        for j in tqdm(col_indices[on_meas]):
-            i = meas_idx[j] + i_offset
+        for j in tqdm(col_indices[on_screen]):
+            i = screen_idx[j] + i_offset
             rows.append(i)
             cols.append(j)
         rho[i_offset: i_offset + row_block_size] = projection.flat
@@ -421,14 +422,15 @@ def art4D(projections, tmats, rec_centers, meas_centers):
     print('Done. t = {}'.format(time.time() - t))
 
     print('Solving linear system.')
-    t = time.time()
-    psi, istop, itn, r1norm, r2norm, anorm, acond, arnorm, xnorm, var = sparse.linalg.lsqr(P, rho, show=True, iter_lim=1000)
-    print('Done. t = {}'.format(time.time() - t))
+    start_time = time.time()
+    psi = sparse.linalg.lsqr(P, rho, show=True, iter_lim=1000)[0]
+    print()
+    print('Done. t = {}'.format(time.time() - start_time))
 
     print('Reshaping phase space density.')
     Z = psi.reshape(tuple(n_bins_rec))
-    
     return Z
+
 
 def pic4D(projections, tmats, rec_centers, meas_centers, max_iters=15):
     """Four-dimensional reconstruction using particle tracking.
