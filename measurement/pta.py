@@ -293,7 +293,7 @@ def processed_profiles(measurements, ws_id, dim='x', width=4.0, norm=False, n_in
     pos = pos[idx]
     data = data[:, idx]
     
-    if n_interp:
+    if n_interp is not None:
         f = interpolate.interp1d(pos, data)
         pos = np.linspace(pos[0], pos[-1], n_interp)
         data = f(pos)   
