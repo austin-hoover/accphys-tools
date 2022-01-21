@@ -8,31 +8,40 @@ lattice, beam mode, and intensity. This is done for following lattices:
         defocusing quadrupoles by -3 degrees.
     (4) Same as (1), but add solenoids between the quadrupoles.
 """
+from __future__ import print_function
 import sys
+import os
+
 import numpy as np
-from tqdm import tqdm, trange
+from tqdm import tqdm
+from tqdm import trange
 
 from bunch import Bunch
 from spacecharge import SpaceChargeCalc2p5D
-from orbit.analysis import AnalysisNode
-from orbit.analysis import add_analysis_nodes
-from orbit.analysis import get_analysis_nodes_data
+from orbit.diagnostics import BunchMonitorNode
+from orbit.diagnostics import BunchStatsNode
+from orbit.diagnostics import DanilovEnvelopeBunchMonitorNode
+from orbit.diagnostics import add_analysis_node
+from orbit.diagnostics import add_analysis_nodes
 from orbit.envelope import DanilovEnvelope
-from orbit.lattice import AccLattice, AccNode, AccActionsContainer
-from orbit.space_charge.envelope import set_env_solver_nodes, set_perveance
+from orbit.lattice import AccLattice
+from orbit.lattice import AccNode
+from orbit.lattice import AccActionsContainer
+from orbit.space_charge.envelope import DanilovEnvSolverNode
+from orbit.space_charge.envelope import set_env_solver_nodes
+from orbit.space_charge.envelope import set_perveance
 from orbit.space_charge.sc2p5d.scLatticeModifications import setSC2p5DAccNodes
 from orbit.teapot import TEAPOT_Lattice
 from orbit.twiss import twiss
 from orbit.utils import helper_funcs as hf
-
-sys.path.append('/Users/46h/Research/code/accphys') 
-from tools.utils import delete_files_not_folders
+from orbit.utils.consts import mass_proton
+from orbit.utils.general import delete_files_not_folders
 
     
 # Settings
 #------------------------------------------------------------------------------
 # General
-mass = 0.93827231 # [GeV/c^2]
+mass = mass_proton # [GeV/c^2]
 kin_energy = 1.0 # [GeV]
 bunch_length = 5.0 # [m]
 intensities = np.linspace(0, 10e14, 8)
@@ -51,10 +60,9 @@ latnames = [
     'fodo_sol'
 ]
 latseq = 'fodo'
-fringe = False
 
 # Initial beam
-eps = 40e-6 # intrinsic emitance
+eps_l = 40e-6 # intrinsic emitance
 eps_x_frac = 0.5 # ex/eps
 nu = np.radians(90) # x-y phase difference
 
@@ -81,28 +89,30 @@ delete_files_not_folders('_output')
 
 
 for latname, latfile in zip(latnames, latfiles):
-    print 'lattice = {}'.format(latname)
+    print('lattice = {}'.format(latname))
     for mode in (1, 2):
-        print 'mode = {}'.format(mode)
+        print('mode = {}'.format(mode))
         tracked_params_list, transfer_mats = [], []
-        env = DanilovEnvelope(eps, mode, eps_x_frac, mass, kin_energy, bunch_length)
+        env = DanilovEnvelope(eps_l, mode, eps_x_frac, mass, kin_energy, bunch_length)
         for intensity in tqdm(intensities):
             env.set_intensity(intensity)
-            lattice = hf.lattice_from_file(latfile, latseq, fringe)
+            lattice = TEAPOT_Lattice()
+            lattice.readMADX(latfile, latseq)
+            lattice.set_fringe(False)
             solver_nodes = set_env_solver_nodes(lattice, env.perveance, max_solver_spacing)
             env.match(lattice, solver_nodes, method=method, verbose=verbose)
             transfer_mats.append(env.transfer_matrix(lattice))
-            monitor_nodes = add_analysis_nodes(lattice, kind='env_monitor')
+            monitor_nodes = add_analysis_nodes(DanilovEnvelopeBunchMonitorNode, lattice, dense=True)
             env.track(lattice)
-            tracked_params_list.append(get_analysis_nodes_data(monitor_nodes, 'env_params'))
+            tracked_params_list.append([node.get_data(-1).env_params for node in monitor_nodes])            
         # Save data
-        data['positions'] = get_analysis_nodes_data(monitor_nodes, 'position')
+        data['positions'] = [node.position for node in monitor_nodes]
         data['perveances'] = hf.get_perveance(mass, kin_energy, intensities / bunch_length)
         data['tracked_params_list'] = tracked_params_list
         data['transfer_mats'] = transfer_mats
         for key in files:
             np.save(files[key].format(latname, mode), data[key])
-    print ''
+    print()
 
 file = open('_output/data/latnames.txt', 'w')
 for latname in latnames:

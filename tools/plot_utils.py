@@ -1,6 +1,28 @@
 import numpy as np
 
 
+PHASE_SPACE_LABELS = [r"x", r"x'", r"y", r"y'", r"z", r"dE"]
+PHASE_SPACE_LABELS_UNITS = [r"x [mm]", r"x' [mrad]", r"y [mm]", r"y' [mrad]", r"z [m]", r"dE [MeV]"]
+
+
+def sci_notation(num, decimal_digits=1, precision=None, exponent=None):
+    """Returns a string representation of the scientific
+    notation of the given number formatted for use with
+    LaTeX or Mathtext, with specified number of significant
+    decimal digits and precision (number of decimal digits
+    to show). The exponent to be used can also be specified
+    explicitly.
+    
+    Found here: https://stackoverflow.com/questions/18311909/how-do-i-annotate-with-power-of-ten-formatting
+    """
+    if exponent is None:
+        exponent = int(np.floor(np.log10(abs(num))))
+    coeff = round(num / float(10**exponent), decimal_digits)
+    if precision is None:
+        precision = decimal_digits
+    return r'${0:.{2}f} \cdot 10^{{{1:d}}}$'.format(coeff, exponent, precision)
+
+
 def moment_label(i, j):
     """Return the label corresponding to Sigma[i, j].
     

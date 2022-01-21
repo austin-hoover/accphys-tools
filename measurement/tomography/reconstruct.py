@@ -12,11 +12,8 @@ from scipy import sparse
 from scipy import interpolate
 from skimage.transform import iradon
 from skimage.transform import iradon_sart
-from skimage import filters
 from tqdm import trange
 from tqdm import tqdm
-import matplotlib.pyplot as plt
-import proplot as pplt
 
 
 def apply(M, X):
@@ -139,10 +136,10 @@ def transform(Z, V, grid, new_grid=None):
          The distribution function in the original space.
     V : ndarray, shape (len(xi),)
         Matrix to transform the coordinates.
-    grid : list[array_like]
+    grid : list[ndarray], shape (n,)
         List of 1D arrays [x1, x2, ...] representing the bin centers in the 
         original space.
-    new_grid : list[array_like] (optional)
+    new_grid : list[ndarray], shape (n,) (optional)
         List of 1D arrays [x1, x2, ...] representing the bin centers in the 
         transformed space. If none are provided, we use the min/max coordinates
         of the transformed grid and keep the same number of bins.
@@ -152,7 +149,7 @@ def transform(Z, V, grid, new_grid=None):
     Z : ndarray, shape (len(x1), ..., len(xn))
         The distribution function in the transformed space. Linear 
         interpolation is used to fill in the gaps.
-    new_grid : list[array_like] 
+    new_grid : list[ndarray], shape (n,)
         List of 1D arrays [x1, x2, ...] representing the bin centers in the 
         transformed space.
     """        
@@ -184,20 +181,20 @@ def scale_projections(projections, tmats, centers_meas, centers_rec):
     
     Parameters
     ----------
-    projections : list, shape (n_proj, N)
+    projections : ndarray, shape (n_proj, N)
         Measured 1D projections of the distribution.
-    tmats: list, shape (n_proj, 2, 2)
+    tmats: ndarray, shape (n_proj, 2, 2)
         Transfer matrices from A to B.
-    centers_meas : list, shape (N,)
+    centers_meas : ndarray, shape (N,)
         Bin center coordinates at B.
-    centers_rec : list, shape (M,)
+    centers_rec : ndarray, shape (M,)
         Bin center coordinates at A.
     
     Returns
     -------
-    scaled_projections : list, shape (n_proj, M)
+    scaled_projections : ndarray, shape (n_proj, M)
         Scaled projections in the phase space at A.
-    proj_angles : list[float]
+    proj_angles : ndarray, shape (n_proj,)
         Angles of the projections at A.
     """
     n_proj, n_bins = np.shape(projections)
@@ -220,13 +217,13 @@ def rec2D(projections, tmats, centers_meas, centers_rec,
     
     Parameters
     ----------
-    projections : list, shape (n_proj, N)
+    projections : ndarray, shape (n_proj, N)
         Measured 1D projections of the distribution.
-    tmats: list, shape (n_proj, 2, 2)
+    tmats: ndarray, shape (n_proj, 2, 2)
         Transfer matrices from reconstruction point to measurement point.
-    centers_meas : list, shape (N,)
+    centers_meas : ndarray, shape (N,)
         Bin center coordinates at the measurement point.
-    centers_rec : list, shape (M,)
+    centers_rec : ndarray, shape (M,)
         Bin center coordinates at the reconstruction point.
     method : {'SART', 'FBP', 'MENT'}
         The reconstruction method to use.
@@ -291,11 +288,11 @@ def hock4D(S, centers_meas, centers_rec, tmats_x, tmats_y,
     S : ndarray, shape (n_bins, n_bins, n_proj, n_proj)
         Projection data. S[i, j, k, l] gives the intensity at (x[i], y[j]) on
         the screen for transfer matrix M = [[tmats_x[k], 0], [0, tmats_y[l]].
-    centers_meas : list, shape (2, nbins)
+    centers_meas : ndarray, shape (2, nbins)
         Coordinates of x and y bin centers on the screen.
-    centers_rec : list, shape (2, nbins)
+    centers_rec : ndarray, shape (2, nbins)
         Coordinates of x and y bin centers on the reconstruction grid.
-    tmats_x{y} : list[ndarray], shape (n_proj,)
+    tmats_x{y} : ndarray, shape (n_proj, 2, 2)
         List of 2 x 2 transfer matrices for x-x'{y-y'}.
     method : {'SART', 'FBP', 'MENT'}
         The 2D reconstruction method.
@@ -352,14 +349,14 @@ def art4D(projections, tmats, rec_centers, screen_centers):
     
     Parameters
     ----------
-    projections : list[ndarray, shape (Nsx, Nsy)]
+    projections : ndarray, shape (n, Nsx, Nsy)
         List of measured projections on the x-y plane.
-    tmats : list[ndarray, shape (4, 4)]
+    tmats : ndarray, shape (n, 4, 4)
         List of transfer matrices from the reconstruction location to the 
         measurement location.
-    rec_centers : list[ndarray, shape (Nr,)]
+    rec_centers : ndarray, shape (4, Nr)
         Grid center coordinates in [x, x', y, y'].
-    screen_edges : list[ndarray, shape (Ns,)]
+    screen_edges : ndarray, shape (2, Ns)        
         Coordinates of bin edges on the screen in [x, y].
         
     Returns
@@ -433,9 +430,10 @@ def art4D(projections, tmats, rec_centers, screen_centers):
 
 
 def pic4D(projections, tmats, rec_centers, meas_centers, max_iters=15):
-    """Four-dimensional reconstruction using particle tracking.
+    """Four-dimensional reconstruction using particle tracking 
+    (not currently working).
     
-    The method is described in Wang et al. (2019). It is not currently working.
+    The method is described in Wang et al. (2019). 
     """
     n_dims = 4
     n_proj = len(projections)
@@ -501,24 +499,26 @@ def pic4D(projections, tmats, rec_centers, meas_centers, max_iters=15):
         print('New bunch has {} particles'.format(X.shape[0]))
         print('Iteration {} complete'.format(iteration))
         
-        
-
-        Z, _ = np.histogramdd(X, rec_edges)
-        Z /= np.sum(Z)
-        
-        plot_kws = dict(ec='None', cmap='mono_r')
-        labels = ["x", "x'", "y", "y'"]
-        indices = [(0, 1), (2, 3), (0, 2), (0, 3), (2, 1), (1, 3)]
-        fig, axes = pplt.subplots(nrows=1, ncols=6, figwidth=8.5, 
-                                  sharex=False, sharey=False, space=0.2)
-        for ax, (i, j) in zip(axes, indices):
-            _Z = project(Z, [i, j])
-            ax.pcolormesh(rec_edges[i], rec_edges[j], _Z.T, **plot_kws)
-            ax.annotate('{}-{}'.format(labels[i], labels[j]),
-                        xy=(0.02, 0.92), xycoords='axes fraction', 
-                        color='white', fontsize='medium')
-        axes.format(xticks=[], yticks=[])
-        plt.show()
+#         # Plot current iteration.
+#         Z, _ = np.histogramdd(X, rec_edges)
+#         Z /= np.sum(Z)
+#         plot_kws = dict(ec='None', cmap='mono_r')
+#         labels = ["x", "x'", "y", "y'"]
+#         indices = [(0, 1), (2, 3), (0, 2), (0, 3), (2, 1), (1, 3)]
+#         fig, axes = pplt.subplots(nrows=1, ncols=6, figwidth=8.5, 
+#                                   sharex=False, sharey=False, space=0.2)
+#         for ax, (i, j) in zip(axes, indices):
+#             _Z = project(Z, [i, j])
+#             ax.pcolormesh(rec_edges[i], rec_edges[j], _Z.T, **plot_kws)
+#             ax.annotate('{}-{}'.format(labels[i], labels[j]),
+#                         xy=(0.02, 0.92), xycoords='axes fraction', 
+#                         color='white', fontsize='medium')
+#         axes.format(xticks=[], yticks=[])
+#         plt.show()
         
     Z = np.histogramdd(X, rec_edges)
     return Z, projections
+
+
+def ment4D():
+    raise NotImplementedError

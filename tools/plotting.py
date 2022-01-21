@@ -556,7 +556,8 @@ def _corner_no_diag(axes, X, kind, thresh, blur, idx, n_bins, limits,
     
     
 def corner_env(
-    env_params, dims='all', axes=None, figsize=None, limits=None,
+    env_params, dims='all', axes=None, use_existing_limits=True,
+    figsize=None, limits=None,
     units='mm-mrad', norm_labels=False, fill=False, cmap=None,
     cmap_range=(0, 1), autolim_kws=None, grid_kws=None, fill_kws=None,
     return_lines=False, **plt_kws
@@ -573,6 +574,8 @@ def corner_env(
         like ("x", "yp") or (0, 3).
     axes : single axis or (3, 3) array of axes).
         If plotting onto existing axes.
+    use_existing_limits : bool
+        If `axes` is provided, whether to modify the existing axes limits.
     figsize : tuple or int
         Size of the figure (x_size, y_size). 
     limits : list
@@ -615,7 +618,7 @@ def corner_env(
         env_params = np.array(env_params)
     if env_params.ndim == 1:
         env_params = env_params[np.newaxis, :]
-    coords = [get_ellipse_coords(p, npts=100) for p in env_params]
+    coords = [get_ellipse_coords(p, npts=1000) for p in env_params]
         
     # Set default key word arguments.
     n_env = len(env_params)
@@ -650,6 +653,11 @@ def corner_env(
         if axes is None:
             n_dims = 4
             fig, axes = pair_grid_nodiag(n_dims, **grid_kws)
+        elif not use_existing_limits:
+            for i in range(3):
+                for j in range(i + 1):
+                    axes[i, j].set_xlim(limits[j])
+                    axes[i, j].set_ylim(limits[i + 1])
     else:
         if axes is None:
             fig, ax = plt.subplots(
@@ -859,18 +867,14 @@ def eigvec_trajectory(ax, M, dim1='x', dim2='y', colors=('red', 'blue'), turns=2
 
 
 def unit_circle(ax, **kws):
-    """Plot the unit circle in the background on the axis."""
-    kws.setdefault('zorder', 0)
-    kws.setdefault('color', 'k')
-    kws.setdefault('ls', '--')
+    """Plot the unit circle."""
     psi = np.linspace(0, 2*np.pi, 50)
     ax.plot(np.cos(psi), np.sin(psi), **kws)
     return ax
 
 
-def eigvals_complex_plane(ax, eigvals, colors=('r','b'), legend=True, **kws):
+def eigvals_complex_plane(ax, eigvals, colors=('r','b'), legend=False, **kws):
     """Plot the eigenvalues in the complex plane."""
-    unit_circle(ax)
     c1, c2 = colors
     for e, c in zip(eigvals, [c1, c1, c2, c2]):
         ax.scatter(e.real, e.imag, c=c, **kws)
