@@ -1,6 +1,7 @@
 """Read Profile Tools and Analysis (PTA) wire-scanner files."""
 from datetime import datetime
 import numpy as np
+from scipy import interpolate
 
 
 DIAG_WIRE_ANGLE = np.radians(-45.0)
@@ -263,3 +264,38 @@ def get_moments_dict(measurements):
     for node_id in moments_dict:
         moments_dict[node_id] = np.array(moments_dict[node_id])
     return moments_dict
+
+
+def processed_profiles(measurements, ws_id, dim='x', width=4.0, norm=False, n_interp=None):
+    data, sigmas, means = [], [], []
+    for measurement in measurements:
+        profile = measurement[ws_id]
+        signal = {'x': profile.hor, 'y': profile.ver, 'u': profile.dia}[dim]
+        pos = np.copy(signal.pos)
+        raw = np.copy(signal.raw)
+        if norm:
+            raw /= signal.stats['Area'].rms
+        data.append(raw)
+        sigmas.append(signal.stats['Sigma'].rms)
+        means.append(signal.stats['Mean'].rms)
+    data = np.array(data)
+    means = np.array(means)
+    sigmas = np.array(sigmas)
+    
+    mean = np.mean(means)    
+    xmin = np.min(mean - width * sigmas)
+    xmax = np.max(mean + width * sigmas)
+    delta = max(abs(xmax - mean), abs(xmin - mean))
+    xmin = mean - delta
+    xmax = mean + delta
+
+    idx = np.logical_and(pos >= xmin, pos <= xmax)
+    pos = pos[idx]
+    data = data[:, idx]
+    
+    if n_interp:
+        f = interpolate.interp1d(pos, data)
+        pos = np.linspace(pos[0], pos[-1], n_interp)
+        data = f(pos)   
+        
+    return pos, data
