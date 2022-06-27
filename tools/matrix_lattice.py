@@ -5,8 +5,11 @@
 import numpy as np
 import numpy.linalg as la
 import scipy.optimize as opt
-from ..coupling import coupling as BL
 from .ap_utils import rotation_matrix_4D
+
+import sys
+sys.path.append('/Users/46h/Research/scdist/')
+import coupling as BL
 
 
 def rotate_mat(M, phi):
