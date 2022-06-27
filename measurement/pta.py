@@ -26,11 +26,11 @@ def split(items, token):
     indices = [i for i, item in enumerate(items) if item == token]
     sublists = []
     if items[0] != token:
-        sublists.append(items[:indices[0]])
+        sublists.append(items[: indices[0]])
     for lo, hi in zip(indices[:-1], indices[1:]):
-        sublists.append(items[lo + 1:hi])
+        sublists.append(items[lo + 1 : hi])
     if items[-1] != token:
-        sublists.append(items[indices[-1] + 1:])
+        sublists.append(items[indices[-1] + 1 :])
     return sublists
 
 
@@ -40,8 +40,8 @@ def get_sig_xy(sig_xx, sig_yy, sig_uu, diag_wire_angle):
     Diagonal wire angle should be in radians.
     """
     phi = np.radians(90.0) + diag_wire_angle
-    sin, cos =  np.sin(phi),  np.cos(phi)
-    sig_xy = (sig_uu - sig_xx*(cos**2) - sig_yy*(sin**2)) / (2 * sin * cos)
+    sn, cs = np.sin(phi), np.cos(phi)
+    sig_xy = (sig_uu - sig_xx * (cs**2) - sig_yy * (sn**2)) / (2 * sn * cs)
     return sig_xy
 
 
@@ -57,10 +57,11 @@ class Stat:
     fit : float
         Parameter value from Gaussian fit.
     """
+
     def __init__(self, name, rms, fit):
         self.name, self.rms, self.fit = name, rms, fit
 
-        
+
 class Signal:
     """Container for profile signal.
     
@@ -77,10 +78,11 @@ class Signal:
         Each value is a Stat object that holds the parameter name, rms value, 
         and Gaussian fit value.
     """
+
     def __init__(self, pos, raw, fit, stats):
         self.pos, self.raw, self.fit, self.stats = pos, raw, fit, stats
-        
-        
+
+
 class Profile:
     """Stores data from single wire-scanner.
     
@@ -88,9 +90,12 @@ class Profile:
     ----------
     hor, ver, dia : Signal
         Signal object for horizontal, vertical and diagonal wire.
+    signals : list
+        List of [hor, ver, dia] signals.
     diag_wire_angle : float
         Angle of diagonal wire above the x axis.
     """
+
     def __init__(self, pos, raw, fit=None, stats=None, diag_wire_angle=DIAG_WIRE_ANGLE):
         """Constructor.
         
@@ -119,7 +124,12 @@ class Profile:
         self.hor = Signal(xpos, xraw, xfit, xstats)
         self.ver = Signal(ypos, yraw, yfit, ystats)
         self.dia = Signal(upos, uraw, ufit, ustats)
+        self.signals = [self.hor, self.ver, self.dia]
         
+    def get_signal(self, dim='x'):
+        """Return the signal along the specified axis."""
+        return {'x': self.hor, 'y': self.ver, 'u': self.dia}[dim]
+
 
 class Measurement(dict):
     """Dictionary of profiles for one measurement.
@@ -144,37 +154,38 @@ class Measurement(dict):
         The linear 4x4 transfer matrix from a start node to each wire-scanner. 
         The start node is determined in the function call `get_transfer_mats`.
     """
+
     def __init__(self, filename):
         dict.__init__(self)
         self.filename = filename
-        self.filename_short = filename.split('/')[-1]
+        self.filename_short = filename.split("/")[-1]
         self.timestamp = None
         self.pvloggerid = None
         self.node_ids = None
         self.moments, self.transfer_mats = dict(), dict()
         self.read_pta_file()
-        
+
     def read_pta_file(self):
         # Store the timestamp on the file.
-        date, time = self.filename.split('WireAnalysisFmt-')[-1].split('_')
-        time = time.split('.pta')[0]
-        year, month, day = [int(token) for token in date.split('.')]
-        hour, minute, second = [int(token) for token in time.split('.')]
+        date, time = self.filename.split("WireAnalysisFmt-")[-1].split("_")
+        time = time.split(".pta")[0]
+        year, month, day = [int(token) for token in date.split(".")]
+        hour, minute, second = [int(token) for token in time.split(".")]
         self.timestamp = datetime(year, month, day, hour, minute, second)
-        
+
         # Collect lines corresponding to each wire-scanner
-        file = open(self.filename, 'r')
+        file = open(self.filename, "r")
         lines = dict()
         ws_id = None
         for line in file:
             line = line.rstrip()
-            if line.startswith('RTBT_Diag'):
+            if line.startswith("RTBT_Diag"):
                 ws_id = line
                 continue
             if ws_id is not None:
                 lines.setdefault(ws_id, []).append(line)
-            if line.startswith('PVLoggerID'):
-                self.pvloggerid = int(line.split('=')[1])
+            if line.startswith("PVLoggerID"):
+                self.pvloggerid = int(line.split("=")[1])
         file.close()
         self.node_ids = sorted(list(lines))
 
@@ -185,21 +196,21 @@ class Measurement(dict):
             #     raw: wire positions and raw signal amplitudes;
             #     fit: wire positions and Gaussian fit amplitudes.
             # There is one blank line after each section.
-            sep = ''
+            sep = ""
             lines_stats, lines_raw, lines_fit = split(lines[node_id], sep)[:3]
 
             # Remove headers and dashed lines beneath headers.
             lines_stats = lines_stats[2:]
             lines_raw = lines_raw[2:]
-            lines_fit = lines_fit[2:]   
+            lines_fit = lines_fit[2:]
 
-            # The columns of the following array are ['pos', 'yraw', 'uraw', 'xraw', 
+            # The columns of the following array are ['pos', 'yraw', 'uraw', 'xraw',
             # 'xpos', 'ypos', 'upos']. (NOTE: This is not the order that is written
             # in the file header.)
             data_arr_raw = [string_to_list(line) for line in lines_raw]
             pos, yraw, uraw, xraw, xpos, ypos, upos = np.transpose(data_arr_raw)
 
-            # This next array is the same, but it contains 'yfit', 'ufit', 'xfit', 
+            # This next array is the same, but it contains 'yfit', 'ufit', 'xfit',
             # instead of 'yraw', 'uraw', 'xraw'.
             data_arr_fit = [string_to_list(line) for line in lines_fit]
             pos, yfit, ufit, xfit, xpos, ypos, upos = np.transpose(data_arr_fit)
@@ -215,45 +226,51 @@ class Measurement(dict):
                 ystats[name] = Stat(name, s_yrms, s_yfit)
                 ustats[name] = Stat(name, s_urms, s_ufit)
 
-            self[node_id] = Profile([xpos, ypos, upos], 
-                                    [xraw, yraw, uraw],
-                                    [xfit, yfit, ufit], 
-                                    [xstats, ystats, ustats])
-            
+            self[node_id] = Profile(
+                [xpos, ypos, upos],
+                [xraw, yraw, uraw],
+                [xfit, yfit, ufit],
+                [xstats, ystats, ustats],
+            )
+
     def get_moments(self):
         """Store/return dictionary of measured moments at each profile."""
         self.moments = dict()
         for node_id in self.node_ids:
             profile = self[node_id]
-            sig_xx = profile.hor.stats['Sigma'].rms**2
-            sig_yy = profile.ver.stats['Sigma'].rms**2
-            sig_uu = profile.dia.stats['Sigma'].rms**2
+            sig_xx = profile.hor.stats["Sigma"].rms**2
+            sig_yy = profile.ver.stats["Sigma"].rms**2
+            sig_uu = profile.dia.stats["Sigma"].rms**2
             sig_xy = get_sig_xy(sig_xx, sig_yy, sig_uu, profile.diag_wire_angle)
             self.moments[node_id] = [sig_xx, sig_yy, sig_xy]
         return self.moments
-    
-    
-    
+
+
 def read_files(filenames):
+    """Read a list of wire-scanner files and sort them by timestamp."""
     measurements = [Measurement(filename) for filename in filenames]
     measurements = sorted(measurements, key=lambda measurement: measurement.timestamp)
-    measurements = [measurement for measurement in measurements 
-                    if measurement.pvloggerid > 0
-                    and measurement.pvloggerid is not None]
+    measurements = [
+        measurement
+        for measurement in measurements
+        if measurement.pvloggerid > 0 and measurement.pvloggerid is not None
+    ]
     return measurements
 
 
 class DictOfLists(dict):
+    """A dictionary of lists."""
     def __init__(self):
         dict.__init__(self)
-        
+
     def add(self, key, value):
         if key not in self:
             self[key] = []
         self[key].append(value)
-        
-        
+
+
 def get_moments_dict(measurements):
+    """Construct a dictionary of rms moments from a list of measurements."""
     if type(measurements) is not list:
         measurements = [measurements]
     moments_dict = DictOfLists()
@@ -266,36 +283,57 @@ def get_moments_dict(measurements):
     return moments_dict
 
 
-def processed_profiles(measurements, ws_id, dim='x', width=4.0, norm=False, n_interp=None):
-    data, sigmas, means = [], [], []
+def processed_profiles(
+    measurements, 
+    ws_id,
+    dim="x",
+    width=None,
+    width_units='data',
+    n_interp=None,
+):
+    """Return ndarray of centered profiles
+    
+    Parameters
+    ----------
+    measurements : list[Measurements], shape (n,)
+        The measurements containing the profiles.
+    ws_id : str
+        The wire-scanner at which to extract the profiles.
+    dim : {'x', 'y', 'u'}
+        The projection axis.
+    width : float
+        The width of the projection axis.
+    width_units : {'data', 'std'}
+        If 'std', `width` is a multiple of the maximum 
+        standard deviation of the profiles.
+    n_interp : int
+        The number of points to use along the projection axis. Linear
+        interpolation is used. If None, no interpolation is performed.
+    
+    Returns
+    -------
+    pos : ndarray, shape (k,)
+        The position array.
+    data : ndarray, shape (k, 3)
+        The horizontal (x), vertical (y) and diagonal (u) profiles.
+    """
+    data, sigmas = [], []
     for measurement in measurements:
         profile = measurement[ws_id]
-        signal = {'x': profile.hor, 'y': profile.ver, 'u': profile.dia}[dim]
-        pos = np.copy(signal.pos)
-        raw = np.copy(signal.raw)
-        if norm:
-            raw /= signal.stats['Area'].rms
-        data.append(raw)
+        signal = profile.get_signal(dim)
+        pos = np.copy(signal.pos) - signal.stats['Mean'].rms
+        data.append(np.copy(signal.raw))
         sigmas.append(signal.stats['Sigma'].rms)
-        means.append(signal.stats['Mean'].rms)
     data = np.array(data)
-    means = np.array(means)
     sigmas = np.array(sigmas)
-    
-    mean = np.mean(means)    
-    xmin = np.min(mean - width * sigmas)
-    xmax = np.max(mean + width * sigmas)
-    delta = max(abs(xmax - mean), abs(xmin - mean))
-    xmin = mean - delta
-    xmax = mean + delta
-
-    idx = np.logical_and(pos >= xmin, pos <= xmax)
-    pos = pos[idx]
-    data = data[:, idx]
-    
-    if n_interp is not None:
-        f = interpolate.interp1d(pos, data)
-        pos = np.linspace(pos[0], pos[-1], n_interp)
-        data = f(pos)   
+     
+    if n_interp is None:
+        n_interp = len(pos)
         
+    if width_units == 'std':
+        width *= np.max(sigmas)
+        
+    f = interpolate.interp1d(pos, data, bounds_error=False, fill_value=0.0)
+    pos = np.linspace(-0.5 * width, 0.5 * width, n_interp)
+    data = f(pos)
     return pos, data

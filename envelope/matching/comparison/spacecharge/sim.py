@@ -1,6 +1,4 @@
-"""
-This script examines the effect of space charge on the envelope trajectory.
-"""
+"""This script examines the effect of space charge on the envelope trajectory."""
 import sys
 import numpy as np
 from tqdm import tqdm, trange

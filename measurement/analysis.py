@@ -21,6 +21,32 @@ from tools import utils
 
 
 
+def unif_dist(x, R):        
+    if type(x) is np.ndarray:
+        idx = np.abs(x) <= R
+        result = np.zeros(len(x))
+        result[idx] = 2.0 * np.sqrt(R**2 - x[idx]**2) / (np.pi * R**2)
+    else:
+        if abs(x) > R:
+            return 0.0
+        result = 2.0 * np.sqrt(R**2 - x**2) / (np.pi * R**2)
+    return result
+
+def norm_dist(x, sigma):
+    return np.exp(-0.5 * (x / sigma)**2) / (sigma * np.sqrt(2.0 * np.pi))
+
+def fit_unif_dist(xdata, ydata):
+    popt, pcov = opt.curve_fit(unif_dist, xdata, ydata)
+    R, = popt
+    return R
+
+def fit_norm_dist(xdata, ydata):
+    popt, pcov = opt.curve_fit(norm_dist, xdata, ydata)
+    sigma, = popt
+    return sigma
+
+
+
 def is_physical_cov(Sigma):
     """Return True if the covariance matrix is physical."""
     if not utils.is_positive_definite(Sigma) or np.linalg.det(Sigma) < 0.:
@@ -143,9 +169,8 @@ def get_sig_xy(sig_xx, sig_yy, sig_uu):
     return sig_uu - 0.5 * (sig_xx + sig_yy)
 
 
-def monte_carlo(moments, transfer_matrices, frac_err=0.02, n_trials=1000):
+def reconstruct_random_trials(moments, transfer_matrices, frac_err=0.02, n_trials=1000):
     """Here `moments` is list of [<xx>, <yy>, <uu>]."""
-    n_trials = 5000
     Sigmas = []
     fails = 0
     hi = 1.0 + frac_err
@@ -158,13 +183,38 @@ def monte_carlo(moments, transfer_matrices, frac_err=0.02, n_trials=1000):
         Sigma, C = reconstruct(noisy_moments, transfer_matrices)
         return Sigma
 
+    total_trials = 0
     for _ in trange(n_trials):
         failed = True
         while failed:
+            total_trials += 1
             Sigma = run_trial(moments, transfer_matrices)
             failed = not is_physical_cov(Sigma)
             if failed:
                 fails += 1
+        Sigmas.append(Sigma)
+    return np.array(Sigmas), float(fails) / total_trials
+
+
+def reconstruct_random_trials_fixed(moments, transfer_matrices, frac_err=0.02, n_trials=1000):
+    """Here `moments` is list of [<xx>, <yy>, <uu>]."""
+    Sigmas = []
+    fails = 0
+    hi = 1.0 + frac_err
+    lo = 1.0 - frac_err
+
+    def run_trial(moments, transfer_matrices):
+        noisy_moments = np.random.uniform(lo * moments, hi * moments, size=moments.shape)
+        noisy_moments[:, 2] = get_sig_xy(noisy_moments[:, 0], noisy_moments[:, 1], noisy_moments[:, 2])
+        Sigma, C = reconstruct(noisy_moments, transfer_matrices)
+        return Sigma
+
+    for _ in trange(n_trials):
+        Sigma = run_trial(moments, transfer_matrices)
+        failed = not is_physical_cov(Sigma)
+        if failed:
+            fails += 1
+            Sigma = None
         Sigmas.append(Sigma)
     return np.array(Sigmas), fails
 
