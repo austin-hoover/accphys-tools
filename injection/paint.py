@@ -5,13 +5,7 @@ TO DO
 * Fix the tune calculation. Currently the `TeapotTuneAnalysisNode` class is
   used. The node location and the Twiss parameteters supplied to the node are
   hard-coded. Instead, a specific node should be chosen and the Twiss paramters
-  should be calculated directly from the ring transfer matrix. Keep in mind that 
-  this method will be inaccurate for a mismatched beam, for example when the 
-  beam intensity is very high (a production beam should be well-matched). In 
-  this case, since the beam is likely still matched since it was painted, the
-  beam Twiss paramters could be used. A new node would have to be created to
-  do this.
-  
+  should be calculated directly from the ring transfer matrix.
 * Add apertures through the ring.
 
 
